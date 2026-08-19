@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BodyWeightView } from './components/BodyWeightView.tsx';
 import { CalendarView } from './components/CalendarView.tsx';
 import { ExercisesView } from './components/ExercisesView.tsx';
@@ -41,49 +41,27 @@ function useToday(): IsoDate {
   return today;
 }
 
-/** 横方向の移動量。これ未満はタップや縦スクロールの揺れとみなす。 */
-const SWIPE_MIN_X = 56;
-/** 横が縦の何倍動いていればスワイプと認めるか。縦スクロールを奪わないため。 */
-const SWIPE_RATIO = 1.6;
-/**
- * これより長い操作はスワイプではなく、ためらいや別の操作とみなす。
- * 短くしすぎると、意図してゆっくり払う操作を落とす。
- */
-const SWIPE_MAX_MS = 900;
+/** どちらの軸の操作か決めるまでに要る移動量。 */
+const AXIS_THRESHOLD = 8;
+/** タブを切り替えると判断する移動量（画面幅に対する割合）。 */
+const COMMIT_RATIO = 0.26;
+/** 速く払ったときは移動量が小さくても切り替える。 */
+const FLICK_MS = 260;
+const FLICK_PX = 44;
+/** スライドの時間。CSS の transition と同じ値にする。 */
+const SLIDE_MS = 270;
 
-/**
- * タブを横スワイプで移動できるようにする。
- *
- * preventDefault は呼ばない。縦スクロールは素の挙動に任せ、指を離した時点の
- * 移動量だけを見て判定する。入力欄やシートの上から始まった操作は無視する
- * （数値欄をなぞる操作や、シート内のスクロールを奪ってしまうため）。
- */
-function useSwipe(onSwipe: (direction: 1 | -1) => void) {
-  const start = useRef<{ x: number; y: number; at: number } | null>(null);
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (e.pointerType !== 'touch') return;
-    const target = e.target as HTMLElement;
-    if (target.closest('input, textarea, select, .sheet, .celebrate, .stepper')) {
-      start.current = null;
-      return;
-    }
-    start.current = { x: e.clientX, y: e.clientY, at: Date.now() };
-  };
-
-  const onPointerUp = (e: React.PointerEvent) => {
-    const from = start.current;
-    start.current = null;
-    if (!from || e.pointerType !== 'touch') return;
-    const dx = e.clientX - from.x;
-    const dy = e.clientY - from.y;
-    if (Date.now() - from.at > SWIPE_MAX_MS) return;
-    if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return;
-    onSwipe(dx < 0 ? 1 : -1);
-  };
-
-  return { onPointerDown, onPointerUp, onPointerCancel: () => (start.current = null) };
-}
+type Drag = {
+  /** 移動先のタブ。 */
+  to: Tab;
+  /** 次のタブなら +1、前のタブなら -1。 */
+  dir: 1 | -1;
+  /** 指の移動量（px）。左へ払うと負。 */
+  dx: number;
+  /** 指を離したあとの自動スライド中か。 */
+  animating: boolean;
+};
 
 /**
  * 鍵を持っているかで入口を分ける。鍵は同期先も決めるので、
@@ -116,17 +94,149 @@ function Shell() {
   const [date, setDate] = useState<IsoDate>(today);
   const [tab, setTab] = useState<Tab>('today');
   const [startNewExercise, setStartNewExercise] = useState(false);
+  const [drag, setDrag] = useState<Drag | null>(null);
   const [, bump] = useState(0);
+
+  const pager = useRef<HTMLDivElement | null>(null);
+  /** 操作の開始点と、どちらの軸の操作か。'y' に決まったらその指では何もしない。 */
+  const gesture = useRef<{ x: number; y: number; at: number; axis: 'unknown' | 'x' | 'y' } | null>(null);
 
   useEffect(() => subscribeUpdate(() => bump((n) => n + 1)), []);
 
-  const swipe = useSwipe((direction) => {
-    const i = TABS.findIndex((t) => t.key === tab);
-    const next = TABS[Math.min(TABS.length - 1, Math.max(0, i + direction))];
-    if (next) setTab(next.key);
-  });
+  const width = () => pager.current?.clientWidth ?? window.innerWidth;
+
+  const neighbor = (dir: 1 | -1): Tab | null => {
+    const i = TABS.findIndex((t) => t.key === tab) + dir;
+    return TABS[i]?.key ?? null;
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch' || drag?.animating) return;
+    const target = e.target as HTMLElement;
+    // 数値欄やシートの上から始まった操作は奪わない
+    if (target.closest('input, textarea, select, .sheet, .celebrate, .stepper')) {
+      gesture.current = null;
+      return;
+    }
+    gesture.current = { x: e.clientX, y: e.clientY, at: Date.now(), axis: 'unknown' };
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const g = gesture.current;
+    if (!g || g.axis === 'y') return;
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+
+    if (g.axis === 'unknown') {
+      if (Math.abs(dx) < AXIS_THRESHOLD && Math.abs(dy) < AXIS_THRESHOLD) return;
+      // 縦の方が動いていればスクロールに任せる。横に決まった指だけ拾う
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        g.axis = 'y';
+        return;
+      }
+      const dir = dx < 0 ? 1 : -1;
+      const to = neighbor(dir);
+      if (to === null) {
+        // 端では引っぱらない。動かないことで端だと分かる
+        g.axis = 'y';
+        return;
+      }
+      g.axis = 'x';
+      setDrag({ to, dir, dx, animating: false });
+      return;
+    }
+
+    setDrag((prev) => {
+      if (!prev || prev.animating) return prev;
+      const w = width();
+      // 行き過ぎないように画面幅で止める
+      return { ...prev, dx: Math.max(-w, Math.min(w, dx)) };
+    });
+  };
+
+  const finish = () => {
+    const g = gesture.current;
+    gesture.current = null;
+    if (!g || g.axis !== 'x') return;
+    setDrag((prev) => {
+      if (!prev || prev.animating) return prev;
+      const w = width();
+      const moved = Math.abs(prev.dx);
+      const quick = Date.now() - g.at < FLICK_MS && moved > FLICK_PX;
+      const commit = moved > w * COMMIT_RATIO || quick;
+      return { ...prev, animating: true, dx: commit ? -prev.dir * w : 0 };
+    });
+  };
+
+  /**
+   * 自動スライドが終わった時点でタブを入れ替える。
+   *
+   * animating でなければ何もしないので、何度呼んでも同じ結果になる。
+   * transitionend と時間切れの両方から呼ぶため、この性質が必要。
+   */
+  const settle = useCallback(() => {
+    setDrag((prev) => {
+      if (!prev?.animating) return prev;
+      if (prev.dx !== 0) setTab(prev.to);
+      return null;
+    });
+  }, []);
+
+  /*
+   * 時間切れでも必ず片付ける。
+   *
+   * transitionend だけに任せると、開始と終了の値が同じだった場合や、
+   * 面が生成された直後で前の値が無い場合に発火せず、2 面が重なったまま
+   * 固まる（実際に起きた）。表示の後始末を 1 つのイベントに賭けない。
+   */
+  useEffect(() => {
+    if (!drag?.animating) return;
+    const id = setTimeout(settle, SLIDE_MS + 60);
+    return () => clearTimeout(id);
+  }, [drag?.animating, settle]);
 
   if (!ready) return <div className="booting">OVERLOAD</div>;
+
+  const renderTab = (key: Tab) => {
+    switch (key) {
+      case 'today':
+        return (
+          <SessionView
+            date={date}
+            today={today}
+            onDateChange={setDate}
+            onCreateExercise={() => {
+              setStartNewExercise(true);
+              setTab('exercises');
+            }}
+          />
+        );
+      case 'calendar':
+        return (
+          <CalendarView
+            today={today}
+            onPickDate={(picked) => {
+              setDate(picked);
+              setTab('today');
+            }}
+          />
+        );
+      case 'weight':
+        return <BodyWeightView today={today} />;
+      case 'exercises':
+        return <ExercisesView startNew={startNewExercise} onStartNewHandled={() => setStartNewExercise(false)} />;
+      case 'settings':
+        return <SettingsView />;
+    }
+  };
+
+  /*
+   * ずらしているあいだだけ transform を当てる。常に当てていると、transform は
+   * position: fixed の基準になるので、シートや祝福が画面全体ではなくこの面の中に
+   * 収まってしまう。止まっているときは外しておく。
+   */
+  const offset = (base: number) =>
+    drag ? { transform: `translate3d(${drag.dx + base}px, 0, 0)` } : undefined;
 
   return (
     <div className="app">
@@ -147,33 +257,33 @@ function Shell() {
         </button>
       ) : null}
 
-      <main className="view" {...swipe}>
-        {tab === 'today' ? (
-          <SessionView
-            date={date}
-            today={today}
-            onDateChange={setDate}
-            onCreateExercise={() => {
-              setStartNewExercise(true);
-              setTab('exercises');
-            }}
-          />
+      <div
+        className="pager"
+        ref={pager}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={finish}
+        onPointerCancel={finish}
+      >
+        <div
+          className={`page ${drag ? 'is-moving' : ''} ${drag?.animating ? 'is-sliding' : ''}`}
+          style={offset(0)}
+          onTransitionEnd={(e) => {
+            if (e.propertyName === 'transform') settle();
+          }}
+        >
+          <main className="view">{renderTab(tab)}</main>
+        </div>
+        {drag ? (
+          <div
+            className={`page is-moving ${drag.animating ? 'is-sliding' : ''}`}
+            style={offset(drag.dir * width())}
+            aria-hidden="true"
+          >
+            <main className="view">{renderTab(drag.to)}</main>
+          </div>
         ) : null}
-        {tab === 'calendar' ? (
-          <CalendarView
-            today={today}
-            onPickDate={(picked) => {
-              setDate(picked);
-              setTab('today');
-            }}
-          />
-        ) : null}
-        {tab === 'weight' ? <BodyWeightView today={today} /> : null}
-        {tab === 'exercises' ? (
-          <ExercisesView startNew={startNewExercise} onStartNewHandled={() => setStartNewExercise(false)} />
-        ) : null}
-        {tab === 'settings' ? <SettingsView /> : null}
-      </main>
+      </div>
 
       <nav className="tabbar">
         {TABS.map((t) => (

@@ -100,8 +100,15 @@ export function buildAskPrompt(
 
   const oldest = inRange.at(-1)!.date;
   const span = Math.max(1, daysBetween(oldest, today) + 1);
-  // 体重の推移は、ボディメイクの目的では扱う重量より効く情報なので頭に置く
-  const weights = inRange.filter((s) => s.bodyWeight > 0);
+  /*
+   * 体重の推移は、ボディメイクの目的では扱う重量より効く情報なので頭に置く。
+   *
+   * inRange（やった日）から拾ってはいけない。体重は休養日にも付けるものなので、
+   * やった日だけに絞ると記録のほとんどが落ちる。
+   */
+  const weights = [...sessions]
+    .filter((s) => s.bodyWeight > 0 && (from === null || s.date >= from) && s.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date));
   const bodyLine =
     weights.length === 0
       ? null

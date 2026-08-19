@@ -12,7 +12,7 @@ import * as db from './lib/db.ts';
 import { presetExercises } from './lib/presets.ts';
 import { isTombstone, mergedExercises, mergedSessions } from './lib/sync.ts';
 import type { Exercise, ExerciseId, IsoDate, Session } from './lib/types.ts';
-import { emptySession, hasRecord } from './lib/types.ts';
+import { emptySession, hasRecord, worthStoring } from './lib/types.ts';
 
 export type Store = {
   ready: boolean;
@@ -47,11 +47,6 @@ export function useStore(): Store {
   const store = useContext(StoreContext);
   if (!store) throw new Error('StoreProvider の外で useStore を呼んだ');
   return store;
-}
-
-/** 空でも入力途中は残す。done を付ける前に閉じても消えないようにする。 */
-function worthKeeping(session: Session): boolean {
-  return session.entries.length > 0 || session.note.trim() !== '';
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -103,7 +98,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const saveSession = useCallback(
     (session: Session) => {
       const next: Session = { ...session, updatedAt: Date.now() };
-      const keep = worthKeeping(next);
+      const keep = worthStoring(next);
       setSessions((prev) => {
         const rest = prev.filter((s) => s.date !== next.date);
         return keep ? [...rest, next] : rest;

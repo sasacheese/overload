@@ -86,6 +86,12 @@ html,
 body {
   margin: 0;
   padding: 0;
+  /*
+   * 面ごとにスクロールするので、文書そのものは動かさない。
+   * これでタブバーが流れていくことがなくなり、引っぱりによる跳ね返りも消える。
+   */
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -96,7 +102,9 @@ body {
   /* 数字を読み違えないよう桁を揃える */
   font-variant-numeric: tabular-nums;
   -webkit-text-size-adjust: 100%;
-  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  /* 二度叩きの拡大を止める。面ごとの縦スクロールは .page 側で許可する */
+  touch-action: manipulation;
 }
 
 button,
@@ -128,15 +136,67 @@ button {
 
 /* ── 全体レイアウト ───────────────────────────────── */
 
+/*
+ * 上のお知らせ・面・タブバーを縦に積む。高さを画面に固定してあるので、
+ * タブバーはスクロールに関係なく常に同じ位置にいる。
+ *
+ * grid の行指定にしないのは、お知らせが無い日には子が 2 つになり、
+ * 行の割り当てが 1 つずれてタブバーが 1fr を取ってしまうため（実際に壊れた）。
+ * flex なら順に積まれるだけで、伸びるのは面だけになる。
+ */
 .app {
-  min-height: 100dvh;
-  display: grid;
-  grid-template-rows: 1fr auto;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/*
+ * 面を横に並べて動かす入れもの。はみ出した面は隠す。
+ * min-height: 0 が無いと、中身の高さより縮めず、面の中のスクロールが働かない。
+ */
+.pager {
+  position: relative;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/*
+ * 1 つの面。縦スクロールはここが持つ。
+ *
+ * touch-action: pan-y にしているのは、縦は素の挙動に任せ、横は JS で扱うため。
+ * これがないと横方向がブラウザに食われて、指に追従できない。
+ */
+.page {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  background: var(--bg);
+}
+
+/*
+ * 動かしているあいだだけ will-change を当てる。
+ *
+ * will-change: transform は transform と同じく position: fixed の基準を作る。
+ * 常に当てていると、面の中の追加ボタンや休憩タイマーが画面ではなく面に対して
+ * 位置を取り、しかも内側のスクロールと一緒に流れていく（実際に流れた）。
+ */
+.page.is-moving {
+  will-change: transform;
+}
+
+/* 指を離したあとの自動スライド。指で動かしているあいだは transition を当てない */
+.page.is-sliding {
+  transition: transform 270ms cubic-bezier(0.25, 0.9, 0.3, 1);
 }
 
 .view {
-  /* 下の余白は、右下の追加ボタンとタブバーに隠れない高さを確保している */
-  padding: 0 var(--gutter) calc(6rem + env(safe-area-inset-bottom));
+  /* タブバーは面の外に出たので、下の余白は左下の追加ボタンぶんだけ確保する */
+  padding: 0 var(--gutter) 5.5rem;
   max-width: 32rem;
   margin: 0 auto;
   width: 100%;
@@ -154,10 +214,9 @@ button {
 }
 
 .tabbar {
-  position: sticky;
-  bottom: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  flex: none;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(16px) saturate(1.4);
   border-top: 1px solid var(--line);
@@ -321,6 +380,7 @@ button {
 .banner {
   display: block;
   width: 100%;
+  flex: none;
   text-align: left;
   padding: 0.6875rem var(--gutter);
   font-size: 0.75rem;
@@ -1561,7 +1621,8 @@ button {
 .fab {
   position: fixed;
   left: var(--gutter);
-  bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  /* タブバー（3rem ＋ 安全域）の上に出す。画面基準に戻したので自分で避ける */
+  bottom: calc(4rem + env(safe-area-inset-bottom));
   width: 3.25rem;
   height: 3.25rem;
   border-radius: 999px;
@@ -1589,7 +1650,7 @@ button {
   /* 左下の追加ボタンのぶんを空ける。同じ高さに並べて 1 段に収める */
   left: calc(var(--gutter) + 4rem);
   right: var(--gutter);
-  bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  bottom: calc(4.125rem + env(safe-area-inset-bottom));
   max-width: 26rem;
   margin: 0 auto;
   display: flex;

@@ -124,3 +124,12 @@ test('claudeNewChatUrl: 新規チャットの q に載る', () => {
   assert.equal(url.origin + url.pathname, 'https://claude.ai/new');
   assert.equal(url.searchParams.get('q'), 'やあ');
 });
+
+test('体重の推移は休養日のぶんも含める（やった日だけに絞ると大半が落ちる）', () => {
+  const trained = session('2026-08-05', [['bench-press', [[60, 8]]]]);
+  trained.bodyWeight = 72;
+  // トレーニングしていない日。体重だけ付けてある
+  const restDay: Session = { ...session('2026-08-18', []), bodyWeight: 70.2 };
+  const prompt = buildAskPrompt({ sessions: [trained, restDay], exercises, today, weeks: 4 });
+  assert.ok(prompt.includes('体重 72kg → 70.2kg'));
+});

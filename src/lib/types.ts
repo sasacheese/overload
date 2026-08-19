@@ -164,7 +164,24 @@ export function doneSets(entry: SessionEntry): SetRecord[] {
   return entry.sets.filter((s) => s.done && s.reps > 0);
 }
 
-/** 何かしら記録された種目があるか。空のセッションはカレンダーに出さない。 */
+/**
+ * トレーニングの記録があるか。カレンダーに「やった日」として出すかの判定。
+ *
+ * 体重は含めない。体重だけ付けた日（休養日）をやった日として塗ると、
+ * 毎日体重を入れるほどカレンダーが埋まって、実際に動いた日が分からなくなる。
+ */
 export function hasRecord(session: Session): boolean {
   return session.entries.some((e) => doneSets(e).length > 0) || session.note.trim() !== '';
+}
+
+/**
+ * 保存する価値があるか。`hasRecord` とは別の判定。
+ *
+ * こちらは**体重を含める**。トレーニングをしない日に体重だけ付ける使い方が
+ * 前提なので、体重しか無い日を保存しないと、入力した数字がそのまま消える。
+ * 種目が空でも行が残っていれば保存するのは、✓ を付ける前に画面を閉じても
+ * 入力途中が消えないようにするため。
+ */
+export function worthStoring(session: Session): boolean {
+  return session.entries.length > 0 || session.note.trim() !== '' || session.bodyWeight > 0;
 }
