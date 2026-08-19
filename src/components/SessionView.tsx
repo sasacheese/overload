@@ -19,7 +19,7 @@ import {
   previousEntry,
   sessionVolume,
 } from '../lib/query.ts';
-import { format } from '../lib/progression.ts';
+
 import { findRecords, type Achievement, type RecordKind } from '../lib/records.ts';
 import type { Exercise, IsoDate, Session, SessionEntry } from '../lib/types.ts';
 import { useSession, useStore } from '../store.tsx';
@@ -27,9 +27,8 @@ import { Celebration } from './Celebration.tsx';
 import { ExerciseCard } from './ExerciseCard.tsx';
 import { ExercisePicker } from './ExercisePicker.tsx';
 import { Icon } from './Icon.tsx';
-import { Mark } from './Mark.tsx';
 import { RestTimer } from './RestTimer.tsx';
-import { Stepper } from './Stepper.tsx';
+import { TopBar } from './TopBar.tsx';
 import { dayClass } from './Weekday.tsx';
 
 type Props = {
@@ -78,6 +77,13 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
   const last = useMemo(() => lastPerformed(sessions), [sessions]);
   // 体重は当日の記録が無ければ直近の値を引き継ぐ。アシスト種目の実効負荷に効く
   const bodyWeight = useMemo(() => bodyWeightOn(sessions, date), [sessions, date]);
+  /** その日より前の直近の記録。上部の帯に「前回」として出す。 */
+  const latestBefore = useMemo(() => {
+    const found = sessions
+      .filter((s) => s.date < date && s.bodyWeight > 0)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    return found ? { date: found.date, weight: found.bodyWeight } : null;
+  }, [sessions, date]);
   const volume = sessionVolume(session, exercises, bodyWeight);
   const sets = countedSets(session);
   const parts = dateParts(date);
@@ -152,28 +158,12 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
 
   return (
     <>
-      {/* 体重。毎日入れる場所なので一番上に置き、スクロールしても残す */}
-      <div className="weigh-in">
-        <span className="weigh-in-label">
-          {/* 18px では線が 1px 未満になって濁るだけなので、三角だけにする（favicon-32 と同じ判断） */}
-          <Mark className="app-mark" showLine={false} />
-          <strong>体重</strong>
-          {/* 今日の欄と同じ数字を 2 つ並べても情報が増えないので、違うときだけ出す */}
-          {bodyWeight > 0 && bodyWeight !== session.bodyWeight ? (
-            <span className="weigh-in-latest">{format(bodyWeight)} kg</span>
-          ) : null}
-        </span>
-        <Stepper
-          value={session.bodyWeight}
-          step={0.1}
-          min={0}
-          max={250}
-          label="体重"
-          suffix="kg"
-          zeroLabel="—"
-          onChange={(v) => saveSession({ ...session, bodyWeight: v })}
-        />
-      </div>
+      <TopBar
+        today={date}
+        todayWeight={session.bodyWeight}
+        latest={latestBefore}
+        onChange={(v) => saveSession({ ...session, bodyWeight: v })}
+      />
 
       <header className="view-head">
         <div className="date-nav">

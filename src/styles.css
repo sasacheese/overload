@@ -2032,3 +2032,109 @@ button {
   justify-content: center;
   gap: 0.375rem;
 }
+
+/* ── 画面上部の帯（印・字・体重） ────────────────── */
+
+/*
+ * スクロールしても残す。左右の余白を打ち消して画面幅まで伸ばしているのは、
+ * 追従したときに地の色が透けて中途半端に見えないため。
+ */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 calc(var(--gutter) * -1);
+  padding: 0.625rem var(--gutter);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 1.0625rem;
+  height: 1.0625rem;
+  color: var(--accent);
+  flex: none;
+}
+
+/* 字は控えめに。主役は記録の数字で、名前は場所を示すだけ */
+.wordmark {
+  display: inline-flex;
+  /*
+   * ベースライン揃え。中央揃えにすると、行送りの中で V が字より下がって
+   * 背が低く見える（実測して 0.9px ずれていた）。SVG は行ボックスを持たないので、
+   * flex のベースラインは下端になり、字のベースラインとちょうど合う。
+   */
+  align-items: baseline;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  color: var(--fg);
+}
+
+/*
+ * V だけ字として組み直したもの。逆三角形のシルエットを字の中に置いている。
+ * 高さは前後の字のキャップハイトに合わせ、字間も同じだけ空ける。
+ */
+.wordmark-v {
+  /* 前後の字の実測値。キャップハイトと字幅をそのまま使う */
+  height: 0.705em;
+  width: 0.663em;
+  color: var(--accent);
+  flex: none;
+  /*
+   * letter-spacing は字の右側に付く。左隣の O が自分の右側に空けているので、
+   * こちらは右側だけ足すと前後が同じ間隔になる。
+   */
+  margin-right: 0.14em;
+}
+
+/* ── 上部の帯の体重 ─────────────────────────────── */
+
+.weigh {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1875rem;
+  flex: none;
+}
+
+.weigh-row {
+  display: flex;
+  align-items: center;
+  /* 数値欄とくっつけて置く。離すと右上の数字が何なのか結びつかない */
+  gap: 0.4375rem;
+}
+
+.weigh-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.weigh-row .stepper {
+  width: 8.25rem;
+  height: 2.375rem;
+  flex: none;
+}
+
+/* 素の数字だけだと何なのか分からないので、「前回」と日付を必ず添える */
+.weigh-latest {
+  font-size: 0.625rem;
+  color: var(--faint);
+  white-space: nowrap;
+}

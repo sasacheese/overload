@@ -9,12 +9,11 @@
  */
 
 import { useMemo, useState } from 'react';
-import { dateLabel, dateParts, dayKind, daysBetween, shiftDays } from '../lib/calendar.ts';
+import { dateLabel, dayKind, daysBetween, shiftDays } from '../lib/calendar.ts';
 import { format } from '../lib/progression.ts';
 import type { IsoDate } from '../lib/types.ts';
 import { useSession, useStore } from '../store.tsx';
-import { Mark } from './Mark.tsx';
-import { Stepper } from './Stepper.tsx';
+import { TopBar } from './TopBar.tsx';
 import { dayClass } from './Weekday.tsx';
 
 type Range = { label: string; days: number | null };
@@ -50,32 +49,17 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
   const changeInRange = newest && oldestInRange ? newest.weight - oldestInRange.weight : null;
 
   const rows = useMemo(() => [...all].reverse().slice(0, LIST_ROWS), [all]);
-  const parts = dateParts(today);
+  /** 今日より前の直近の記録。上部の帯に「前回」として出す。 */
+  const latestBefore = useMemo(() => all.filter((p) => p.date < today).at(-1) ?? null, [all, today]);
 
   return (
     <>
-      <div className="weigh-in">
-        <span className="weigh-in-label">
-          {/* 18px では線が 1px 未満になって濁るだけなので、三角だけにする（favicon-32 と同じ判断） */}
-          <Mark className="app-mark" showLine={false} />
-          <strong>
-            {parts.date}(<span className={dayClass(parts.kind)}>{parts.weekday}</span>)
-          </strong>
-          {newest && newest.weight !== session.bodyWeight ? (
-            <span className="weigh-in-latest">{format(newest.weight)} kg</span>
-          ) : null}
-        </span>
-        <Stepper
-          value={session.bodyWeight}
-          step={0.1}
-          min={0}
-          max={250}
-          label="今日の体重"
-          suffix="kg"
-          zeroLabel="—"
-          onChange={(v) => saveSession({ ...session, bodyWeight: v })}
-        />
-      </div>
+      <TopBar
+        today={today}
+        todayWeight={session.bodyWeight}
+        latest={latestBefore}
+        onChange={(v) => saveSession({ ...session, bodyWeight: v })}
+      />
 
       {all.length === 0 ? (
         <p className="empty">まだ記録がない。上の欄に今日の体重を入れると、ここに変化が出る。</p>
