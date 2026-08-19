@@ -1,0 +1,33 @@
+{
+  "name": "overload",
+  "private": true,
+  "version": "0.4.0",
+  "description": "漸進性過負荷を毎回の入力欄そのものに埋め込んだ、オフラインで動く筋トレ記録 PWA",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/lib/*.test.ts",
+    "icons": "node scripts/make-icons.mjs",
+    "passphrase": "node scripts/passphrase.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "firebase": "^12.17.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^6.0.5",
+    "tsx": "^4.20.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0"
+  }
+}

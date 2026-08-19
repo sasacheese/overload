@@ -1,0 +1,155 @@
+/**
+ * カレンダー。やった日が一目で分かることと、空白が続いていることに気づけることの
+ * 両方を担う。日単位の連続記録は出さない（休養日で切れて、休むことが罰になる）。
+ * 代わりに「週」で続いているかを数える。
+ */
+
+import { useMemo, useState } from 'react';
+import {
+  WEEKDAY_LABELS,
+  dateLabel,
+  dayKindOfIndex,
+  inMonth,
+  monthGrid,
+  monthOf,
+  shiftMonth,
+  weekStreak,
+  type YearMonth,
+} from '../lib/calendar.ts';
+import { bodyWeightOn, countedSets, sessionGroups, sessionVolume, sortedSessions } from '../lib/query.ts';
+import { MUSCLE_GROUPS, type IsoDate, type MuscleGroup } from '../lib/types.ts';
+import { useStore } from '../store.tsx';
+import { AskClaudeButton } from './AskClaudeButton.tsx';
+import { Icon } from './Icon.tsx';
+import { dayClass } from './Weekday.tsx';
+
+type Props = {
+  today: IsoDate;
+  onPickDate: (date: IsoDate) => void;
+};
+
+export function CalendarView({ today, onPickDate }: Props) {
+  const { sessions, exercises } = useStore();
+  const [month, setMonth] = useState<YearMonth>(() => monthOf(today));
+
+  const recorded = useMemo(() => {
+    const map = new Map<IsoDate, { volume: number; sets: number; groups: readonly MuscleGroup[] }>();
+    for (const session of sortedSessions(sessions)) {
+      map.set(session.date, {
+        volume: sessionVolume(session, exercises, bodyWeightOn(sessions, session.date)),
+        sets: countedSets(session),
+        groups: sessionGroups(session, exercises),
+      });
+    }
+    return map;
+  }, [sessions, exercises]);
+
+  const weeks = useMemo(() => monthGrid(month), [month]);
+  const monthDates = useMemo(() => [...recorded.keys()].filter((d) => inMonth(d, month)), [recorded, month]);
+  const monthVolume = monthDates.reduce((n, d) => n + (recorded.get(d)?.volume ?? 0), 0);
+  const streak = weekStreak([...recorded.keys()], today);
+  // 濃さの基準はその月の最大ボリューム。月によって上限が違っても比較が効くようにする
+  const peak = Math.max(1, ...monthDates.map((d) => recorded.get(d)?.volume ?? 0));
+
+  const recent = useMemo(() => sortedSessions(sessions).slice(0, 8), [sessions]);
+
+  return (
+    <>
+      <header className="view-head">
+        <div className="date-nav">
+          <button type="button" className="icon-btn" aria-label="前の月" onClick={() => setMonth(shiftMonth(month, -1))}>
+            <Icon name="left" />
+          </button>
+          <div className="date-current">
+            <strong>
+              {month.year}年{month.month}月
+            </strong>
+          </div>
+          <button type="button" className="icon-btn" aria-label="次の月" onClick={() => setMonth(shiftMonth(month, 1))}>
+            <Icon name="right" />
+          </button>
+        </div>
+      </header>
+
+      <div className="summary">
+        <span>
+          <strong>{monthDates.length}</strong>
+          <span className="unit">回</span>
+        </span>
+        <span>
+          <strong>{Math.round(monthVolume).toLocaleString('ja-JP')}</strong>
+          <span className="unit">kg</span>
+        </span>
+        <span className={streak >= 2 ? 'hit' : ''}>
+          <strong>{streak}</strong>
+          <span className="unit">週連続</span>
+        </span>
+      </div>
+
+      <div className="calendar">
+        <div className="cal-row cal-head">
+          {WEEKDAY_LABELS.map((label, i) => (
+            <span key={label} className={`cal-weekday ${dayClass(dayKindOfIndex(i)) ?? ''}`}>
+              {label}
+            </span>
+          ))}
+        </div>
+        {weeks.map((week) => (
+          <div className="cal-row" key={week[0]}>
+            {week.map((day) => {
+              const record = recorded.get(day);
+              const outside = !inMonth(day, month);
+              // 上限を抑えているのは、濃くなった日の文字が読めなくなるのを避けるため
+              const intensity = record ? 0.16 + 0.44 * Math.min(1, record.volume / peak) : 0;
+              return (
+                <button
+                  type="button"
+                  key={day}
+                  className={`cal-cell ${outside ? 'is-outside' : ''} ${day === today ? 'is-today' : ''} ${record ? 'has-record' : ''}`}
+                  style={{ '--intensity': intensity } as React.CSSProperties}
+                  onClick={() => onPickDate(day)}
+                  aria-label={`${dateLabel(day)}${record ? ` ${record.sets}セット` : ' 記録なし'}`}
+                >
+                  <span className="cal-day">{Number(day.slice(8))}</span>
+                  {/* 部位は色ではなく漢字で示す。色の点を撒くと画面が賑やかになる */}
+                  <span className="cal-groups">
+                    {record?.groups.map((g) => MUSCLE_GROUPS[g].short).join('') ?? ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <AskClaudeButton sessions={sessions} exercises={exercises} today={today} />
+
+      <h2 className="section-title with-icon">
+        <Icon name="history" />
+        最近のセッション
+      </h2>
+      {recent.length === 0 ? (
+        <p className="empty">まだ記録がない。「今日」から始める。</p>
+      ) : (
+        <ul className="recent">
+          {recent.map((session) => {
+            const record = recorded.get(session.date);
+            return (
+              <li key={session.date}>
+                <button type="button" className="recent-item" onClick={() => onPickDate(session.date)}>
+                  <span className="recent-date">{dateLabel(session.date)}</span>
+                  <span className="recent-groups">
+                    {record?.groups.map((g) => MUSCLE_GROUPS[g].label).join('・') || 'メモのみ'}
+                  </span>
+                  <span className="muted">
+                    {record?.sets ?? 0}セット · {Math.round(record?.volume ?? 0).toLocaleString('ja-JP')}kg
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}

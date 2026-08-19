@@ -1,0 +1,56 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages へのデプロイと OIDC トークンの取得。リポジトリは読むだけ。
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: GitHub Pages へデプロイ
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: ビルド
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_BACKUP_REPO: ${{ github.repository }}
+          # Firebase の値は名前のとおり公開情報。アクセス制御は Firestore Security
+          # Rules 側が担うので、Secrets ではなく Variables に置く（実態と合わせる）。
+          VITE_FIREBASE_PUBLIC_API_KEY: ${{ vars.VITE_FIREBASE_PUBLIC_API_KEY }}
+          VITE_FIREBASE_PUBLIC_PROJECT_ID: ${{ vars.VITE_FIREBASE_PUBLIC_PROJECT_ID }}
+          VITE_FIREBASE_PUBLIC_APP_ID: ${{ vars.VITE_FIREBASE_PUBLIC_APP_ID }}
+          # 合言葉のハッシュは .env に置いてある。ここで env に足すと、
+          # Secrets が未設定のとき空文字で上書きされてロックが黙って消えるので足さない。
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

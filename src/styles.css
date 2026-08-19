@@ -1,0 +1,2034 @@
+/*
+ * 「洗練された上質な肉体を作るためのトレーニングプロデュース」を画面に落とす。
+ *
+ * 方針を 5 つに決めてある。
+ *
+ * 1. 地は白でも青黒でもなく**石灰色（greige）と焙煎色の黒**。真っ白の紙面と
+ *    青みのある黒は、どちらもよくある技術系サイトの顔で、他と見分けがつかない。
+ *    明るい側を白ではなく石灰色に落とすのが、この配色でいちばん効いている部分。
+ * 2. 赤は**面ではなく信号**として使う。ヘッダを赤で塗る作りは目立つが安くなる。
+ *    「記録を更新した」「今日である」の 2 つだけに塗りの赤を割り当て、
+ *    それ以外は無彩色に徹する。赤の総面積が小さいほど 1 つ 1 つが強く効く。
+ *    色は深紅ではなく朱（vermilion）寄りにして、温かい地の色と同じ系統に置く。
+ * 3. 書体は**ゴシック 1 系統だけ**。明朝を混ぜると和の情緒が出て、
+ *    淡々と数字を置く道具という性格から外れる。字間の演出も最小に留める。
+ * 4. **文字で説明せず記号で示す。** タブ・メモ・増減・前回といった繰り返し出る
+ *    ラベルはアイコンに置き換える。逆に記録の数字とコツの文章は文字のまま残す
+ *    （記号にすると意味が伝わらないため）。
+ * 5. 達成の色に緑を使わない。赤と緑の信号色はどのフィットネスアプリにもある。
+ *    赤が入る = 前進した、無彩色 = 変化なし、という 1 軸に寄せる。
+ */
+
+:root {
+  color-scheme: dark light;
+
+  /*
+   * 無彩色。ベージュや焙煎色のような色味を地に置くと、それ自体が主張して
+   * 記録の数字より先に目に入る。地は完全に無彩色にして、色は赤 1 色だけに任せる。
+   */
+  --bg: #0e0e0e;
+  --surface: #181818;
+  --surface-2: #222222;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --fg: #ededed;
+  --fg-dim: #b0b0b0;
+  --muted: #858585;
+  --faint: #575757;
+
+  --accent: #dc3226;
+  --accent-soft: rgb(220 50 38 / 0.13);
+  --accent-fg: #fff;
+
+  /*
+   * 曜日の色だけが無彩色 + 赤という配色の例外。カレンダーの慣習（土は水色、
+   * 日は赤）に合わせている。休日の区別は色以外に置き換えが効かないので、
+   * 意味のある色として通す。使うのは曜日の 1 文字だけに限る。
+   */
+  --sat: #63b0d6;
+
+  --radius: 10px;
+  --radius-sm: 8px;
+  /* ステッパーの −/+ の幅。「62.5」と単位が入る余地を数値欄に残す必要がある */
+  --tap: 1.875rem;
+  /* 画面の左右余白。スティッキーな帯を画面幅に伸ばすときにも使う */
+  --gutter: 1.25rem;
+
+  --sans: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ececec;
+    --surface: #fbfbfb;
+    --surface-2: #e1e1e1;
+    --line: rgb(0 0 0 / 0.1);
+    --line-strong: rgb(0 0 0 / 0.2);
+    --fg: #141414;
+    --fg-dim: #3a3a3a;
+    --muted: #6b6b6b;
+    --faint: #9e9e9e;
+
+    --accent: #c4271c;
+    --accent-soft: rgb(196 39 28 / 0.09);
+    --accent-fg: #fff;
+
+    --sat: #1f6d92;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.7 var(--sans);
+  letter-spacing: 0.005em;
+  /* 数字を読み違えないよう桁を揃える */
+  font-variant-numeric: tabular-nums;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-variant-numeric: inherit;
+  color: inherit;
+}
+
+.icon {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+  flex: none;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  /* 連打したときに文字が選択されて反転するのを防ぐ */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── 全体レイアウト ───────────────────────────────── */
+
+.app {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+
+.view {
+  /* 下の余白は、右下の追加ボタンとタブバーに隠れない高さを確保している */
+  padding: 0 var(--gutter) calc(6rem + env(safe-area-inset-bottom));
+  max-width: 32rem;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.booting {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.tabbar {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ラベルを置かずアイコンだけ。5 つ並ぶので、文字を入れると窮屈になる */
+.tabbar button {
+  padding: 0.8125rem 0.25rem 0.75rem;
+  color: var(--faint);
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.tabbar .icon {
+  width: 1.375rem;
+  height: 1.375rem;
+}
+
+.tabbar button.is-active {
+  color: var(--fg);
+}
+
+.tabbar button.is-active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0.3125rem;
+  width: 1rem;
+  height: 1.5px;
+  background: var(--accent);
+}
+
+.tabbar {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.view-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+}
+
+.view-title {
+  font-size: 1.0625rem;
+  letter-spacing: 0.03em;
+  margin: 0;
+  font-weight: 600;
+}
+
+.date-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+/* 2 段だと視線が縦に動く。日付・曜日・今日を 1 行に並べる */
+.date-current {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.375rem;
+  min-width: 11rem;
+}
+
+.date-current strong {
+  font-size: 1.0625rem;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+}
+
+.date-current .muted {
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+/* 括弧は色を変えない（休日の主張が強くなりすぎる） */
+.day-sat {
+  color: var(--sat);
+}
+
+.day-sun {
+  color: var(--accent);
+}
+
+/* 要約は罫線で仕切る。カードにすると主役の種目カードと競合する */
+.summary {
+  display: flex;
+  gap: 1.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.summary > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+.summary strong {
+  font-size: 1.0625rem;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.summary .unit {
+  font-size: 0.625rem;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.summary .hit strong {
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.center {
+  text-align: center;
+}
+
+/* 節のラベル。明朝＋広いトラッキングで、内容より前に出ないようにする */
+.section-title {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0.5rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.empty,
+.footnote {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.7;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--fg-dim);
+  margin: 0;
+  background: var(--surface-2);
+  border-left: 1px solid var(--accent);
+  padding: 0.5rem 0.75rem;
+  line-height: 1.7;
+}
+
+.banner {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.6875rem var(--gutter);
+  font-size: 0.75rem;
+  margin: 0;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-dim);
+}
+
+.banner.warn {
+  border-bottom-color: var(--accent);
+}
+
+.banner.update {
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+
+.warn {
+  color: var(--accent);
+}
+
+/* ── ボタン ──────────────────────────────────────── */
+
+.primary,
+.ghost {
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--fg);
+  transition: background 0.15s ease;
+}
+
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+/*
+ * 押せないボタンは色を薄めるのではなく、塗りを外す。赤を薄めただけだと
+ * 「押せる赤」との差が濃さの違いにしか出ず、押せるかどうかが判別できない。
+ */
+.primary:disabled {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--faint);
+}
+
+.ghost:active {
+  background: var(--surface-2);
+}
+
+.ghost.danger,
+.ghost.accent {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/*
+ * 面を赤で塗るのは ✓（達成した）とタブの現在地だけに留める。
+ * 追加ボタンを塗ると、画面で一番強いのが「まだ何もしていない操作」になってしまう。
+ */
+.ghost.accent {
+  padding: 0.8125rem 1rem;
+  letter-spacing: 0.03em;
+}
+
+.wide {
+  width: 100%;
+}
+
+.small {
+  padding: 0.4375rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.icon-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 1.125rem;
+  display: grid;
+  place-items: center;
+}
+
+.icon-btn:active {
+  background: var(--surface-2);
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.btn-row .ghost {
+  flex: 1 1 7rem;
+}
+
+/* 部位は色ではなく明朝の 1 文字で示す。細い枠で囲って記号として立てる */
+.glyph {
+  font-size: 0.6875rem;
+  line-height: 1;
+  width: 1.375rem;
+  height: 1.375rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  color: var(--fg-dim);
+  flex: none;
+}
+
+.chip {
+  font-size: 0.625rem;
+  letter-spacing: 0.03em;
+  padding: 0.125rem 0.4375rem;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.chip.mark {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  font-weight: 700;
+}
+
+.chip.kind-load-up {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ── 種目カード ─────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.card-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 今日の目標。カードの中で最も大きく、最初に目に入る要素 */
+.target-label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 0.1875rem;
+}
+
+.target-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.target-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.target-value .sub {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+
+.target-reason,
+.prev-line {
+  margin: 0.375rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.prev-line {
+  color: var(--fg-dim);
+}
+
+/* ── セット行 ────────────────────────────────────── */
+
+.sets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.set-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4375rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.set-main {
+  display: grid;
+  grid-template-columns: 0.875rem minmax(0, 1fr) minmax(0, 1fr) 2.375rem;
+  gap: 0.3125rem;
+  align-items: center;
+}
+
+.set-index {
+  font-size: 0.75rem;
+  color: var(--faint);
+  text-align: center;
+}
+
+.set-item.is-done .set-index {
+  color: var(--accent);
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap);
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  height: 2.625rem;
+  overflow: hidden;
+}
+
+/* −/+ を出さない欄。数値だけなので 1 列にして、両端に余白を取る */
+.stepper.is-plain {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.stepper.is-plain .stepper-field {
+  padding: 0 0.75rem;
+}
+
+.set-item.is-done .stepper {
+  border-color: var(--line-strong);
+}
+
+.stepper-btn {
+  color: var(--muted);
+  font-size: 1rem;
+  display: grid;
+  place-items: center;
+}
+
+.stepper-btn:active {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+/*
+ * 数値と単位を縦方向の中央に置く。
+ *
+ * baseline で揃えると、単位（小さい文字）のベースラインに合わせるぶん数値が
+ * 上へずれて、枠の中で浮いて見える。中央揃えにして、単位だけ 1px 下げて
+ * 数値の足元に置くのが、両方が同じ行に乗っているように見える組み合わせ。
+ */
+.stepper-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 数字と単位がくっつくと 62.5kg が 1 語に見える。間を空けて別物として読ませる */
+  gap: 0.3125rem;
+  min-width: 0;
+  padding: 0 0.125rem;
+  height: 100%;
+}
+
+.stepper-field input {
+  border: none;
+  background: none;
+  text-align: right;
+  width: 100%;
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: 0;
+  /* 行の高さを 1 にしないと、行間ぶんの余白が上下非対称に効いて中央から外れる */
+  line-height: 1;
+}
+
+.stepper-field input:focus {
+  outline: none;
+}
+
+.stepper-suffix {
+  font-size: 0.5625rem;
+  line-height: 1;
+  color: var(--muted);
+  flex: none;
+  letter-spacing: 0;
+  transform: translateY(1px);
+}
+
+.check {
+  height: 2.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 0.9375rem;
+  display: grid;
+  place-items: center;
+}
+
+.check.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.set-extra {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-left: 1.1875rem;
+}
+
+.delta {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/*
+ * 前回より伸びた差だけを赤で出す。落ちた日と変化なしの日は無彩色で数字だけ置く。
+ * 「赤が入る = 前進した」の 1 軸に寄せているので、ここで赤を使うのは
+ * 記録更新の祝福と同じ意味になる。
+ */
+.delta-up {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.delta-down,
+.delta-same,
+.delta-new {
+  color: var(--muted);
+}
+
+.ghost-prev {
+  color: var(--faint);
+}
+
+.note-btn {
+  font-size: 0.625rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem;
+  flex: none;
+}
+
+.note-btn.has-note {
+  color: var(--fg-dim);
+  border-color: var(--line-strong);
+}
+
+/*
+ * セットのメモ。左端をステッパーの位置に合わせる。
+ *
+ * 枠で囲わず下線だけにしている。セット行ごとに枠が増えると、1 枚のカードの中に
+ * 四角が並びすぎて記録そのものが埋もれる。
+ *
+ * 共通の入力欄スタイル（width: 100%）をここに当てると、左のインデントぶんだけ
+ * 右へはみ出す。この 1 箇所だけ幅の扱いが違うので共通の選択子から外し、
+ * インデントを差し引いた幅をここで指定している。
+ */
+.set-note {
+  margin-left: 1.1875rem;
+  width: calc(100% - 1.1875rem);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line-strong);
+  border-radius: 0;
+  padding: 0.25rem 0.125rem;
+  font-size: 0.8125rem;
+}
+
+.set-note::placeholder {
+  color: var(--faint);
+}
+
+.set-note:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
+/* アシスト種目の実効負荷。入力した数字の意味を取り違えないための注記 */
+.effective {
+  font-size: 0.6875rem;
+  color: var(--fg-dim);
+  padding-left: 1.1875rem;
+  margin: 0;
+}
+
+.effective strong {
+  font-weight: 600;
+}
+
+.set-actions {
+  display: flex;
+  gap: 0.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.625rem;
+}
+
+.set-actions .ghost {
+  flex: 1;
+  padding: 0.4375rem;
+  font-size: 0.75rem;
+  border-color: var(--line);
+}
+
+/* ── 前回比ゲージ ───────────────────────────────── */
+
+.gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4375rem;
+}
+
+.gauge-track {
+  position: relative;
+  height: 2px;
+  background: var(--line-strong);
+}
+
+.gauge-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  transition: width 0.3s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* 前回の位置。ここを越えたかどうかがこの画面の主題 */
+.gauge-mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--fg);
+  opacity: 0.65;
+}
+
+.gauge-text {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.gauge-text strong {
+  letter-spacing: 0.06em;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gauge.status-achieved .gauge-text strong,
+.gauge.status-exceeded .gauge-text strong {
+  color: var(--accent);
+}
+
+.gauge.status-in-progress .gauge-text strong,
+.gauge.status-below .gauge-text strong,
+.gauge.status-matched .gauge-text strong,
+.gauge.status-first .gauge-text strong {
+  color: var(--fg-dim);
+}
+
+/* ── コツ・機材の設定 ───────────────────────────── */
+
+.tips {
+  display: block;
+  text-align: left;
+  width: 100%;
+  background: var(--surface-2);
+  border-left: 1px solid var(--accent);
+  padding: 0.5625rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--fg-dim);
+  white-space: pre-wrap;
+}
+
+.tips-empty {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  text-align: left;
+}
+
+.tips-edit textarea {
+  min-height: 4.5rem;
+}
+
+.tips-edit .ghost {
+  align-self: flex-start;
+}
+
+/* ── 開閉する節（やり方・これまで・推移・メモ） ── */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.disclosure + .disclosure {
+  border-top: 1px solid var(--line);
+}
+
+/* 見出し自体がボタン。開いたあと同じ場所を押せば閉じられる */
+.disclosure-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 0;
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.disclosure.is-open .disclosure-head {
+  color: var(--fg);
+}
+
+.disclosure-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--faint);
+}
+
+.disclosure.is-open .disclosure-icon {
+  color: var(--fg-dim);
+}
+
+.disclosure-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.disclosure-count {
+  font-size: 0.6875rem;
+  color: var(--faint);
+}
+
+/* 件数が意味を持たない節（メモ）で、中身があることだけを示す印 */
+.disclosure-mark {
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 999px;
+  background: var(--fg-dim);
+  flex: none;
+}
+
+.disclosure-chevron {
+  width: 1rem;
+  height: 1rem;
+  color: var(--faint);
+  transition: transform 0.18s ease-out;
+  flex: none;
+}
+
+.disclosure.is-open .disclosure-chevron {
+  transform: rotate(180deg);
+}
+
+.disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 0.25rem 0 1.125rem;
+}
+
+.section-textarea {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5625rem 0.6875rem;
+  font-size: 0.875rem;
+  width: 100%;
+  resize: vertical;
+}
+
+.section-textarea:focus {
+  outline: none;
+  border-color: var(--line-strong);
+}
+
+.past-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.past-list li {
+  display: grid;
+  grid-template-columns: 5.75rem minmax(0, 1fr);
+  gap: 0.125rem 0.75rem;
+  padding: 0.4375rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.8125rem;
+}
+
+.past-date {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.past-sets {
+  font-weight: 600;
+}
+
+.past-note {
+  grid-column: 2;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.trend-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.75rem;
+}
+
+.trend-head strong {
+  font-size: 0.9375rem;
+}
+
+.sparkline {
+  width: 100%;
+  height: 2.5rem;
+  /* 罫線の色だと薄すぎて線の向きが読めない。本文より一段落とした濃さにする */
+  color: var(--fg-dim);
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.spark-dot {
+  fill: var(--fg-dim);
+}
+
+.spark-best {
+  fill: var(--accent);
+}
+
+/* やり方・効く筋肉 */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.guide-how {
+  font-size: 0.8125rem;
+  line-height: 1.8;
+  color: var(--fg-dim);
+  margin: 0;
+}
+
+.guide-body {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.875rem;
+  align-items: start;
+}
+
+.bodymap {
+  width: 100%;
+  display: block;
+}
+
+.bodymap .base {
+  fill: var(--line);
+}
+
+.bodymap .primary {
+  fill: var(--accent);
+}
+
+.bodymap .secondary {
+  fill: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.bodymap-caption {
+  font-size: 0.5625rem;
+  letter-spacing: 0.04em;
+  fill: var(--faint);
+}
+
+.muscle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  font-size: 0.75rem;
+}
+
+.muscle-row {
+  display: flex;
+  gap: 0.4375rem;
+  align-items: baseline;
+}
+
+.muscle-swatch {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  margin-top: 0.25rem;
+  background: var(--accent);
+}
+
+.muscle-swatch.is-secondary {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.cues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--fg-dim);
+}
+
+.cues li {
+  display: grid;
+  grid-template-columns: 0.75rem minmax(0, 1fr);
+  gap: 0.25rem;
+}
+
+.cues li::before {
+  content: '—';
+  color: var(--faint);
+}
+
+/* ── 入力欄 ──────────────────────────────────────── */
+
+.note,
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+}
+
+.note textarea,
+.field input,
+.form input,
+.form select,
+.search {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5625rem 0.6875rem;
+  font-size: 0.875rem;
+  letter-spacing: 0;
+  width: 100%;
+}
+
+.note textarea:focus,
+.field input:focus,
+.form input:focus,
+.search:focus {
+  outline: none;
+  border-color: var(--line-strong);
+}
+
+.note textarea {
+  resize: vertical;
+}
+
+.session-note {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.9375rem 1.125rem;
+}
+
+/* 体重。アシスト種目の実効負荷に使うので、置き場所は今日の画面の中 */
+.bodyweight {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.625rem 0.875rem;
+}
+
+.bodyweight-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+.bodyweight-label span:first-child {
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+}
+
+.bodyweight-label .footnote {
+  font-size: 0.625rem;
+}
+
+.bodyweight .stepper {
+  width: 9.5rem;
+  flex: none;
+}
+
+/* ── カレンダー ─────────────────────────────────── */
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: 0.625rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  padding-bottom: 0.5rem;
+}
+
+.cal-weekday.day-sat {
+  color: var(--sat);
+}
+
+.cal-weekday.day-sun {
+  color: var(--accent);
+}
+
+/*
+ * 罫線の格子にする。角丸のタイルを 42 個並べると、それだけで賑やかになる。
+ * 記録の濃さは赤の濃度で示し、部位は明朝の漢字で示す。
+ */
+.cal-cell {
+  aspect-ratio: 1 / 1.05;
+  border: 0.5px solid var(--line);
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  position: relative;
+}
+
+.cal-cell.has-record {
+  background: color-mix(in srgb, var(--accent) calc(var(--intensity) * 100%), transparent);
+}
+
+.cal-cell.is-outside {
+  opacity: 0.3;
+}
+
+.cal-cell.is-today::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 1px solid var(--accent);
+  pointer-events: none;
+}
+
+.cal-day {
+  font-size: 0.8125rem;
+  color: var(--fg-dim);
+  letter-spacing: -0.01em;
+}
+
+.cal-cell.has-record .cal-day {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.cal-groups {
+  font-size: 0.5rem;
+  letter-spacing: 0.02em;
+  color: var(--fg-dim);
+  height: 0.75rem;
+  line-height: 0.75rem;
+}
+
+.recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recent-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 5.75rem minmax(0, 1fr) auto;
+  gap: 0.625rem;
+  align-items: baseline;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  padding: 0.6875rem 0;
+  font-size: 0.8125rem;
+}
+
+.recent-date {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.recent-groups {
+  letter-spacing: 0.03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-item .muted {
+  font-size: 0.6875rem;
+}
+
+/* ── Claude に頼む ──────────────────────────────── */
+
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.875rem;
+  background: var(--surface);
+}
+
+.ask-head {
+  font-size: 0.8125rem;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.ask-periods {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.ask-periods button {
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border-right: 1px solid var(--line);
+}
+
+.ask-periods button:last-child {
+  border-right: none;
+}
+
+.ask-periods button.is-active {
+  background: var(--surface-2);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.ask-link {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
+/* ── シート（種目の追加・編集） ─────────────────── */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 20;
+}
+
+.sheet {
+  background: var(--surface);
+  width: min(32rem, 100%);
+  max-height: 88dvh;
+  border-radius: 14px 14px 0 0;
+  border-top: 1px solid var(--line-strong);
+  padding: 1.125rem var(--gutter) calc(1.25rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet-head strong {
+  font-size: 0.9375rem;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+}
+
+.sheet-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sheet-actions > * {
+  flex: 1;
+}
+
+.picker-group h3 {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  font-weight: 600;
+}
+
+.picker-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.picker-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.6875rem;
+  font-size: 0.8125rem;
+  color: var(--fg-dim);
+}
+
+.picker-item:active {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.form {
+  gap: 0.75rem;
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.form label.row {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+/* ── 種目一覧 ────────────────────────────────────── */
+
+.ex-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+}
+
+.ex-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  padding: 0.6875rem 0;
+}
+
+.ex-name {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+}
+
+.ex-item .muted {
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+}
+
+/* ── 設定 ────────────────────────────────────────── */
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--surface);
+}
+
+.panel h2 {
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+  margin: 0;
+  font-weight: 600;
+}
+
+.panel p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.75;
+  color: var(--fg-dim);
+}
+
+.status {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.375rem 0.875rem;
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.status dt {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.status dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--fg-dim);
+}
+
+.status dd.ok {
+  color: var(--fg);
+}
+
+.key-value {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  word-break: break-all;
+  user-select: all;
+  background: var(--surface-2);
+  padding: 0.4375rem 0.5rem;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
+/* ── 右下の追加ボタン ───────────────────────────── */
+
+/*
+ * 種目の追加は、記録の途中でも下までスクロールせずに押せる位置に固定する。
+ *
+ * 右下ではなく**左下**に置いている。セット行の ✓ は右端に並ぶので、右下に固定すると
+ * スクロール位置によって ✓ の上に重なる。✓ は 1 セッションに何十回も押す操作で、
+ * 種目の追加は数回。頻度の低い操作を遠い側に置いて、頻度の高い操作を塞がないほうを取った。
+ *
+ * 面は赤で塗らず、地と反転した無彩色にしている。赤は「前進した」ことの合図に
+ * 取っておきたいので、まだ何もしていない操作に一番強い色を渡さない。
+ */
+.fab {
+  position: fixed;
+  left: var(--gutter);
+  bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 5px 18px rgb(0 0 0 / 0.3);
+  z-index: 15;
+}
+
+.fab:active {
+  transform: scale(0.94);
+}
+
+.fab .icon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* ── 休憩タイマー ───────────────────────────────── */
+
+.rest-timer {
+  position: fixed;
+  /* 左下の追加ボタンのぶんを空ける。同じ高さに並べて 1 段に収める */
+  left: calc(var(--gutter) + 4rem);
+  right: var(--gutter);
+  bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  max-width: 26rem;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.5625rem 0.875rem;
+  overflow: hidden;
+  isolation: isolate;
+  z-index: 10;
+}
+
+.rest-bar {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1px;
+  background: var(--line-strong);
+  z-index: -1;
+  transition: width 1s linear;
+}
+
+.rest-timer.is-ready .rest-bar {
+  background: var(--accent);
+}
+
+.rest-text {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4375rem;
+  flex: 1;
+}
+
+.rest-text strong {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.rest-target,
+.rest-state {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.rest-timer.is-ready .rest-state {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── ロック画面 ─────────────────────────────────── */
+
+.gate {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.gate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  width: min(20rem, 100%);
+  text-align: center;
+}
+
+.gate-mark {
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0 auto 0.25rem;
+  color: var(--accent);
+}
+
+.gate-form h1 {
+  font-size: 1.125rem;
+  letter-spacing: 0.24em;
+  margin: 0;
+  font-weight: 600;
+  /* トラッキングぶん右に寄るのを戻す */
+  text-indent: 0.24em;
+}
+
+.gate-tagline {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0;
+}
+
+.gate-form p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.7;
+}
+
+.gate-form input {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+
+.gate-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.gate-error {
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+
+.gate-rule {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0.25rem 0;
+}
+
+/* ── 記録更新の祝福 ─────────────────────────────── */
+
+.celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(3px);
+  animation: fade-in 180ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* 細い線が外へ走って消えるだけ。紙吹雪はこの画面の静けさから浮く */
+.celebrate-rays {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.celebrate-rays span {
+  position: absolute;
+  width: 1px;
+  height: 4.5rem;
+  background: linear-gradient(to top, var(--accent), transparent);
+  transform-origin: 50% 100%;
+  opacity: 0;
+  animation: ray 900ms cubic-bezier(0.15, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes ray {
+  0% {
+    transform: rotate(var(--angle)) translateY(-2.5rem) scaleY(0.15);
+    opacity: 0;
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--angle)) translateY(-9rem) scaleY(0.55);
+    opacity: 0;
+  }
+}
+
+.celebrate-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1875rem;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 1.5rem 1.75rem;
+  min-width: 14rem;
+  text-align: center;
+  animation: pop 420ms cubic-bezier(0.2, 1.1, 0.3, 1) both;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+}
+
+.celebrate-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--accent);
+  margin-bottom: 0.375rem;
+}
+
+.celebrate-title {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.celebrate-exercise {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.celebrate-detail {
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 0.125rem;
+}
+
+.celebrate-prev {
+  font-size: 0.6875rem;
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celebrate,
+  .celebrate-card,
+  .celebrate-rays span {
+    animation: none;
+  }
+  .celebrate-rays {
+    display: none;
+  }
+}
+
+/* ── 体重 ────────────────────────────────────────── */
+
+/*
+ * 体重の帯。トレーニングの有無に関わらず毎日入れるものなので一番上に置き、
+ * スクロールしても残るようにしてある。左右の余白を打ち消して画面幅まで
+ * 伸ばしているのは、追従したときに地の色が透けて中途半端に見えないため。
+ */
+.weigh-in {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 calc(var(--gutter) * -1);
+  padding: 0.75rem var(--gutter);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--line);
+}
+
+.weigh-in-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* 上部バーの左端に置くアプリの印。ここだけは常に赤で出す */
+.app-mark {
+  width: 1.125rem;
+  height: 1.125rem;
+  color: var(--accent);
+  flex: none;
+}
+
+.weigh-in-label strong {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* 直近の実測。今日まだ入れていない日でも、どこから動くのかが分かる */
+.weigh-in-latest {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.weigh-in .stepper {
+  width: 8.75rem;
+  flex: none;
+}
+
+.weight-chart {
+  width: 100%;
+  height: 11rem;
+  display: block;
+  overflow: visible;
+}
+
+.weight-chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.weight-chart .curve {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.weight-chart .area {
+  fill: var(--accent-soft);
+}
+
+.weight-chart .point {
+  fill: var(--accent);
+}
+
+.weight-chart .axis {
+  font-size: 0.5625rem;
+  fill: var(--muted);
+}
+
+.weight-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.weight-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  padding: 0.625rem 0;
+  font-size: 0.8125rem;
+}
+
+.weight-row .value {
+  font-weight: 600;
+}
+
+.weight-row .diff {
+  font-size: 0.6875rem;
+  color: var(--muted);
+  min-width: 3.25rem;
+  text-align: right;
+}
+
+.weight-row .diff.down {
+  color: var(--accent);
+}
+
+.weight-range {
+  display: flex;
+  gap: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.weight-range button {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border-right: 1px solid var(--line);
+}
+
+.weight-range button:last-child {
+  border-right: none;
+}
+
+.weight-range button.is-active {
+  background: var(--surface-2);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* ── アイコンを置いた小さなボタン ───────────────── */
+
+.icon-chip {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--faint);
+  flex: none;
+}
+
+/* メモが入っていることは前進ではないので赤を使わない（赤は記録更新に取っておく） */
+.icon-chip.is-on {
+  color: var(--fg-dim);
+  border-color: var(--line-strong);
+}
+
+.set-actions .ghost .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0 auto;
+}
+
+.check .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.icon-btn .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* 前回の値。時計のアイコンを頭に置いて「前回」の文字を省く */
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.with-icon .icon {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  color: var(--faint);
+}
+
+/* アイコンを頭に置いた横幅いっぱいのボタンは、中身を中央に寄せる */
+.center-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+}

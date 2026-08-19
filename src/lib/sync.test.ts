@@ -1,0 +1,84 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { applicableToLocal, isEmpty, isTombstone, mergedExercises, mergedSessions, planExercises, planSessions } from './sync.ts';
+import { presetExercises } from './presets.ts';
+import { isoDate, type Session } from './types.ts';
+
+function session(date: string, updatedAt: number, reps = 8): Session {
+  return {
+    date: isoDate(date),
+    entries: [{ exerciseId: 'bench-press' as Session['entries'][number]['exerciseId'], sets: [{ weight: 60, reps, done: true, note: '' }], note: '' }],
+    note: '',
+    bodyWeight: 0,
+    updatedAt,
+  };
+}
+
+const empty = (date: string, updatedAt: number): Session => ({
+  date: isoDate(date),
+  entries: [],
+  note: '',
+  bodyWeight: 0,
+  updatedAt,
+});
+
+test('片側にしか無いものは、それぞれ反対側へ渡る', () => {
+  const p = planSessions([session('2026-08-17', 100)], [session('2026-08-18', 200)]);
+  assert.deepEqual(p.toRemote.map((s) => s.date), ['2026-08-17']);
+  assert.deepEqual(p.toLocal.map((s) => s.date), ['2026-08-18']);
+});
+
+test('両側にあるときは updatedAt の大きい方が勝つ', () => {
+  const newer = planSessions([session('2026-08-17', 200, 9)], [session('2026-08-17', 100, 8)]);
+  assert.deepEqual(newer.toRemote.map((s) => s.updatedAt), [200]);
+  assert.equal(newer.toLocal.length, 0);
+
+  const older = planSessions([session('2026-08-17', 100, 8)], [session('2026-08-17', 200, 9)]);
+  assert.deepEqual(older.toLocal.map((s) => s.updatedAt), [200]);
+  assert.equal(older.toRemote.length, 0);
+});
+
+test('updatedAt が同じなら何もしない', () => {
+  const p = planSessions([session('2026-08-17', 100)], [session('2026-08-17', 100)]);
+  assert.ok(isEmpty(p));
+});
+
+test('種目も同じ規則で突き合わせる', () => {
+  const [bench, ...rest] = presetExercises();
+  const local = [{ ...bench!, name: 'ローカルで直した', updatedAt: 300 }, ...rest];
+  const remote = [{ ...bench!, name: 'リモートの名前', updatedAt: 100 }];
+  const p = planExercises(local, remote);
+  assert.equal(p.toLocal.length, 0);
+  assert.equal(p.toRemote.find((e) => e.id === 'bench-press')?.name, 'ローカルで直した');
+  // リモートに無い種目もすべて送る
+  assert.equal(p.toRemote.length, local.length);
+});
+
+test('空のセッションは消した印として扱い、取り込みでは落とす', () => {
+  assert.ok(isTombstone(empty('2026-08-17', 500)));
+  assert.ok(!isTombstone(session('2026-08-17', 500)));
+  assert.ok(!isTombstone({ ...empty('2026-08-17', 500), note: '休養日' }));
+  assert.deepEqual(applicableToLocal([empty('2026-08-17', 1), session('2026-08-18', 1)]).map((s) => s.date), [
+    '2026-08-18',
+  ]);
+});
+
+test('mergedSessions: 消した印が来た日はローカルからも消える', () => {
+  const local = [session('2026-08-17', 100), session('2026-08-18', 100)];
+  const merged = mergedSessions(local, [empty('2026-08-17', 500)]);
+  assert.deepEqual(merged.map((s) => s.date), ['2026-08-18']);
+});
+
+test('mergedSessions: リモートが新しい日は置き換わり、無い日は残る', () => {
+  const local = [session('2026-08-17', 100, 8), session('2026-08-18', 100, 8)];
+  const merged = mergedSessions(local, [session('2026-08-17', 500, 12)]);
+  assert.equal(merged.length, 2);
+  assert.equal(merged.find((s) => s.date === '2026-08-17')?.entries[0]?.sets[0]?.reps, 12);
+});
+
+test('mergedExercises: id で置き換わる', () => {
+  const local = presetExercises();
+  const merged = mergedExercises(local, [{ ...local[0]!, name: '別名', updatedAt: 9 }]);
+  assert.equal(merged.length, local.length);
+  assert.equal(merged.find((e) => e.id === local[0]!.id)?.name, '別名');
+});
