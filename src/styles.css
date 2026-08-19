@@ -746,6 +746,15 @@ button {
   outline: none;
 }
 
+/*
+ * 触って空にしたあいだ、元の数字が影で残る。字の形は同じままにして色だけ落とす
+ * ——大きさや太さを変えると、打った数字と別のものに見えて置き換えだと分からない。
+ */
+.stepper-field input::placeholder {
+  color: var(--faint);
+  opacity: 1;
+}
+
 .stepper-suffix {
   font-size: 0.5625rem;
   line-height: 1;
