@@ -44,8 +44,8 @@ jobs:
           VITE_FIREBASE_PUBLIC_API_KEY: ${{ vars.VITE_FIREBASE_PUBLIC_API_KEY }}
           VITE_FIREBASE_PUBLIC_PROJECT_ID: ${{ vars.VITE_FIREBASE_PUBLIC_PROJECT_ID }}
           VITE_FIREBASE_PUBLIC_APP_ID: ${{ vars.VITE_FIREBASE_PUBLIC_APP_ID }}
-          # 合言葉のハッシュは .env に置いてある。ここで env に足すと、
-          # Secrets が未設定のとき空文字で上書きされてロックが黙って消えるので足さない。
+          # 入口の鍵はビルドに入れない。公開バンドルは誰でも読めるので、
+          # 埋め込んだ時点で鍵ではなくなる。端末ごとに 1 回入力する方式にしている。
         run: npm run build
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

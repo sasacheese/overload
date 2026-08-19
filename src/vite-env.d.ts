@@ -1,8 +1,6 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** 合言葉の SHA-256（16 進 64 文字）。未設定ならロック画面を出さない。 */
-  readonly VITE_PASSPHRASE_SHA256?: string;
   /** バックアップの保存先に使うリポジトリ。'owner/repo' 形式。 */
   readonly VITE_BACKUP_REPO?: string;
   /**
