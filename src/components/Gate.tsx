@@ -35,7 +35,7 @@ export function Gate({ onUnlocked }: { onUnlocked: (key: string) => void }) {
     <div className="gate">
       {mode === 'create' && created !== null ? (
         <div className="gate-form">
-          <Mark className="gate-mark" lineColor="var(--fg-dim)" />
+          <Mark className="gate-mark" />
           <h1>OVERLOAD</h1>
           <p className="gate-tagline">あなたの鍵</p>
           <code className="key-value">{formatKey(created)}</code>
@@ -63,7 +63,7 @@ export function Gate({ onUnlocked }: { onUnlocked: (key: string) => void }) {
             if (normalized !== '') onUnlocked(normalized);
           }}
         >
-          <Mark className="gate-mark" lineColor="var(--fg-dim)" />
+          <Mark className="gate-mark" />
           <h1>OVERLOAD</h1>
           <p className="gate-tagline">上質な肉体をプロデュースする</p>
           <input

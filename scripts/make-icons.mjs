@@ -16,8 +16,7 @@ const OUT = resolve(import.meta.dirname, '..', 'public');
 // 無彩色の地と、信号として使う赤。styles.css の --bg / --accent と揃える
 const BG = [0x0e, 0x0e, 0x0e];
 const MARK = [0xdc, 0x32, 0x26];
-// 「前回までの水準」を表す線。主役は三角なので、明るさを落として従にする
-const LINE = [0x59, 0x59, 0x59];
+
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -60,14 +59,6 @@ function encodePng(size, rgba) {
   ]);
 }
 
-function inTriangle(x, y, [ax, ay], [bx, by], [cx, cy]) {
-  const sign = (px, py, qx, qy, rx, ry) => (px - rx) * (qy - ry) - (qx - rx) * (py - ry);
-  const d1 = sign(x, y, ax, ay, bx, by);
-  const d2 = sign(x, y, bx, by, cx, cy);
-  const d3 = sign(x, y, cx, cy, ax, ay);
-  return (d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0);
-}
-
 function inRoundedRect(x, y, x0, y0, x1, y1, r) {
   if (x < x0 || x > x1 || y < y0 || y > y1) return false;
   const cx = Math.min(Math.max(x, x0 + r), x1 - r);
@@ -75,29 +66,62 @@ function inRoundedRect(x, y, x0, y0, x1, y1, r) {
   return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
 }
 
-/**
- * 「前の水準を超える」の図。src/components/Mark.tsx と同じ形。
- *
- * 水平の線が前回までの水準で、その上に立って突き抜けている三角が今日。
- * 線は三角の底辺より外へ伸ばして、越えている関係が読めるようにしている。
- *
- * scale は maskable の安全域に収めるための縮小率。三角形は重心が下寄りに
- * 見えるので、光学的な中心に合わせて少し上へずらす。
- *
- * @returns 'mark' | 'line' | null
+function inPolygon(x, y, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** 点から多角形の輪郭までの最短距離。角を丸めるために使う。 */
+function distToPolygon(x, y, pts) {
+  let best = Infinity;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [ax, ay] = pts[j];
+    const [bx, by] = pts[i];
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len = dx * dx + dy * dy;
+    const t = len === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len));
+    best = Math.min(best, Math.hypot(x - (ax + t * dx), y - (ay + t * dy)));
+  }
+  return best;
+}
+
+/*
+ * バーを担いだ V。src/components/Mark.tsx と同じ寸法（100 単位系）。
+ * V は多角形の内側に加えて、輪郭から ROUND 以内も塗る。SVG 側で塗りと同じ色の線を
+ * 重ねて角を丸めているのと同じ効果を、距離で出している。
  */
-function mark(x, y, scale, withLine) {
+const BAR = { x0: 8, y0: 13, x1: 92, y1: 25, r: 3 };
+const V = [
+  [15, 34],
+  [50, 89],
+  [85, 34],
+  [67, 34],
+  [50, 66],
+  [33, 34],
+];
+const ROUND = 1.5;
+
+/**
+ * @param scale maskable の安全域に収めるための縮小率
+ * @returns 印の内側か
+ */
+function mark(x, y, scale) {
   const u = (v) => 0.5 + (v - 0.5) / scale;
-  const px = u(x);
-  const py = u(y) + 0.03;
-  if (px < 0 || px > 1 || py < 0 || py > 1) return null;
-  if (inTriangle(px, py, [0.5, 0.13], [0.16, 0.66], [0.84, 0.66])) return 'mark';
-  if (withLine && inRoundedRect(px, py, 0.05, 0.66, 0.95, 0.705, 0.023)) return 'line';
-  return null;
+  const px = u(x) * 100;
+  const py = u(y) * 100;
+  if (px < 0 || px > 100 || py < 0 || py > 100) return false;
+  if (inRoundedRect(px, py, BAR.x0, BAR.y0, BAR.x1, BAR.y1, BAR.r)) return true;
+  return inPolygon(px, py, V) || distToPolygon(px, py, V) <= ROUND;
 }
 
 /** 1 ピクセルを 4×4 でサンプリングして輪郭をなめらかにする。 */
-function render(size, { round, scale, withLine }) {
+function render(size, { round, scale }) {
   const rgba = Buffer.alloc(size * size * 4);
   const radius = round ? 0.225 : 0;
   const sub = 4;
@@ -105,26 +129,22 @@ function render(size, { round, scale, withLine }) {
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       let bg = 0;
-      let markHits = 0;
-      let lineHits = 0;
+      let hits = 0;
       for (let sy = 0; sy < sub; sy++) {
         for (let sx = 0; sx < sub; sx++) {
           const nx = (x + (sx + 0.5) / sub) / size;
           const ny = (y + (sy + 0.5) / sub) / size;
           if (round && !inRoundedRect(nx, ny, 0, 0, 1, 1, radius)) continue;
           bg += 1;
-          const hit = mark(nx, ny, scale, withLine);
-          if (hit === 'mark') markHits += 1;
-          else if (hit === 'line') lineHits += 1;
+          if (mark(nx, ny, scale)) hits += 1;
         }
       }
       const i = (y * size + x) * 4;
       rgba[i + 3] = Math.round((bg / total) * 255);
       if (bg === 0) continue;
-      const m = markHits / bg;
-      const l = lineHits / bg;
+      const m = hits / bg;
       for (let c = 0; c < 3; c++) {
-        rgba[i + c] = Math.round(BG[c] * (1 - m - l) + MARK[c] * m + LINE[c] * l);
+        rgba[i + c] = Math.round(BG[c] * (1 - m) + MARK[c] * m);
       }
     }
   }
@@ -132,18 +152,18 @@ function render(size, { round, scale, withLine }) {
 }
 
 const targets = [
-  // 印は canvas の 62% に収める。余白を取るほど記号として見える
-  { name: 'icon-192.png', size: 192, round: true, scale: 0.62, withLine: true },
-  { name: 'icon-512.png', size: 512, round: true, scale: 0.62, withLine: true },
+  // 印は canvas の 68% に収める。余白を取るほど記号として見える
+  { name: 'icon-192.png', size: 192, round: true, scale: 0.68 },
+  { name: 'icon-512.png', size: 512, round: true, scale: 0.68 },
   // maskable は端が切られる前提なので、さらに内側へ寄せる
-  { name: 'maskable-icon-512.png', size: 512, round: false, scale: 0.44, withLine: true },
+  { name: 'maskable-icon-512.png', size: 512, round: false, scale: 0.48 },
   // iOS 側で角が丸められるので四角のまま出す
-  { name: 'apple-touch-icon.png', size: 180, round: false, scale: 0.62, withLine: true },
-  // 32px では線が 1px 未満に潰れて濁るだけなので、三角だけにして輪郭を優先する
-  { name: 'favicon-32.png', size: 32, round: true, scale: 0.74, withLine: false },
+  { name: 'apple-touch-icon.png', size: 180, round: false, scale: 0.68 },
+  // 32px ではバーと V の間が 1px を割るので、印を大きく取って形を優先する
+  { name: 'favicon-32.png', size: 32, round: true, scale: 0.82 },
 ];
 
-for (const { name, size, round, scale, withLine } of targets) {
-  writeFileSync(resolve(OUT, name), encodePng(size, render(size, { round, scale, withLine })));
-  console.log(`${name} (${size}×${size})${withLine ? '' : ' 線なし'}`);
+for (const { name, size, round, scale } of targets) {
+  writeFileSync(resolve(OUT, name), encodePng(size, render(size, { round, scale })));
+  console.log(`${name} (${size}×${size})`);
 }

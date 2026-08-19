@@ -37,8 +37,7 @@ export function TopBar({
   return (
     <div className="topbar">
       <span className="brand">
-        {/* 18px 以下では線が 1px 未満になって濁るだけなので、印は三角だけにする */}
-        <Mark className="brand-mark" showLine={false} />
+        <Mark className="brand-mark" />
         <Wordmark />
       </span>
 
