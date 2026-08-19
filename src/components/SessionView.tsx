@@ -43,14 +43,18 @@ const REST_KEY = 'overload:rest';
 /** 出し終えた祝福。同じ種類を 1 セッションで繰り返さないために覚えておく。 */
 const SHOWN_KEY = 'overload:shownRecords';
 
-function readRest(): { at: number; targetSec: number } | null {
+/** どのセットが始めた休憩かを覚えておく。✓ を外したときに畳むため。 */
+type Rest = { at: number; targetSec: number; exerciseId: string; index: number };
+
+function readRest(): Rest | null {
   try {
     const raw = sessionStorage.getItem(REST_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return null;
-    const { at, targetSec } = parsed as Record<string, unknown>;
-    return typeof at === 'number' && typeof targetSec === 'number' ? { at, targetSec } : null;
+    const { at, targetSec, exerciseId, index } = parsed as Record<string, unknown>;
+    if (typeof at !== 'number' || typeof targetSec !== 'number') return null;
+    return { at, targetSec, exerciseId: String(exerciseId ?? ''), index: Number(index ?? -1) };
   } catch {
     return null;
   }
@@ -96,8 +100,8 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     setPicking(false);
   };
 
-  const startRest = (exercise: Exercise) => {
-    const next = { at: Date.now(), targetSec: exercise.restSec };
+  const startRest = (exercise: Exercise, index: number) => {
+    const next: Rest = { at: Date.now(), targetSec: exercise.restSec, exerciseId: exercise.id, index };
     setRest(next);
     try {
       sessionStorage.setItem(REST_KEY, JSON.stringify(next));
@@ -132,19 +136,49 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
 
     const key = (kind: RecordKind) => `${date}:${exercise.id}:${kind}`;
     const fresh = records.find((r) => !shown.has(key(r.kind)));
-    if (!fresh) return;
-    shown.add(key(fresh.kind));
+
+    /*
+     * 出さなかったぶんも「出した」ことにする。
+     *
+     * 表示するのは一番強い 1 つだけだが、当たった種類を全部覚えておかないと、
+     * ✓ を外して入れ直すたびに次の順位の記録が出てくる（実際にそうなっていた）。
+     * 1 セットに対して褒めるのは 1 回、を保つ。
+     *
+     * この時点で当たっていない種類は覚えないので、あとのセットで本当に新しい
+     * 記録が出たときはちゃんと祝われる。
+     */
+    for (const record of records) shown.add(key(record.kind));
     try {
       sessionStorage.setItem(SHOWN_KEY, JSON.stringify([...shown]));
     } catch {
       // 覚えられなければ同じ祝福がもう一度出るだけ
     }
+
+    if (!fresh) return;
     setCelebration({ achievement: fresh, exerciseName: exercise.name });
   };
 
-  const onSetCompleted = (exercise: Exercise, entry: SessionEntry) => {
-    startRest(exercise);
+  const onSetCompleted = (exercise: Exercise, entry: SessionEntry, index: number) => {
+    startRest(exercise, index);
     celebrate(exercise, entry);
+  };
+
+  /*
+   * ✓ を外したときは、そのセットが始めた休憩を畳む。
+   *
+   * 押し間違いで ✓ が付くことがあり、そのまま残ると意味のない残り時間を数え続ける。
+   * 別のセットが始めた休憩は消さない（3 セット目の休憩中に 1 セット目を直すことがある）。
+   */
+  const onSetUndone = (exercise: Exercise, index: number) => {
+    setRest((prev) => {
+      if (!prev || prev.exerciseId !== exercise.id || prev.index !== index) return prev;
+      try {
+        sessionStorage.removeItem(REST_KEY);
+      } catch {
+        // 消せなければ表示が残るだけ
+      }
+      return null;
+    });
   };
 
   const dismissRest = () => {
@@ -236,6 +270,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
             onChange={(next) => setEntries(session.entries.map((e, j) => (j === i ? next : e)))}
             onRemove={() => setEntries(session.entries.filter((_, j) => j !== i))}
             onSetCompleted={onSetCompleted}
+            onSetUndone={onSetUndone}
           />
         );
       })}

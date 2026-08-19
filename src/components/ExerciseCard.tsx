@@ -50,7 +50,8 @@ type Props = {
   bodyWeight: number;
   onChange: (entry: SessionEntry) => void;
   onRemove: () => void;
-  onSetCompleted: (exercise: Exercise, entry: SessionEntry) => void;
+  onSetCompleted: (exercise: Exercise, entry: SessionEntry, index: number) => void;
+  onSetUndone: (exercise: Exercise, index: number) => void;
 };
 
 /** 履歴に出す過去セッション数。これ以上並べても遡って読まない。 */
@@ -116,6 +117,7 @@ export function ExerciseCard({
   onChange,
   onRemove,
   onSetCompleted,
+  onSetUndone,
 }: Props) {
   const { sessions, upsertExercise } = useStore();
   const [editingTips, setEditingTips] = useState(false);
@@ -166,7 +168,8 @@ export function ExerciseCard({
       sets: entry.sets.map((s, i) => (i === index ? { ...s, done: !s.done } : s)),
     };
     onChange(nextEntry);
-    if (!set.done) onSetCompleted(exercise, nextEntry);
+    if (set.done) onSetUndone(exercise, index);
+    else onSetCompleted(exercise, nextEntry, index);
   };
 
   const toggleNote = (index: number) => {
