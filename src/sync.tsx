@@ -41,9 +41,17 @@ const LAST_SYNCED_KEY = 'overload:lastSyncedAt';
 
 export type SyncPhase = 'off' | 'idle' | 'running' | 'error';
 
+/**
+ * 同期が無効な理由。設定を足せば済むのか、鍵を作れば済むのかで案内が変わるので、
+ * 真偽値ではなく理由まで持つ。
+ */
+export type SyncOff = 'config' | 'key';
+
 export type Sync = {
-  /** Firebase の設定が入っているか。false なら同期そのものが無効。 */
+  /** 同期が使えるか。false なら記録はこの端末だけに残る。 */
   available: boolean;
+  /** 使えない理由。available が true なら null。 */
+  off: SyncOff | null;
   phase: SyncPhase;
   lastSyncedAt: number | null;
   error: string | null;
@@ -69,7 +77,9 @@ function readLastSynced(): number | null {
 
 export function SyncProvider({ vaultKey, children }: { vaultKey: string | null; children: ReactNode }) {
   const { ready, sessions, exercises, applyRemote } = useStore();
-  const available = remote.remoteConfigured() && vaultKey !== null;
+  const configured = remote.remoteConfigured();
+  const available = configured && vaultKey !== null;
+  const off: SyncOff | null = available ? null : configured ? 'key' : 'config';
 
   const [phase, setPhase] = useState<SyncPhase>(available ? 'idle' : 'off');
   const [error, setError] = useState<string | null>(null);
@@ -162,12 +172,13 @@ export function SyncProvider({ vaultKey, children }: { vaultKey: string | null; 
   const value = useMemo<Sync>(
     () => ({
       available,
+      off,
       phase,
       lastSyncedAt,
       error,
       syncNow: () => void run(true),
     }),
-    [available, phase, lastSyncedAt, error, run],
+    [available, off, phase, lastSyncedAt, error, run],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

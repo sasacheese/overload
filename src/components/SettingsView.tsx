@@ -8,7 +8,17 @@
 
 import { useEffect, useState } from 'react';
 import { URL_CONTENT_LIMIT, backupFileName, buildBackup, githubNewFileUrl, isRepoSlug, parseBackup } from '../lib/backup.ts';
-import { clearKey, formatKey, storedKey, vaultId } from '../lib/vault.ts';
+import {
+  STRONG_LENGTH,
+  clearEntry,
+  formatKey,
+  generateKey,
+  isStrongKey,
+  normalizeKey,
+  storeKey,
+  storedKey,
+  vaultId,
+} from '../lib/vault.ts';
 import { securityRules } from '../lib/remote.ts';
 import { offlineError, offlineReady, updateReady, applyUpdate, subscribeUpdate } from '../lib/updates.ts';
 import { useStore } from '../store.tsx';
@@ -23,6 +33,105 @@ function syncLabel(at: number | null): string {
   if (mins < 60) return `${mins}分前`;
   const hours = Math.floor(mins / 60);
   return hours < 24 ? `${hours}時間前` : `${Math.floor(hours / 24)}日前`;
+}
+
+/**
+ * 鍵なしで使っている端末に、あとから鍵を持たせる節。
+ *
+ * 発行と入力を 1 つの節に収めているのは、どちらも「この端末に鍵を置く」という
+ * 同じ操作の別の入口だから。既定は発行（作る）で、すでに持っている鍵を入れる方は
+ * 静かな操作にしてある——鍵を持っている人は探せるが、初めての人には迷いになる。
+ */
+function KeylessKeyPanel({
+  issued,
+  joining,
+  joinInput,
+  onIssue,
+  onCopy,
+  onAdopt,
+  onJoinInput,
+  onJoin,
+  onCancel,
+}: {
+  issued: string | null;
+  joining: boolean;
+  joinInput: string;
+  onIssue: () => void;
+  onCopy: (key: string) => void;
+  onAdopt: (key: string) => void;
+  onJoinInput: (value: string) => void;
+  onJoin: () => void;
+  onCancel: () => void;
+}) {
+  if (issued !== null) {
+    return (
+      <>
+        <code className="key-value">{formatKey(issued)}</code>
+        <p className="muted">
+          書き留めてから進む。失くしてもこの端末の記録は消えないが、同期していたぶんには戻れなくなる。
+        </p>
+        <div className="btn-row">
+          <button type="button" className="ghost" onClick={() => onCopy(issued)}>
+            鍵をコピー
+          </button>
+          <button type="button" className="primary" onClick={() => onAdopt(issued)}>
+            この鍵で始める
+          </button>
+        </div>
+        <button type="button" className="quiet-action" onClick={onCancel}>
+          やめる
+        </button>
+      </>
+    );
+  }
+
+  if (joining) {
+    const normalized = normalizeKey(joinInput);
+    return (
+      <>
+        <label className="field">
+          <span>すでにある鍵</span>
+          <input
+            value={joinInput}
+            autoFocus
+            autoCapitalize="characters"
+            placeholder="ABCD-1234-EFGH-5678-JKMN"
+            onChange={(e) => onJoinInput(e.target.value)}
+          />
+        </label>
+        <p className="footnote">
+          この端末の記録と、その鍵にある記録が合わさる。同じ日の記録は新しい方が残る。
+          {normalized !== '' && !isStrongKey(normalized)
+            ? ` ${STRONG_LENGTH} 文字未満の鍵は総当たりで見つかりうる。`
+            : ''}
+        </p>
+        <div className="btn-row">
+          <button
+            type="button"
+            className="primary"
+            disabled={normalized === ''}
+            onClick={() => onAdopt(normalized)}
+          >
+            この鍵に入る
+          </button>
+          <button type="button" className="ghost" onClick={onCancel}>
+            やめる
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <button type="button" className="ghost wide" onClick={onIssue}>
+        鍵を作って同期を始める
+      </button>
+      <button type="button" className="quiet-action" onClick={onJoin}>
+        すでにある鍵を入れる
+      </button>
+    </>
+  );
 }
 
 export function SettingsView() {
@@ -53,11 +162,39 @@ export function SettingsView() {
   const [message, setMessage] = useState<string | null>(null);
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [confirmLock, setConfirmLock] = useState(false);
+  /*
+   * 鍵なしで使っている端末に、あとから鍵を持たせる。
+   *
+   * `issued` は発行したての鍵（写し取ってもらうために出す）、`joining` は
+   * すでに持っている鍵を入れている状態。どちらも記録には触らない——鍵を
+   * 置いて開き直すだけで、最初の同期がそれまでの記録をまとめて送る。
+   */
+  const [issued, setIssued] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
+  const [joinInput, setJoinInput] = useState('');
   const [, bump] = useState(0);
 
   useEffect(() => subscribeUpdate(() => bump((n) => n + 1)), []);
 
   const json = () => JSON.stringify(buildBackup(exercises, sessions, new Date()), null, 2);
+
+  /**
+   * この端末に鍵を持たせて開き直す。
+   *
+   * 開き直すのは、同期先が SyncProvider より外側で決まっているため。記録は
+   * IndexedDB に残るので、これで失われるものは無い。開き直したあとの最初の
+   * 同期が、それまでの記録をまとめて送る。
+   */
+  const adopt = (key: string) => {
+    storeKey(key);
+    location.reload();
+  };
+
+  const copyKey = (key: string) => {
+    navigator.clipboard
+      ?.writeText(formatKey(key))
+      .then(() => setMessage('鍵をコピーした'), () => setMessage('コピーできなかった'));
+  };
 
   const download = () => {
     const blob = new Blob([json()], { type: 'application/json' });
@@ -175,8 +312,9 @@ export function SettingsView() {
           </>
         ) : (
           <p className="muted">
-            Firebase の設定（VITE_FIREBASE_PUBLIC_*）が入っていないので同期は無効。
-            記録はこの端末だけに残る。設定手順は README にある。
+            {sync.off === 'key'
+              ? '鍵を作っていないので同期は無効。記録はこの端末だけに残る。下の「鍵」から作れば、それまでの記録ごと同期が始まる。'
+              : 'Firebase の設定（VITE_FIREBASE_PUBLIC_*）が入っていないので同期は無効。記録はこの端末だけに残る。設定手順は README にある。'}
           </p>
         )}
       </section>
@@ -184,10 +322,27 @@ export function SettingsView() {
       <section className="panel">
         <h2>鍵</h2>
         <p className="muted">
-          この鍵が記録の在り処。他の端末で同じ鍵を入れると同じ記録が開く。
-          鍵を知らない人はどの端末からも到達できない。
+          {key === null
+            ? '鍵は同期先の住所。作っていないので、記録はこの端末の中だけにある。他の端末でも同じ記録を開きたくなったとき、あるいは端末を失っても残したいときに作る。いま作っても、これまでの記録はそのまま同期される。'
+            : 'この鍵が記録の在り処。他の端末で同じ鍵を入れると同じ記録が開く。鍵を知らない人はどの端末からも到達できない。'}
         </p>
-        {key === null ? null : showKey ? (
+        {key === null ? (
+          <KeylessKeyPanel
+            issued={issued}
+            joining={joining}
+            joinInput={joinInput}
+            onIssue={() => setIssued(generateKey())}
+            onCopy={copyKey}
+            onAdopt={adopt}
+            onJoinInput={setJoinInput}
+            onJoin={() => setJoining(true)}
+            onCancel={() => {
+              setIssued(null);
+              setJoining(false);
+              setJoinInput('');
+            }}
+          />
+        ) : showKey ? (
           <>
             <code className="key-value">{formatKey(key)}</code>
             <div className="btn-row">
@@ -243,8 +398,9 @@ export function SettingsView() {
         {/*
           鍵を消すのは「表示する」と並ぶ重さの操作ではない。書き留めていない鍵を
           消すと同期していたぶんに戻れなくなるので、静かな見た目にして一段挟む。
+          鍵が無い端末では守るものが無いので、この操作自体を出さない。
         */}
-        {confirmLock ? (
+        {key === null ? null : confirmLock ? (
           <>
             <p className="warn">鍵を書き留めたか。消すとこの端末からは開けなくなる。</p>
             <div className="btn-row">
@@ -252,7 +408,7 @@ export function SettingsView() {
                 type="button"
                 className="ghost danger"
                 onClick={() => {
-                  clearKey();
+                  clearEntry();
                   location.reload();
                 }}
               >
@@ -280,7 +436,7 @@ export function SettingsView() {
         </p>
         <div className="btn-row">
           <button type="button" className="ghost" onClick={download}>
-            ファイルに書き出す
+            書き出す
           </button>
           <button type="button" className="ghost" onClick={share}>
             共有
@@ -346,7 +502,7 @@ export function SettingsView() {
       </section>
 
       {message ? <p className="hint">{message}</p> : null}
-      <p className="footnote">OVERLOAD v0.4</p>
+      <p className="footnote">OVERLOAD v1.0.0</p>
     </>
   );
 }

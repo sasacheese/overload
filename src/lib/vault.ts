@@ -1,5 +1,14 @@
 /**
- * 入口の鍵。この 1 つで「画面を開く」と「同期先を決める」の両方を担う。
+ * 入口の鍵。同期先の住所であり、他の端末から同じ記録を開くための合わせ札。
+ *
+ * ## 鍵を作らずに使える
+ *
+ * 鍵が要るのは同期先を決めるためなので、**同期しないなら鍵は要らない**。
+ * 鍵なしで始めた場合、記録はこの端末の IndexedDB だけに残る。あとから鍵を
+ * 作れば、それまでの記録ごと同期が始まる（最初の同期がすべてを送る）。
+ *
+ * 「決めていない」と「鍵なしで使うと決めた」は区別する必要がある。同じに
+ * 扱うと、鍵を作らないと決めた人に毎回入口を出すことになる。
  *
  * ## なぜ短い合言葉ではないのか
  *
@@ -18,6 +27,8 @@
  */
 
 const STORAGE_KEY = 'overload:vault-key';
+/** 鍵を作らずにこの端末だけで使う、と決めた印。 */
+const LOCAL_ONLY_KEY = 'overload:local-only';
 
 /** 見間違いと打ち間違いを避けるため I L O U を除いてある。 */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -55,20 +66,63 @@ export function storedKey(): string | null {
   }
 }
 
+/** 鍵を持つと決めた。鍵なしの印は落とす——両方立っていると入り方が決まらない。 */
 export function storeKey(key: string): void {
   try {
     localStorage.setItem(STORAGE_KEY, normalizeKey(key));
+    localStorage.removeItem(LOCAL_ONLY_KEY);
   } catch {
     // 保存できなくてもこのタブでは開ける
   }
 }
 
-export function clearKey(): void {
+/** 鍵を作らずにこの端末だけで使うと決めた。 */
+export function storeLocalOnly(): void {
+  try {
+    localStorage.setItem(LOCAL_ONLY_KEY, '1');
+  } catch {
+    // 保存できなくてもこのタブでは開ける
+  }
+}
+
+/**
+ * 入り方の印を落として入口に戻す。鍵と鍵なしの印の両方を消す。
+ *
+ * 片方だけ残すと、鍵を消したのに入口が出ない（鍵なしの印で素通りする）。
+ * 記録そのものは IndexedDB に残るので、これで消えるのは入り方だけ。
+ */
+export function clearEntry(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LOCAL_ONLY_KEY);
   } catch {
     // 消せなければ何もしない
   }
+}
+
+/** この端末の入り方。null は「まだ決めていない」。 */
+export type Entry = { kind: 'key'; key: string } | { kind: 'local' };
+
+/**
+ * 2 つの印から入り方を決める。localStorage から切り離してあるのはここを試験するため。
+ *
+ * **鍵が勝つ。** 両方立つことは無いようにしてあるが（`storeKey` が印を落とす）、
+ * もし立っていたら同期できる方を採る。鍵なしを採ると、同期していた記録に
+ * 手が届かないまま使い続けることになる。
+ */
+export function entryFrom(key: string | null, localOnly: boolean): Entry | null {
+  if (key !== null && key !== '') return { kind: 'key', key };
+  return localOnly ? { kind: 'local' } : null;
+}
+
+export function storedEntry(): Entry | null {
+  let localOnly = false;
+  try {
+    localOnly = localStorage.getItem(LOCAL_ONLY_KEY) === '1';
+  } catch {
+    // 読めなければ「決めていない」として扱う
+  }
+  return entryFrom(storedKey(), localOnly);
 }
 
 /**

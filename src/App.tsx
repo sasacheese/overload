@@ -9,7 +9,7 @@ import { SettingsView } from './components/SettingsView.tsx';
 import { todayIso } from './lib/calendar.ts';
 import { subscribeUpdate, updateReady, applyUpdate } from './lib/updates.ts';
 import type { IsoDate } from './lib/types.ts';
-import { storeKey, storedKey } from './lib/vault.ts';
+import { type Entry, storeKey, storeLocalOnly, storedEntry } from './lib/vault.ts';
 import { useStore } from './store.tsx';
 import { SyncProvider } from './sync.tsx';
 
@@ -64,25 +64,32 @@ type Drag = {
 };
 
 /**
- * 鍵を持っているかで入口を分ける。鍵は同期先も決めるので、
+ * 入り方が決まるまでは入口を出す。鍵は同期先も決めるので、
  * SyncProvider より外側で確定させる必要がある。
+ *
+ * 鍵なしで使う場合は同期先が無い。鍵を渡さないだけで済むように、
+ * SyncProvider は null を受け取ったら同期を無効にする作りにしてある。
  */
 export function App() {
-  const [vaultKey, setVaultKey] = useState<string | null>(storedKey);
+  const [entry, setEntry] = useState<Entry | null>(storedEntry);
 
-  if (vaultKey === null) {
+  if (entry === null) {
     return (
       <Gate
-        onUnlocked={(key) => {
+        onKey={(key) => {
           storeKey(key);
-          setVaultKey(key);
+          setEntry({ kind: 'key', key });
+        }}
+        onLocalOnly={() => {
+          storeLocalOnly();
+          setEntry({ kind: 'local' });
         }}
       />
     );
   }
 
   return (
-    <SyncProvider vaultKey={vaultKey}>
+    <SyncProvider vaultKey={entry.kind === 'key' ? entry.key : null}>
       <Shell />
     </SyncProvider>
   );

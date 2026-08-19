@@ -3,13 +3,23 @@ import { formatKey, generateKey, isStrongKey, normalizeKey, STRONG_LENGTH } from
 import { Mark } from './Mark.tsx';
 
 /**
- * 鍵の入力・発行。
+ * 入口。鍵を入れる・作る・作らない。
  *
- * この鍵は「画面を開く」ことと「同期先を決める」ことの両方を担う。守りの強さは
- * 鍵の強さそのものなので、既定では 20 文字を発行する。短い語を入れることも
- * できるが、そのときは同期先が総当たりで見つかりうることを画面に出す。
+ * 鍵は同期先を決めるものなので、守りの強さは鍵の強さそのもの。既定では
+ * 20 文字を発行する。短い語を入れることもできるが、そのときは同期先が
+ * 総当たりで見つかりうることを画面に出す。
+ *
+ * **鍵を作らない道を塞がない。** 鍵が要るのは同期のためで、この端末だけで
+ * 使うなら要らない。あとから鍵を作れば記録ごと同期が始まるので、ここでの
+ * 選択は取り返しがつく。それを画面に書いてあるので、確認は挟まない。
  */
-export function Gate({ onUnlocked }: { onUnlocked: (key: string) => void }) {
+export function Gate({
+  onKey,
+  onLocalOnly,
+}: {
+  onKey: (key: string) => void;
+  onLocalOnly: () => void;
+}) {
   const [mode, setMode] = useState<'enter' | 'create'>('enter');
   const [input, setInput] = useState('');
   const [created, setCreated] = useState<string | null>(null);
@@ -47,7 +57,7 @@ export function Gate({ onUnlocked }: { onUnlocked: (key: string) => void }) {
             <button type="button" className="ghost" onClick={() => copy(created)}>
               {copied ? '✓ コピーした' : '鍵をコピー'}
             </button>
-            <button type="button" className="primary" onClick={() => onUnlocked(created)}>
+            <button type="button" className="primary" onClick={() => onKey(created)}>
               この鍵で開く
             </button>
           </div>
@@ -60,7 +70,7 @@ export function Gate({ onUnlocked }: { onUnlocked: (key: string) => void }) {
           className="gate-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (normalized !== '') onUnlocked(normalized);
+            if (normalized !== '') onKey(normalized);
           }}
         >
           <Mark className="gate-mark" />
@@ -88,6 +98,13 @@ export function Gate({ onUnlocked }: { onUnlocked: (key: string) => void }) {
           <button type="button" className="tips-empty" onClick={create}>
             はじめて使う — 鍵を作る
           </button>
+          <button type="button" className="tips-empty" onClick={onLocalOnly}>
+            鍵を使わずにこの端末だけで使う
+          </button>
+          <p className="footnote">
+            鍵なしでも機能は何も減らない。同期だけが無効になり、記録はこの端末の中に残る。
+            あとから鍵を作れば、それまでの記録ごと同期が始まる。
+          </p>
         </form>
       )}
     </div>
