@@ -82,3 +82,28 @@ test('mergedExercises: id で置き換わる', () => {
   assert.equal(merged.length, local.length);
   assert.equal(merged.find((e) => e.id === local[0]!.id)?.name, '別名');
 });
+
+test('後から連携したとき、それまでの記録が全部送られる', () => {
+  // リモートは空。あとから Firestore を繋いだ初回の状況
+  const local = [session('2026-06-01', 100), session('2026-07-15', 200), session('2026-08-19', 300)];
+  const p = planSessions(local, []);
+  assert.equal(p.toLocal.length, 0);
+  assert.deepEqual(p.toRemote.map((s) => s.date), ['2026-06-01', '2026-07-15', '2026-08-19']);
+});
+
+test('後から連携したとき、種目の設定も全部送られる', () => {
+  const local = presetExercises().map((e) => ({ ...e, tips: 'ラック8段目', updatedAt: 5 }));
+  const p = planExercises(local, []);
+  assert.equal(p.toRemote.length, local.length);
+  assert.equal(p.toLocal.length, 0);
+  // 自分で書いたコツも一緒に上がる
+  assert.ok(p.toRemote.every((e) => e.tips === 'ラック8段目'));
+});
+
+test('2 回目以降は変わっていない記録を送らない（初回だけ全部送る）', () => {
+  const local = [session('2026-06-01', 100), session('2026-08-19', 300)];
+  const first = planSessions(local, []);
+  // 初回で送ったものがリモートに乗った状態で、もう一度突き合わせる
+  const second = planSessions(local, first.toRemote);
+  assert.ok(isEmpty(second));
+});
