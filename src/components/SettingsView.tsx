@@ -502,7 +502,7 @@ export function SettingsView() {
       </section>
 
       {message ? <p className="hint">{message}</p> : null}
-      <p className="footnote">OVERLOAD v1.0.0</p>
+      <p className="footnote">OVERLOAD v1.1.0</p>
     </>
   );
 }
