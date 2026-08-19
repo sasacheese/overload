@@ -34,9 +34,22 @@
   --fg: #ededed;
   --fg-dim: #b0b0b0;
   --muted: #858585;
-  --faint: #575757;
+  /*
+   * 一番弱い色。飾りと記号にだけ使う（文字を載せる場所には使わない）。
+   * 以前は #575757 で地に対して 2.7:1 しかなく、アイコンの輪郭が沈んでいた。
+   * UI の部品に必要な 3:1 を満たす明るさに上げてある。
+   */
+  --faint: #767676;
 
   --accent: #dc3226;
+  /*
+   * 小さな赤文字用。
+   *
+   * 面に載せる赤の小文字（前回比の差、記録更新の見出し、日曜）は、塗りと同じ赤だと
+   * 暗い地で 3.8:1 しか出ず読みにくい。塗りの赤を明るくすると今度は白抜きの文字が
+   * 弱くなるので、役割ごとに分けている。明るい地では差が出ないので同じ値。
+   */
+  --accent-text: #f0554a;
   --accent-soft: rgb(220 50 38 / 0.13);
   --accent-fg: #fff;
 
@@ -68,9 +81,10 @@
     --fg: #141414;
     --fg-dim: #3a3a3a;
     --muted: #6b6b6b;
-    --faint: #9e9e9e;
+    --faint: #7f7f7f;
 
     --accent: #c4271c;
+    --accent-text: #b3241a;
     --accent-soft: rgb(196 39 28 / 0.09);
     --accent-fg: #fff;
 
@@ -123,6 +137,17 @@ textarea {
   flex: none;
 }
 
+/*
+ * キーボードで辿ったときだけ出す枠。ブラウザ既定の枠は、地の色によって
+ * 見えなかったり浮いたりするので、この配色に合わせて自分で出す。
+ * 指で押したときには出ない（:focus-visible なので）。
+ */
+:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 button {
   cursor: pointer;
   background: none;
@@ -149,6 +174,14 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /*
+   * 安全域はここで 1 回だけ持つ。
+   *
+   * viewport-fit=cover を指定しているので、これが無いとホーム画面から起動したときに
+   * 上部バーが時計やノッチの下へ潜って読めなくなる。上部バーとお知らせの両方に
+   * 持たせると、お知らせが出た日だけ画面の途中に空きができるため、外枠に寄せている。
+   */
+  padding-top: env(safe-area-inset-top);
 }
 
 /*
@@ -230,6 +263,7 @@ button {
   position: relative;
   display: grid;
   place-items: center;
+  transition: color 140ms ease-out;
 }
 
 .tabbar .icon {
@@ -303,7 +337,7 @@ button {
 }
 
 .day-sun {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* 要約は罫線で仕切る。カードにすると主役の種目カードと競合する */
@@ -336,7 +370,7 @@ button {
 }
 
 .summary .hit strong {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .muted {
@@ -400,7 +434,7 @@ button {
 }
 
 .warn {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ── ボタン ──────────────────────────────────────── */
@@ -509,13 +543,13 @@ button {
 }
 
 .chip.mark {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   font-weight: 700;
 }
 
 .chip.kind-load-up {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
@@ -623,7 +657,7 @@ button {
 
 .set-index {
   font-size: 0.75rem;
-  color: var(--faint);
+  color: var(--muted);
   text-align: center;
 }
 
@@ -638,7 +672,11 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--bg);
-  height: 2.625rem;
+  /*
+   * 44px。一番よく触る行なので、指の的として確保する。
+   * 幅は「62.5」が収まることを優先しているため、高さで稼いでいる。
+   */
+  height: 2.75rem;
   overflow: hidden;
 }
 
@@ -660,6 +698,8 @@ button {
   font-size: 1rem;
   display: grid;
   place-items: center;
+  /* 枠いっぱいに伸ばす。中途半端な高さだと上下の端を押しても反応しない */
+  height: 100%;
 }
 
 .stepper-btn:active {
@@ -713,13 +753,22 @@ button {
 }
 
 .check {
-  height: 2.625rem;
+  height: 2.75rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   color: var(--faint);
   font-size: 0.9375rem;
   display: grid;
   place-items: center;
+  /* 一番よく押す場所。切り替わりが瞬間だと機械的なので、わずかに時間をかける */
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+.check:active {
+  transform: scale(0.94);
 }
 
 .check.is-on {
@@ -751,7 +800,7 @@ button {
  * 記録更新の祝福と同じ意味になる。
  */
 .delta-up {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -762,7 +811,32 @@ button {
 }
 
 .ghost-prev {
-  color: var(--faint);
+  /* 前回の値は読ませる情報なので、飾りの色は使わない */
+  color: var(--muted);
+}
+
+/*
+ * 見た目を変えずに当たり判定だけ広げる。
+ *
+ * 28px や 36px の的は、汗ばんだ指では外す。大きさを変えると配置が崩れるので、
+ * 透明な当たり判定を外側へ伸ばして 44px 相当にしている。
+ */
+.icon-chip,
+.icon-btn,
+.check {
+  position: relative;
+}
+
+.icon-chip::after,
+.icon-btn::after,
+.check::after {
+  content: '';
+  position: absolute;
+  inset: -0.25rem;
+}
+
+.icon-chip::after {
+  inset: -0.5rem;
 }
 
 .note-btn {
@@ -831,7 +905,7 @@ button {
 
 .set-actions .ghost {
   flex: 1;
-  padding: 0.4375rem;
+  padding: 0.625rem;
   font-size: 0.75rem;
   border-color: var(--line);
 }
@@ -913,8 +987,10 @@ button {
 .tips-empty {
   font-size: 0.6875rem;
   letter-spacing: 0.06em;
-  color: var(--faint);
+  color: var(--muted);
   text-align: left;
+  /* 高さ 19px では押しにくいので、見た目を変えずに当たり判定だけ広げる */
+  padding: 0.4375rem 0;
 }
 
 .tips-edit textarea {
@@ -971,7 +1047,7 @@ button {
 
 .disclosure-count {
   font-size: 0.6875rem;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 /* 件数が意味を持たない節（メモ）で、中身があることだけを示す印 */
@@ -995,26 +1071,29 @@ button {
   transform: rotate(180deg);
 }
 
+/* 開いた瞬間に現れるのではなく、わずかに上から下りてくる */
 .disclosure-body {
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
   padding: 0.25rem 0 1.125rem;
+  animation: unfold 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
-.section-textarea {
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0.5625rem 0.6875rem;
-  font-size: 0.875rem;
-  width: 100%;
-  resize: vertical;
+@keyframes unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
 }
 
-.section-textarea:focus {
-  outline: none;
-  border-color: var(--line-strong);
+@media (prefers-reduced-motion: reduce) {
+  .disclosure-body {
+    animation: none;
+  }
+  .check:active {
+    transform: none;
+  }
 }
 
 .past-list {
@@ -1180,7 +1259,14 @@ button {
   letter-spacing: 0.06em;
 }
 
-.note textarea,
+/*
+ * 入力の見せ方を 2 通りに決めている。
+ *
+ * - カードの中（記録に添える文章）は**下線だけ**。カードという枠の中にさらに枠を
+ *   置くと、四角が入れ子になって記録そのものが埋もれる
+ * - シートの中（種目の設定）は**枠付き**。項目が並ぶ場所では、枠があるほうが
+ *   どこからどこまでが 1 つの欄か分かる
+ */
 .field input,
 .form input,
 .form select,
@@ -1194,7 +1280,31 @@ button {
   width: 100%;
 }
 
+.note textarea,
+.section-textarea {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line-strong);
+  border-radius: 0;
+  padding: 0.375rem 0.125rem;
+  font-size: 0.875rem;
+  letter-spacing: 0;
+  width: 100%;
+  resize: vertical;
+  transition: border-color 140ms ease-out;
+}
+
+.note textarea::placeholder,
+.section-textarea::placeholder {
+  color: var(--faint);
+}
+
 .note textarea:focus,
+.section-textarea:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
 .field input:focus,
 .form input:focus,
 .search:focus {
@@ -1202,15 +1312,11 @@ button {
   border-color: var(--line-strong);
 }
 
-.note textarea {
-  resize: vertical;
-}
-
 .session-note {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 0.9375rem 1.125rem;
+  padding: 0.875rem 1.125rem 1rem;
 }
 
 /* 体重。アシスト種目の実効負荷に使うので、置き場所は今日の画面の中 */
@@ -1270,7 +1376,7 @@ button {
 }
 
 .cal-weekday.day-sun {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /*
@@ -1287,6 +1393,10 @@ button {
   justify-content: center;
   gap: 0.125rem;
   position: relative;
+}
+
+.cal-cell {
+  transition: background-color 160ms ease-out;
 }
 
 .cal-cell.has-record {
@@ -1643,6 +1753,21 @@ button {
   height: 1.5rem;
 }
 
+/*
+ * 主たる操作と並べたくない、控えめな操作。
+ *
+ * 枠付きのボタンを 2 つ並べると同じ重さに見えて、押し間違いが起きる。
+ * 文字だけにして、押す前に一段挟む操作に使う。
+ */
+.quiet-action {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: left;
+  padding: 0.4375rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
 /* ── 休憩タイマー ───────────────────────────────── */
 
 .rest-timer {
@@ -1860,7 +1985,7 @@ button {
 .celebrate-title {
   font-size: 0.75rem;
   letter-spacing: 0.06em;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -1878,7 +2003,7 @@ button {
 
 .celebrate-prev {
   font-size: 0.6875rem;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2009,7 +2134,7 @@ button {
 }
 
 .weight-row .diff.down {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .weight-range {
@@ -2195,7 +2320,7 @@ button {
 
 /* 素の数字だけだと何なのか分からないので、「前回」と日付を必ず添える */
 .weigh-latest {
-  font-size: 0.625rem;
-  color: var(--faint);
+  font-size: 0.6875rem;
+  color: var(--muted);
   white-space: nowrap;
 }

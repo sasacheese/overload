@@ -41,12 +41,7 @@ export function ExercisePicker({ exercises, exclude, onPick, onClose, onCreate, 
         <div className="sheet-body">
           {groups.map(({ key, items }) => (
             <div key={key} className="picker-group">
-              <h3>
-                <span className="glyph" aria-hidden="true">
-                  {MUSCLE_GROUPS[key].short}
-                </span>
-                {MUSCLE_GROUPS[key].label}
-              </h3>
+              <h3>{MUSCLE_GROUPS[key].label}</h3>
               <div className="picker-items">
                 {items.map((e) => (
                   <button type="button" key={e.id} className="picker-item" onClick={() => onPick(e)}>

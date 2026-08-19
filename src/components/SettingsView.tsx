@@ -52,6 +52,7 @@ export function SettingsView() {
   );
   const [message, setMessage] = useState<string | null>(null);
   const [confirmWipe, setConfirmWipe] = useState(false);
+  const [confirmLock, setConfirmLock] = useState(false);
   const [, bump] = useState(0);
 
   useEffect(() => subscribeUpdate(() => bump((n) => n + 1)), []);
@@ -239,16 +240,34 @@ export function SettingsView() {
             鍵と同期先 ID を表示する
           </button>
         )}
-        <button
-          type="button"
-          className="ghost wide"
-          onClick={() => {
-            clearKey();
-            location.reload();
-          }}
-        >
-          この端末から鍵を消す（ロックする）
-        </button>
+        {/*
+          鍵を消すのは「表示する」と並ぶ重さの操作ではない。書き留めていない鍵を
+          消すと同期していたぶんに戻れなくなるので、静かな見た目にして一段挟む。
+        */}
+        {confirmLock ? (
+          <>
+            <p className="warn">鍵を書き留めたか。消すとこの端末からは開けなくなる。</p>
+            <div className="btn-row">
+              <button
+                type="button"
+                className="ghost danger"
+                onClick={() => {
+                  clearKey();
+                  location.reload();
+                }}
+              >
+                消してロックする
+              </button>
+              <button type="button" className="ghost" onClick={() => setConfirmLock(false)}>
+                やめる
+              </button>
+            </div>
+          </>
+        ) : (
+          <button type="button" className="quiet-action" onClick={() => setConfirmLock(true)}>
+            この端末から鍵を消す（ロックする）
+          </button>
+        )}
       </section>
 
       <section className="panel">

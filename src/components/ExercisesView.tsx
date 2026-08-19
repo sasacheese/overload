@@ -90,12 +90,8 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
         if (items.length === 0) return null;
         return (
           <div key={key} className="ex-group">
-            <h2 className="section-title">
-              <span className="glyph" aria-hidden="true">
-                {MUSCLE_GROUPS[key].short}
-              </span>
-              {MUSCLE_GROUPS[key].label}
-            </h2>
+            {/* 記号は名前が出ない場所（種目カードの見出し）専用。ここは文字があるので置かない */}
+            <h2 className="section-title">{MUSCLE_GROUPS[key].label}</h2>
             <ul className="ex-list">
               {items.map((e) => (
                 <li key={e.id}>
