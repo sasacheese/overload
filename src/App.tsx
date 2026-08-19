@@ -114,7 +114,7 @@ function Shell() {
     if (e.pointerType !== 'touch' || drag?.animating) return;
     const target = e.target as HTMLElement;
     // 数値欄やシートの上から始まった操作は奪わない
-    if (target.closest('input, textarea, select, .sheet, .celebrate, .stepper')) {
+    if (target.closest('input, textarea, select, .sheet, .celebrate, .confirm, .stepper')) {
       gesture.current = null;
       return;
     }

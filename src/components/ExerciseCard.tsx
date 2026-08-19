@@ -37,6 +37,7 @@ import {
 } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
 import { BodyMap } from './BodyMap.tsx';
+import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { Sparkline } from './Sparkline.tsx';
 import { Stepper } from './Stepper.tsx';
@@ -126,6 +127,7 @@ export function ExerciseCard({
 }: Props) {
   const { sessions, upsertExercise } = useStore();
   const [editingTips, setEditingTips] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   /*
    * どのメモ欄を開いているか。
    *
@@ -223,7 +225,12 @@ export function ExerciseCard({
           </span>
           <span className="card-name">{exercise.name}</span>
         </span>
-        <button type="button" className="icon-btn" aria-label={`${exercise.name}を今日から外す`} onClick={onRemove}>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label={`${exercise.name}を今日から外す`}
+          onClick={() => setConfirmRemove(true)}
+        >
           <Icon name="close" />
         </button>
       </header>
@@ -470,6 +477,35 @@ export function ExerciseCard({
           />
         </Disclosure>
       </div>
+
+      {confirmRemove ? (
+        <ConfirmDialog
+          title={`${exercise.name}を今日から外す`}
+          detail={removalLoss(entry)}
+          confirmLabel="外す"
+          onConfirm={() => {
+            setConfirmRemove(false);
+            onRemove();
+          }}
+          onCancel={() => setConfirmRemove(false)}
+        />
+      ) : null}
     </section>
   );
+}
+
+/**
+ * 外すと何が失われるか。
+ *
+ * 「本当によろしいですか」だけでは判断材料が無い。記録済みのセット数とメモの有無を
+ * 出せば、押し間違いなら止まるし、意図した削除なら迷わず進める。
+ */
+function removalLoss(entry: SessionEntry): string | undefined {
+  const done = doneSets(entry).length;
+  const notes = entry.sets.filter((s) => s.note.trim() !== '').length + (entry.note.trim() !== '' ? 1 : 0);
+  if (done === 0 && notes === 0) return 'まだ記録はない。設定（コツ・機材）は残る。';
+  const parts = [done > 0 ? `${done}セットの記録` : null, notes > 0 ? `${notes}件のメモ` : null].filter(
+    (v): v is string => v !== null,
+  );
+  return `${parts.join('と')}が消える。この種目の設定（コツ・機材）は残る。`;
 }

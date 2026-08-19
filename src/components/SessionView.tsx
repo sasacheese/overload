@@ -8,7 +8,7 @@
  * 種目カードの下にあると、開いて下までスクロールしないと入力に届かない。
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { dateParts, relativeLabel, shiftDays } from '../lib/calendar.ts';
 import { initialSets } from '../lib/progression.ts';
 import {
@@ -76,6 +76,23 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
   const [picking, setPicking] = useState(false);
   const [rest, setRest] = useState(readRest);
   const [celebration, setCelebration] = useState<{ achievement: Achievement; exerciseName: string } | null>(null);
+
+  /*
+   * 一番下まで来たら、浮いているボタンを引っこめて末尾の普通のボタンに任せる。
+   *
+   * 末尾のボタン自身を見張っているので、判定と表示がずれない。画面に入り始めた
+   * 時点で入れ替わるので、2 つが重なって見える瞬間が無い。中身が短くて
+   * スクロールが要らない日は、最初から末尾のボタンだけになる。
+   */
+  const addButton = useRef<HTMLButtonElement | null>(null);
+  const [addInView, setAddInView] = useState(false);
+  useEffect(() => {
+    const el = addButton.current;
+    if (el === null || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => setAddInView(entry?.isIntersecting ?? false));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const byId = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
   const last = useMemo(() => lastPerformed(sessions), [sessions]);
@@ -285,6 +302,16 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         <p className="empty">種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して ✓ を押す。</p>
       ) : null}
 
+      <button
+        type="button"
+        className="ghost accent wide center-icon add-exercise"
+        ref={addButton}
+        onClick={() => setPicking(true)}
+      >
+        <Icon name="plus" />
+        種目を追加
+      </button>
+
       {picking ? (
         <ExercisePicker
           exercises={exercises}
@@ -299,7 +326,14 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         />
       ) : null}
 
-      <button type="button" className="fab" aria-label="種目を追加" onClick={() => setPicking(true)}>
+      <button
+        type="button"
+        className={`fab ${addInView ? 'is-tucked' : ''}`}
+        aria-label="種目を追加"
+        aria-hidden={addInView}
+        tabIndex={addInView ? -1 : undefined}
+        onClick={() => setPicking(true)}
+      >
         <Icon name="plus" />
       </button>
 
