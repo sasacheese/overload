@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Achievement } from '../lib/records.ts';
 import { Icon } from './Icon.tsx';
 
@@ -24,10 +24,20 @@ export function Celebration({
   exerciseName: string;
   onClose: () => void;
 }) {
+  /*
+   * onClose を ref 経由で呼ぶ。
+   *
+   * 親から渡されるのはその場で作られる関数なので、依存に入れると親が再描画する
+   * たびにタイマーが張り直され、いつまでも閉じない。閉じるまでの時間は
+   * 記録が変わったときだけ数え直す。
+   */
+  const close = useRef(onClose);
+  close.current = onClose;
+
   useEffect(() => {
-    const id = setTimeout(onClose, AUTO_CLOSE_MS);
+    const id = setTimeout(() => close.current(), AUTO_CLOSE_MS);
     return () => clearTimeout(id);
-  }, [achievement, onClose]);
+  }, [achievement]);
 
   return (
     <div className="celebrate" onClick={onClose} role="status" aria-live="polite">

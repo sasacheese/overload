@@ -12,7 +12,7 @@ import * as db from './lib/db.ts';
 import { presetExercises } from './lib/presets.ts';
 import { isTombstone, mergedExercises, mergedSessions } from './lib/sync.ts';
 import type { Exercise, ExerciseId, IsoDate, Session } from './lib/types.ts';
-import { emptySession, hasRecord, worthStoring } from './lib/types.ts';
+import { emptySession, worthStoring } from './lib/types.ts';
 
 export type Store = {
   ready: boolean;
@@ -154,12 +154,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [report],
   );
 
+  /**
+   * バックアップから戻す。
+   *
+   * 先に書いてから、バックアップに無いものを消す。消してから書く順にすると、
+   * 書き込みの途中で失敗したときに手元の記録だけが消えて何も残らない。
+   * この順なら、失敗しても最悪「新旧が混ざった状態」で止まり、記録は失われない。
+   */
   const restore = useCallback(
     async (backup: Backup) => {
       try {
-        await db.wipe();
         await db.putMany(db.STORES.exercises, backup.exercises);
         await db.putMany(db.STORES.sessions, backup.sessions);
+
+        const keptDates = new Set(backup.sessions.map((s) => s.date));
+        const keptIds = new Set(backup.exercises.map((e) => e.id));
+        const staleDates = sessions.map((s) => s.date).filter((d) => !keptDates.has(d));
+        const staleIds = exercises.map((e) => e.id).filter((id) => !keptIds.has(id));
+        await Promise.all([
+          ...staleDates.map((date) => db.deleteSession(date)),
+          ...staleIds.map((id) => db.remove(db.STORES.exercises, id)),
+        ]);
+
         setExercises(backup.exercises);
         setSessions(backup.sessions);
       } catch (e) {
@@ -167,7 +183,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         throw e;
       }
     },
-    [report],
+    [report, sessions, exercises],
   );
 
   const wipe = useCallback(async () => {
@@ -225,8 +241,4 @@ export function useSession(date: IsoDate): Session {
     () => sessions.find((s) => s.date === date) ?? emptySession(date),
     [sessions, date],
   );
-}
-
-export function recordedDates(sessions: readonly Session[]): Set<IsoDate> {
-  return new Set(sessions.filter(hasRecord).map((s) => s.date));
 }

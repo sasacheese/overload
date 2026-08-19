@@ -13,7 +13,7 @@
  *  4. 機材の設定とコツを常に上に出す。毎回思い出す手間を消す
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { relativeLabel } from '../lib/calendar.ts';
 import { guideFor } from '../lib/presets.ts';
 import {
@@ -56,6 +56,11 @@ type Props = {
 
 /** 履歴に出す過去セッション数。これ以上並べても遡って読まない。 */
 const HISTORY_ROWS = 5;
+
+/** 中身のあるメモの行番号。開いた状態の初期値に使う。 */
+function notedRows(sets: readonly SetRecord[]): Set<number> {
+  return new Set(sets.flatMap((set, i) => (set.note.trim() === '' ? [] : [i])));
+}
 
 type Section = 'guide' | 'history' | 'trend' | 'note';
 
@@ -121,7 +126,14 @@ export function ExerciseCard({
 }: Props) {
   const { sessions, upsertExercise } = useStore();
   const [editingTips, setEditingTips] = useState(false);
-  const [openNotes, setOpenNotes] = useState<ReadonlySet<number>>(new Set());
+  /*
+   * どのメモ欄を開いているか。
+   *
+   * 「中身があれば開く」を毎回の描画で判定していたときは、文字が入っている行の
+   * ボタンを押しても閉じられなかった（判定が状態を上書きしていた）。
+   * 初期値としてだけ中身を見て、以降はボタンの操作を正とする。
+   */
+  const [openNotes, setOpenNotes] = useState<ReadonlySet<number>>(() => notedRows(entry.sets));
   /*
    * 節ごとに開閉する。1 つのまとまりにしていたときは、開いたあと閉じる場所が
    * カードの見出ししか無く（そこも長い節を開くと画面外に出る）、閉じられなかった。
@@ -130,6 +142,19 @@ export function ExerciseCard({
   const [openSections, setOpenSections] = useState<ReadonlySet<Section>>(() =>
     entry.note.trim() === '' ? new Set() : new Set<Section>(['note']),
   );
+
+  /*
+   * 日付が変わると同じカードに別の日の記録が入るので、開閉の状態を引き継がない。
+   *
+   * 依存を date だけにしているのは意図的。entry を入れると、メモに 1 文字打つたびに
+   * 開閉が組み直されて操作を奪ってしまう。
+   */
+  useEffect(() => {
+    setOpenNotes(notedRows(entry.sets));
+    setOpenSections(entry.note.trim() === '' ? new Set() : new Set<Section>(['note']));
+    setEditingTips(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
 
   const toggleSection = (section: Section) =>
     setOpenSections((prev) => {
@@ -239,7 +264,7 @@ export function ExerciseCard({
       <ol className="sets">
         {entry.sets.map((set, i) => {
           const delta = set.done ? compareToPrev(exercise, set, prevSets[i]) : null;
-          const noteOpen = openNotes.has(i) || set.note.trim() !== '';
+          const noteOpen = openNotes.has(i);
           const prevSet = prevSets[i];
           const effective = isAssist ? loadOf(exercise, set, bodyWeight) : 0;
           return (

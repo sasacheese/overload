@@ -1,14 +1,41 @@
 /**
  * セッション群から「前回どうだったか」を引く。純関数だけを置く。
+ *
+ * 並べ替えと体重の引き当ては、セッション配列の同一性で結果を使い回す。
+ * これが無いと、種目カードごとに全セッションを並べ替え、さらにその中で
+ * 1 日ずつ体重を線形探索するため、記録が増えると種目数 × 日数の二乗で効いてくる
+ * （20 種目 × 300 日で百万回規模になっていた）。配列は保存のたびに作り直されるので、
+ * 中身が変われば勝手に作り直される。
  */
 
 import { doneSets, hasRecord, type Exercise, type ExerciseId, type IsoDate, type Session, type SessionEntry } from './types.ts';
 import { metrics, type ExerciseHistory, type Performance } from './progression.ts';
 import { PRESET_ORDER } from './presets.ts';
 
-/** 日付の新しい順。 */
+const sortedCache = new WeakMap<readonly Session[], Session[]>();
+const weightCache = new WeakMap<readonly Session[], readonly WeighIn[]>();
+
+/** 日付の新しい順。トレーニングの記録がある日だけ。 */
 export function sortedSessions(sessions: readonly Session[]): Session[] {
-  return [...sessions].filter(hasRecord).sort((a, b) => b.date.localeCompare(a.date));
+  const cached = sortedCache.get(sessions);
+  if (cached) return cached;
+  const sorted = [...sessions].filter(hasRecord).sort((a, b) => b.date.localeCompare(a.date));
+  sortedCache.set(sessions, sorted);
+  return sorted;
+}
+
+type WeighIn = { date: IsoDate; weight: number };
+
+/** 体重が入っている日だけを古い順に。日付の並びなので二分探索できる。 */
+function weighIns(sessions: readonly Session[]): readonly WeighIn[] {
+  const cached = weightCache.get(sessions);
+  if (cached) return cached;
+  const points = sessions
+    .filter((s) => s.bodyWeight > 0)
+    .map((s) => ({ date: s.date, weight: s.bodyWeight }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  weightCache.set(sessions, points);
+  return points;
 }
 
 export function entryOf(session: Session | undefined, id: ExerciseId): SessionEntry | undefined {
@@ -20,15 +47,24 @@ export function entryOf(session: Session | undefined, id: ExerciseId): SessionEn
  *
  * その日に記録が無ければ、それより前の直近の記録を使う。アシスト種目の実効負荷
  * （体重 − 補助重量）に必要なので、毎回入れさせるのではなく前回の値を引き継ぐ。
+ * それより前に 1 つも記録が無ければ 0（実効負荷は出せないのでレップ数で測る）。
  */
 export function bodyWeightOn(sessions: readonly Session[], date: IsoDate): number {
-  const own = sessions.find((s) => s.date === date)?.bodyWeight ?? 0;
-  if (own > 0) return own;
-  return (
-    [...sessions]
-      .filter((s) => s.date <= date && s.bodyWeight > 0)
-      .sort((a, b) => b.date.localeCompare(a.date))[0]?.bodyWeight ?? 0
-  );
+  const points = weighIns(sessions);
+  // date 以下で一番後ろの点を探す
+  let lo = 0;
+  let hi = points.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid]!.date <= date) {
+      found = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return found < 0 ? 0 : points[found]!.weight;
 }
 
 /** その種目を実際にやった日を新しい順で返す。体重は当時の値を付ける。 */

@@ -95,6 +95,12 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
   const setEntries = (entries: SessionEntry[]) => saveSession({ ...session, entries });
 
   const addExercise = (exercise: Exercise) => {
+    // 同じ種目が 2 行に並ぶと、行の識別（種目 ID）と集計の両方が崩れる。
+    // 選択肢からは除いてあるが、ここでも塞いでおく
+    if (session.entries.some((e) => e.exerciseId === exercise.id)) {
+      setPicking(false);
+      return;
+    }
     const prev = previousEntry(sessions, exercise.id, date);
     setEntries([...session.entries, { exerciseId: exercise.id, sets: initialSets(exercise, prev?.entry), note: '' }]);
     setPicking(false);

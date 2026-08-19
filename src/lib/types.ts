@@ -65,10 +65,6 @@ export const MUSCLES = {
 
 export type Muscle = keyof typeof MUSCLES;
 
-export function isMuscle(raw: unknown): raw is Muscle {
-  return typeof raw === 'string' && raw in MUSCLES;
-}
-
 /**
  * 負荷のかけ方。入力した数字の意味と、進める向きがこれで変わる。
  *

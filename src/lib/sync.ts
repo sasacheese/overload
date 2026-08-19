@@ -10,7 +10,7 @@
  * 列を別に持つと二重管理になるだけで得るものが無い。
  */
 
-import type { Exercise, IsoDate, Session } from './types.ts';
+import { worthStoring, type Exercise, type IsoDate, type Session } from './types.ts';
 
 export type Plan<T> = {
   /** リモートが新しいので、ローカルに書くもの。 */
@@ -51,17 +51,20 @@ export function planExercises(local: readonly Exercise[], remote: readonly Exerc
 }
 
 /**
- * 中身が空のセッションは、リモートでは「消した印」として扱う。
+ * リモートでは「消した印」として扱うセッションか。
  *
  * 消したことを表す専用の仕組みを足す代わりに、空のセッションを送る。ローカルは
- * 空を保存しないので、取り込むときに落とせば、両側とも「その日は無い」で一致する。
+ * 保存する価値の無いものを保存しないので、取り込むときに落とせば、
+ * 両側とも「その日は無い」で一致する。
+ *
+ * 判定を `worthStoring` の裏返しとして定義しているのは、2 つが食い違うと
+ * 記録が消えるため。以前は「種目が空でメモも無い」だけで判定していて、
+ * **体重だけ付けた休養日が消した印と見なされ、同期先の端末で体重が消えていた**。
+ * 保存する条件と消した印の条件は必ず一致していなければならないので、
+ * 別々に書かずに片方から導く。
  */
 export function isTombstone(session: Session): boolean {
-  return session.entries.length === 0 && session.note.trim() === '';
-}
-
-export function applicableToLocal(sessions: readonly Session[]): Session[] {
-  return sessions.filter((s) => !isTombstone(s));
+  return !worthStoring(session);
 }
 
 /** 取り込んだあとのローカルの姿。表示に使う。 */

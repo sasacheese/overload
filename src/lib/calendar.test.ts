@@ -6,7 +6,6 @@ import {
   dayKind,
   dayKindOfIndex,
   daysBetween,
-  isWeekend,
   inMonth,
   monthGrid,
   relativeLabel,
@@ -96,13 +95,6 @@ test('dateLabel / relativeLabel', () => {
   assert.equal(relativeLabel(d('2026-08-14'), d('2026-08-19')), '5日前');
   assert.equal(relativeLabel(d('2026-08-01'), d('2026-08-19')), '2週間前');
   assert.equal(relativeLabel(d('2026-08-20'), d('2026-08-19')), '1日後');
-});
-
-test('isWeekend: 土日だけ true', () => {
-  assert.ok(!isWeekend(d('2026-08-21'))); // 金
-  assert.ok(isWeekend(d('2026-08-22'))); // 土
-  assert.ok(isWeekend(d('2026-08-23'))); // 日
-  assert.ok(!isWeekend(d('2026-08-24'))); // 月
 });
 
 test('dateParts: 日付と曜日を分けて返す', () => {

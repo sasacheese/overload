@@ -15,6 +15,9 @@ type Props = {
   onDismiss: () => void;
 };
 
+/** これを超えたら休憩ではなく閉じ忘れとみなして出さない。 */
+const MAX_SEC = 600;
+
 function mmss(sec: number): string {
   const m = Math.floor(sec / 60);
   return `${m}:${String(sec % 60).padStart(2, '0')}`;
@@ -25,16 +28,20 @@ export function RestTimer({ startedAt, targetSec, onDismiss }: Props) {
 
   useEffect(() => {
     if (startedAt === null) return;
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const tick = () => {
+      setNow(Date.now());
+      // 出さなくなったあとも動かし続ける意味はないので、そこで止める
+      if (Date.now() - startedAt > MAX_SEC * 1000) clearInterval(id);
+    };
+    const id = setInterval(tick, 1000);
+    tick();
     return () => clearInterval(id);
   }, [startedAt]);
 
   if (startedAt === null) return null;
 
   const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
-  // 10 分も経っていれば休憩ではなく閉じ忘れなので出さない
-  if (elapsed > 600) return null;
+  if (elapsed > MAX_SEC) return null;
 
   const ratio = Math.min(1, elapsed / targetSec);
   const reached = elapsed >= targetSec;

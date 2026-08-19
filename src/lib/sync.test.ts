@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { applicableToLocal, isEmpty, isTombstone, mergedExercises, mergedSessions, planExercises, planSessions } from './sync.ts';
+import { isEmpty, isTombstone, mergedExercises, mergedSessions, planExercises, planSessions } from './sync.ts';
 import { presetExercises } from './presets.ts';
 import { isoDate, type Session } from './types.ts';
 
@@ -58,9 +58,8 @@ test('空のセッションは消した印として扱い、取り込みでは�
   assert.ok(isTombstone(empty('2026-08-17', 500)));
   assert.ok(!isTombstone(session('2026-08-17', 500)));
   assert.ok(!isTombstone({ ...empty('2026-08-17', 500), note: '休養日' }));
-  assert.deepEqual(applicableToLocal([empty('2026-08-17', 1), session('2026-08-18', 1)]).map((s) => s.date), [
-    '2026-08-18',
-  ]);
+  // 体重だけの日は消した印ではない（保存しておく必要がある）
+  assert.ok(!isTombstone({ ...empty('2026-08-17', 500), bodyWeight: 69.8 }));
 });
 
 test('mergedSessions: 消した印が来た日はローカルからも消える', () => {
@@ -106,4 +105,25 @@ test('2 回目以降は変わっていない記録を送らない（初回だけ
   // 初回で送ったものがリモートに乗った状態で、もう一度突き合わせる
   const second = planSessions(local, first.toRemote);
   assert.ok(isEmpty(second));
+});
+
+test('体重だけの日は同期先で消されない（保存する条件と消した印の条件が一致している）', () => {
+  const restDay: Session = {
+    date: isoDate('2026-08-18'),
+    entries: [],
+    note: '',
+    bodyWeight: 69.8,
+    updatedAt: 500,
+  };
+  // 受け取り側で落とされないこと
+  assert.ok(!isTombstone(restDay));
+  const merged = mergedSessions([], [restDay]);
+  assert.deepEqual(merged.map((s) => s.date), ['2026-08-18']);
+  assert.equal(merged[0]?.bodyWeight, 69.8);
+});
+
+test('本当に空になった日は消した印として働く', () => {
+  const cleared: Session = { date: isoDate('2026-08-18'), entries: [], note: '', bodyWeight: 0, updatedAt: 900 };
+  assert.ok(isTombstone(cleared));
+  assert.deepEqual(mergedSessions([session('2026-08-18', 100)], [cleared]), []);
 });

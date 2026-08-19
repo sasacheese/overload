@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   bestSeries,
+  bodyWeightOn,
   byRecentUse,
   exerciseHistory,
   lastPerformed,
@@ -99,4 +100,35 @@ test('byRecentUse: 独自に足した種目は末尾に回る', () => {
   const custom = { ...bench, id: exerciseId('custom-zzz'), name: 'なにか' };
   const sorted = byRecentUse([custom, ...presetExercises()], new Map());
   assert.equal(sorted.at(-1)?.id, 'custom-zzz');
+});
+
+test('bodyWeightOn: その日 → それより前の直近 → 無ければ 0', () => {
+  const withWeights: Session[] = [
+    { ...session('2026-08-01', [[60, 8]]), bodyWeight: 71 },
+    { ...session('2026-08-05', [[60, 8]]), bodyWeight: 0 },
+    { ...session('2026-08-10', [[60, 8]]), bodyWeight: 70 },
+  ];
+  assert.equal(bodyWeightOn(withWeights, isoDate('2026-08-01')), 71); // その日
+  assert.equal(bodyWeightOn(withWeights, isoDate('2026-08-05')), 71); // 直近に遡る
+  assert.equal(bodyWeightOn(withWeights, isoDate('2026-08-07')), 71); // セッションが無い日
+  assert.equal(bodyWeightOn(withWeights, isoDate('2026-08-10')), 70);
+  assert.equal(bodyWeightOn(withWeights, isoDate('2026-09-01')), 70); // 最後の値を引き継ぐ
+  assert.equal(bodyWeightOn(withWeights, isoDate('2026-07-20')), 0); // それより前に記録が無い
+  assert.equal(bodyWeightOn([], isoDate('2026-08-01')), 0);
+});
+
+test('bodyWeightOn: 体重だけの日（休養日）も引き当てに使う', () => {
+  const restDay: Session = { date: isoDate('2026-08-12'), entries: [], note: '', bodyWeight: 69.4, updatedAt: 0 };
+  const list = [{ ...session('2026-08-10', [[60, 8]]), bodyWeight: 70 }, restDay];
+  // トレーニングの記録は無いが体重はある日。ここを飛ばすと古い値を使ってしまう
+  assert.equal(bodyWeightOn(list, isoDate('2026-08-14')), 69.4);
+});
+
+test('sortedSessions: 同じ配列を渡せば同じ結果を返す（使い回しても内容が変わらない）', () => {
+  const list = [session('2026-08-01', [[60, 8]]), session('2026-08-10', [[60, 8]])];
+  const a = sortedSessions(list);
+  const b = sortedSessions(list);
+  assert.deepEqual(a.map((s) => s.date), b.map((s) => s.date));
+  // 別の配列（中身は同じ）でも結果は同じ
+  assert.deepEqual(sortedSessions([...list]).map((s) => s.date), a.map((s) => s.date));
 });

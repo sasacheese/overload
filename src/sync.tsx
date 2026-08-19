@@ -75,9 +75,16 @@ export function SyncProvider({ vaultKey, children }: { vaultKey: string | null; 
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(readLastSynced);
 
-  // 実行中に最新の状態を読むためのミラー。同期は非同期なので state を直接見ると古い
+  /*
+   * 実行中に最新の状態を読むためのミラー。同期は非同期なので state を直接見ると古い。
+   *
+   * 描画中に書かず、確定後の effect で写す。描画は中断・破棄されることがあるので、
+   * その途中の値を ref に残すと、実際には使われなかった状態を同期に渡しうる。
+   */
   const latest = useRef({ sessions, exercises });
-  latest.current = { sessions, exercises };
+  useEffect(() => {
+    latest.current = { sessions, exercises };
+  }, [sessions, exercises]);
   const running = useRef(false);
   // 直前の同期時刻。state と違って run の中から常に最新が読める
   const syncedAt = useRef<number | null>(lastSyncedAt);

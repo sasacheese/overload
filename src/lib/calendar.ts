@@ -110,11 +110,6 @@ export function dateLabel(iso: IsoDate): string {
   return `${month}月${day}日(${WEEKDAY_LABELS[weekdayIndex(iso)]})`;
 }
 
-/** 土日か。 */
-export function isWeekend(iso: IsoDate): boolean {
-  return weekdayIndex(iso) >= 5;
-}
-
 /**
  * 曜日の種別。土と日を分けているのは色を分けるため
  * （カレンダーの慣習に合わせて土は水色、日は赤）。

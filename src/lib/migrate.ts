@@ -58,6 +58,20 @@ export function normalizeSession(raw: unknown): Session {
   };
 }
 
+/**
+ * プリセットの引き当て。
+ *
+ * normalizeExercise は保存済みの全種目とリモートの全 doc に対して呼ばれる。
+ * その中で presetExercises() を呼ぶと、1 件ごとに 40 件ぶんの配列と説明文を
+ * 作り直すことになるので、一度だけ作って使い回す。
+ */
+let presetsById: Map<string, Exercise> | null = null;
+
+function preset(id: string): Exercise | undefined {
+  presetsById ??= new Map(presetExercises().map((e) => [e.id as string, e]));
+  return presetsById.get(id);
+}
+
 /** 種目の初期値はプリセットから借りる。プリセットに無い種目は無害な既定値。 */
 const FALLBACK = {
   increment: 2.5,
@@ -81,19 +95,19 @@ function normalizeLoadMode(raw: Record<string, unknown>, preset: Exercise | unde
 export function normalizeExercise(raw: unknown): Exercise {
   const o = (raw ?? {}) as Record<string, unknown>;
   const id = str(o['id']) as ExerciseId;
-  const preset = presetExercises().find((e) => e.id === id);
+  const base = preset(id);
   const group = o['group'];
   return {
     id,
-    name: str(o['name']) || preset?.name || id,
-    group: isMuscleGroup(group) ? group : (preset?.group ?? 'chest'),
-    loadMode: normalizeLoadMode(o, preset),
+    name: str(o['name']) || base?.name || id,
+    group: isMuscleGroup(group) ? group : (base?.group ?? 'chest'),
+    loadMode: normalizeLoadMode(o, base),
     tips: str(o['tips']),
-    increment: num(o['increment'], preset?.increment ?? FALLBACK.increment),
-    repMin: num(o['repMin'], preset?.repMin ?? FALLBACK.repMin),
-    repMax: num(o['repMax'], preset?.repMax ?? FALLBACK.repMax),
-    sets: num(o['sets'], preset?.sets ?? FALLBACK.sets),
-    restSec: num(o['restSec'], preset?.restSec ?? FALLBACK.restSec),
+    increment: num(o['increment'], base?.increment ?? FALLBACK.increment),
+    repMin: num(o['repMin'], base?.repMin ?? FALLBACK.repMin),
+    repMax: num(o['repMax'], base?.repMax ?? FALLBACK.repMax),
+    sets: num(o['sets'], base?.sets ?? FALLBACK.sets),
+    restSec: num(o['restSec'], base?.restSec ?? FALLBACK.restSec),
     archived: o['archived'] === true,
     updatedAt: num(o['updatedAt'], 0),
   };
