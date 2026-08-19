@@ -8,7 +8,8 @@
 
 import { useEffect, useState } from 'react';
 import { URL_CONTENT_LIMIT, backupFileName, buildBackup, githubNewFileUrl, isRepoSlug, parseBackup } from '../lib/backup.ts';
-import { clearKey, formatKey, storedKey } from '../lib/vault.ts';
+import { clearKey, formatKey, storedKey, vaultId } from '../lib/vault.ts';
+import { securityRules } from '../lib/remote.ts';
 import { offlineError, offlineReady, updateReady, applyUpdate, subscribeUpdate } from '../lib/updates.ts';
 import { useStore } from '../store.tsx';
 import { useSync } from '../sync.tsx';
@@ -29,6 +30,23 @@ export function SettingsView() {
   const sync = useSync();
   const key = storedKey();
   const [showKey, setShowKey] = useState(false);
+  /*
+   * 同期先 ID（鍵の SHA-256）。Rules に貼るために出す。
+   *
+   * ID を知っている人は匿名サインインを通せば読み書きできるので、機密の度合いは
+   * 鍵そのものと同じ。鍵と同じ「表示する」の内側に置いてある。
+   */
+  const [vault, setVault] = useState<string | null>(null);
+  useEffect(() => {
+    if (key === null) return;
+    let cancelled = false;
+    vaultId(key).then((id) => {
+      if (!cancelled) setVault(id);
+    }, () => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
   const [repo, setRepo] = useState(
     () => localStorage.getItem(REPO_KEY) ?? import.meta.env.VITE_BACKUP_REPO ?? '',
   );
@@ -181,16 +199,44 @@ export function SettingsView() {
                     .then(() => setMessage('鍵をコピーした'), () => setMessage('コピーできなかった'));
                 }}
               >
-                コピー
+                鍵をコピー
               </button>
               <button type="button" className="ghost" onClick={() => setShowKey(false)}>
                 隠す
               </button>
             </div>
+
+            <dl className="status">
+              <dt>同期先 ID</dt>
+              <dd>
+                <code className="key-value">{vault ?? '計算中…'}</code>
+              </dd>
+            </dl>
+            <p className="footnote">
+              Firestore の Security Rules にこの ID を固定すると、他の人が同じプロジェクトに
+              自分の領域を作れなくなる。下のボタンで貼り付けられる形になる。
+              この ID は鍵と同じくらい秘密にする。
+            </p>
+            <button
+              type="button"
+              className="ghost wide"
+              disabled={vault === null}
+              onClick={() => {
+                if (vault === null) return;
+                navigator.clipboard
+                  ?.writeText(securityRules(vault))
+                  .then(
+                    () => setMessage('Rules をコピーした。Firestore のルール画面に貼って公開する'),
+                    () => setMessage('コピーできなかった'),
+                  );
+              }}
+            >
+              Security Rules をコピー
+            </button>
           </>
         ) : (
           <button type="button" className="ghost wide" onClick={() => setShowKey(true)}>
-            鍵を表示する
+            鍵と同期先 ID を表示する
           </button>
         )}
         <button

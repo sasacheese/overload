@@ -125,9 +125,15 @@ export function SyncProvider({ vaultKey, children }: { vaultKey: string | null; 
     [available, vaultKey, applyRemote],
   );
 
-  // 起動時とローカルの変更後。変更のたびにタイマーが張り直されるので実質デバウンス
+  /*
+   * 起動時とローカルの変更後。変更のたびにタイマーが張り直されるので実質デバウンス。
+   *
+   * 圏外では試行そのものを見送る。送ろうとして失敗させると設定画面が
+   * 「同期できていない」になるが、圏内に戻れば updatedAt の比較から同じ結論が出て
+   * 送られるので、実際には何も失われていない。起きていない障害を表示しない。
+   */
   useEffect(() => {
-    if (!ready || !available) return;
+    if (!ready || !available || !navigator.onLine) return;
     const id = setTimeout(() => void run(false), PUSH_DELAY_MS);
     return () => clearTimeout(id);
   }, [ready, available, sessions, exercises, run]);

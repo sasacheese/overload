@@ -23,15 +23,52 @@ import type { Firestore } from 'firebase/firestore/lite';
 import { normalizeExercise, normalizeSession } from './migrate.ts';
 import type { Exercise, ExerciseId, Session } from './types.ts';
 
-const config = {
-  apiKey: import.meta.env.VITE_FIREBASE_PUBLIC_API_KEY ?? '',
-  projectId: import.meta.env.VITE_FIREBASE_PUBLIC_PROJECT_ID ?? '',
-  appId: import.meta.env.VITE_FIREBASE_PUBLIC_APP_ID ?? '',
-};
+/**
+ * ビルド時に埋め込まれる設定。
+ *
+ * モジュールの先頭で読まず、呼ばれたときに読む。`import.meta.env` はバンドラが
+ * 差し込む値で、素の Node（単体テスト）には存在しない。先頭で触ると、この
+ * モジュールを import しただけで落ちて、純粋な関数まで一緒にテストできなくなる。
+ */
+function config() {
+  const env: Record<string, string | undefined> = import.meta.env ?? {};
+  return {
+    apiKey: env['VITE_FIREBASE_PUBLIC_API_KEY'] ?? '',
+    projectId: env['VITE_FIREBASE_PUBLIC_PROJECT_ID'] ?? '',
+    appId: env['VITE_FIREBASE_PUBLIC_APP_ID'] ?? '',
+  };
+}
 
 /** 設定が無ければ同期機能そのものを出さない。未設定でもアプリは動く。 */
 export function remoteConfigured(): boolean {
-  return config.apiKey !== '' && config.projectId !== '';
+  const { apiKey, projectId } = config();
+  return apiKey !== '' && projectId !== '';
+}
+
+/** 記録を置くコレクション。Rules の文面と同じ場所を指す必要がある。 */
+const ROOT = 'vaults';
+
+/**
+ * Firestore に貼る Security Rules。同期先 ID を固定した形で組み立てる。
+ *
+ * ID を固定しないと、匿名サインインは誰でも通せるので、公開サイトを開いた人が
+ * 自分の領域を作ってこのプロジェクトに書き込める。他人の記録は読めないが、
+ * 容量と無料枠は消費される。固定すれば領域そのものを作れなくなる。
+ *
+ * この文面をここに置いているのは、パスの定義（ROOT）と 1 箇所にまとめるため。
+ * 置き場所を変えたら Rules も一緒に変わる。
+ */
+export function securityRules(vault: string): string {
+  return [
+    "rules_version = '2';",
+    'service cloud.firestore {',
+    '  match /databases/{database}/documents {',
+    `    match /${ROOT}/{vault}/{document=**} {`,
+    `      allow read, write: if request.auth != null && vault == '${vault}';`,
+    '    }',
+    '  }',
+    '}',
+  ].join('\n');
 }
 
 type Loaded = { app: FirebaseApp; auth: Auth; db: Firestore };
@@ -45,11 +82,12 @@ function load(): Promise<Loaded> {
       import('firebase/auth'),
       import('firebase/firestore/lite'),
     ]);
+    const { apiKey, projectId, appId } = config();
     const app = initializeApp({
-      apiKey: config.apiKey,
-      projectId: config.projectId,
-      appId: config.appId,
-      authDomain: `${config.projectId}.firebaseapp.com`,
+      apiKey,
+      projectId,
+      appId,
+      authDomain: `${projectId}.firebaseapp.com`,
     });
     return { app, auth: authMod.getAuth(app), db: storeMod.getFirestore(app) };
   })();
@@ -76,8 +114,8 @@ export async function fetchAll(vault: string): Promise<{ sessions: Session[]; ex
   const { db } = await ready();
   const { collection, getDocs } = await import('firebase/firestore/lite');
   const [sessions, exercises] = await Promise.all([
-    getDocs(collection(db, 'vaults', vault, 'sessions')),
-    getDocs(collection(db, 'vaults', vault, 'exercises')),
+    getDocs(collection(db, ROOT, vault, 'sessions')),
+    getDocs(collection(db, ROOT, vault, 'exercises')),
   ]);
   return {
     sessions: sessions.docs.map((d) => normalizeSession({ ...d.data(), date: d.id })),
@@ -101,7 +139,7 @@ export async function pushSessions(vault: string, sessions: readonly Session[]):
     for (const session of group) {
       // date は doc の id で持つので本文からは外す
       const { date, ...body } = session;
-      batch.set(doc(db, 'vaults', vault, 'sessions', date), body);
+      batch.set(doc(db, ROOT, vault, 'sessions', date), body);
     }
     await batch.commit();
   }
@@ -115,7 +153,7 @@ export async function pushExercises(vault: string, exercises: readonly Exercise[
     const batch = writeBatch(db);
     for (const exercise of group) {
       const { id, ...body } = exercise;
-      batch.set(doc(db, 'vaults', vault, 'exercises', id), body);
+      batch.set(doc(db, ROOT, vault, 'exercises', id), body);
     }
     await batch.commit();
   }
@@ -124,5 +162,5 @@ export async function pushExercises(vault: string, exercises: readonly Exercise[
 export async function removeExerciseDoc(vault: string, id: ExerciseId): Promise<void> {
   const { db } = await ready();
   const { deleteDoc, doc } = await import('firebase/firestore/lite');
-  await deleteDoc(doc(db, 'vaults', vault, 'exercises', id));
+  await deleteDoc(doc(db, ROOT, vault, 'exercises', id));
 }
