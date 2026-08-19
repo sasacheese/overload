@@ -55,6 +55,8 @@ export function CalendarView({ today, onPickDate }: Props) {
 
   return (
     <>
+      {/* 広い画面では左にカレンダー、右に最近の記録。狭い画面では contents で素通り */}
+      <div className="cal-main">
       <header className="view-head">
         <div className="date-nav">
           <button type="button" className="icon-btn" aria-label="前の月" onClick={() => setMonth(shiftMonth(month, -1))}>
@@ -124,6 +126,9 @@ export function CalendarView({ today, onPickDate }: Props) {
 
       <AskClaudeButton sessions={sessions} exercises={exercises} today={today} />
 
+      </div>
+
+      <div className="cal-aside">
       <h2 className="section-title with-icon">
         <Icon name="history" />
         最近のセッション
@@ -150,6 +155,7 @@ export function CalendarView({ today, onPickDate }: Props) {
           })}
         </ul>
       )}
+    </div>
     </>
   );
 }

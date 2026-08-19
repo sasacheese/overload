@@ -4,6 +4,8 @@ import { CalendarView } from './components/CalendarView.tsx';
 import { ExercisesView } from './components/ExercisesView.tsx';
 import { Gate } from './components/Gate.tsx';
 import { Icon, type IconName } from './components/Icon.tsx';
+import { Mark } from './components/Mark.tsx';
+import { Wordmark } from './components/Wordmark.tsx';
 import { SessionView } from './components/SessionView.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
 import { todayIso } from './lib/calendar.ts';
@@ -247,52 +249,65 @@ function Shell() {
 
   return (
     <div className="app">
-      {!persistent ? (
-        <p className="banner warn">
-          この環境では記録を保存できない（プライベートブラウズなどで IndexedDB が使えない）。
-          再読み込みすると消える。
-        </p>
-      ) : null}
-      {error ? (
-        <p className="banner warn" onClick={clearError}>
-          保存に失敗した: {error}（タップで閉じる）
-        </p>
-      ) : null}
-      {updateReady() ? (
-        <button type="button" className="banner update" onClick={applyUpdate}>
-          新しい版がある · タップで再読み込み
-        </button>
-      ) : null}
-
-      <div
-        className="pager"
-        ref={pager}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={finish}
-        onPointerCancel={finish}
-      >
-        <div
-          className={`page ${drag ? 'is-moving' : ''} ${drag?.animating ? 'is-sliding' : ''}`}
-          style={offset(0)}
-          onTransitionEnd={(e) => {
-            if (e.propertyName === 'transform') settle();
-          }}
-        >
-          <main className="view">{renderTab(tab)}</main>
-        </div>
-        {drag ? (
-          <div
-            className={`page is-moving ${drag.animating ? 'is-sliding' : ''}`}
-            style={offset(drag.dir * width())}
-            aria-hidden="true"
-          >
-            <main className="view">{renderTab(drag.to)}</main>
-          </div>
+      {/*
+        帯とページャを束ねてある。広い画面では入れものを横並びにして左に筋を出すが、
+        そのとき横に並んでよいのは「この束」と「筋」の 2 つだけ。束ねずに並べると、
+        お知らせの帯まで列になってしまう。狭い画面では display: contents で
+        この div を無かったことにするので、並びは元のまま。
+      */}
+      <div className="shell">
+        {!persistent ? (
+          <p className="banner warn">
+            この環境では記録を保存できない（プライベートブラウズなどで IndexedDB が使えない）。
+            再読み込みすると消える。
+          </p>
         ) : null}
+        {error ? (
+          <p className="banner warn" onClick={clearError}>
+            保存に失敗した: {error}（タップで閉じる）
+          </p>
+        ) : null}
+        {updateReady() ? (
+          <button type="button" className="banner update" onClick={applyUpdate}>
+            新しい版がある · タップで再読み込み
+          </button>
+        ) : null}
+
+        <div
+          className="pager"
+          ref={pager}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={finish}
+          onPointerCancel={finish}
+        >
+          <div
+            className={`page ${drag ? 'is-moving' : ''} ${drag?.animating ? 'is-sliding' : ''}`}
+            style={offset(0)}
+            onTransitionEnd={(e) => {
+              if (e.propertyName === 'transform') settle();
+            }}
+          >
+            <main className={`view view-${tab}`}>{renderTab(tab)}</main>
+          </div>
+          {drag ? (
+            <div
+              className={`page is-moving ${drag.animating ? 'is-sliding' : ''}`}
+              style={offset(drag.dir * width())}
+              aria-hidden="true"
+            >
+              <main className={`view view-${drag.to}`}>{renderTab(drag.to)}</main>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <nav className="tabbar">
+        {/* 広い画面だけ出す。狭い画面では上部バーが名乗るので、二重に名乗らせない */}
+        <span className="rail-brand">
+          <Mark className="rail-mark" />
+          <Wordmark />
+        </span>
         {TABS.map((t) => (
           <button
             type="button"
@@ -301,7 +316,12 @@ function Shell() {
             aria-current={tab === t.key ? 'page' : undefined}
             onClick={() => setTab(t.key)}
           >
-            <Icon name={t.icon} label={t.name} />
+            {/*
+              字は常に置き、狭い画面では見えなくするだけ（読み上げには残る）。
+              記号側に名前を持たせると、広い画面で字と記号が同じことを 2 回言う。
+            */}
+            <Icon name={t.icon} />
+            <span className="tab-label">{t.name}</span>
           </button>
         ))}
       </nav>

@@ -222,6 +222,12 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         onChange={(v) => saveSession({ ...session, bodyWeight: v })}
       />
 
+      {/*
+        広い画面では 2 列にする。左は種目（触る場所）、右は日付と要点とメモ
+        （見ておく場所）。狭い画面では display: contents でこの div を無かった
+        ことにするので、縦一列の並びは元のまま。
+      */}
+      <div className="session-aside">
       <header className="view-head">
         <div className="date-nav">
           <button type="button" className="icon-btn" aria-label="前の日" onClick={() => onDateChange(shiftDays(date, -1))}>
@@ -273,6 +279,9 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         />
       </label>
 
+      </div>
+
+      <div className="session-main">
       {session.entries.map((entry, i) => {
         const exercise = byId.get(entry.exerciseId);
         if (!exercise) {
@@ -311,6 +320,8 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         <Icon name="plus" />
         種目を追加
       </button>
+
+      </div>
 
       {picking ? (
         <ExercisePicker

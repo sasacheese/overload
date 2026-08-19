@@ -65,6 +65,8 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
         <p className="empty">まだ記録がない。上の欄に今日の体重を入れると、ここに変化が出る。</p>
       ) : (
         <>
+          {/* 広い画面では左に要点と折れ線、右に一覧。狭い画面では contents で素通り */}
+          <div className="weight-main">
           <div className="summary">
             <span>
               <strong>{format(newest!.weight)}</strong>
@@ -101,6 +103,9 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
 
           <WeightChart points={points} today={today} />
 
+          </div>
+
+          <div className="weight-aside">
           <ul className="weight-list">
             {rows.map((row, i) => {
               const older = rows[i + 1];
@@ -118,6 +123,7 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
               );
             })}
           </ul>
+          </div>
         </>
       )}
     </>

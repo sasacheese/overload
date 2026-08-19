@@ -188,6 +188,22 @@ button {
  * 面を横に並べて動かす入れもの。はみ出した面は隠す。
  * min-height: 0 が無いと、中身の高さより縮めず、面の中のスクロールが働かない。
  */
+/*
+ * 束ねただけの入れものは、狭い画面では無いものとして扱う。
+ *
+ * display: contents なら中身が親の直接の子として並ぶので、これらを足しても
+ * 狭い画面の見た目は 1px も変わらない。広い画面でだけ列や段になる。
+ */
+.shell,
+.session-aside,
+.session-main,
+.cal-main,
+.cal-aside,
+.weight-main,
+.weight-aside {
+  display: contents;
+}
+
 .pager {
   position: relative;
   overflow: hidden;
@@ -251,7 +267,7 @@ button {
 
 .tabbar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   flex: none;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(16px) saturate(1.4);
@@ -274,6 +290,26 @@ button {
   height: 1.375rem;
 }
 
+/*
+ * タブの名前。狭い画面では見えなくするだけで、読み上げには残す。
+ *
+ * display: none で消すと読み上げからも消えるので、押せるものの名前が
+ * 無くなる。記号側に名前を持たせない代わりに、こちらを常に置いておく。
+ */
+.tab-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 筋の頭の名乗り。広い画面だけ */
+.rail-brand {
+  display: none;
+}
+
 .tabbar button.is-active {
   color: var(--fg);
 }
@@ -287,10 +323,6 @@ button {
   width: 1rem;
   height: 1.5px;
   background: var(--accent);
-}
-
-.tabbar {
-  grid-template-columns: repeat(5, 1fr);
 }
 
 .view-head {
@@ -2423,5 +2455,405 @@ button {
   .confirm,
   .confirm-card {
     animation: none;
+  }
+}
+
+/* ══ 広い画面 ═══════════════════════════════════════════
+ *
+ * 段は 2 つ。狭い画面の見た目と操作は上の定義のまま変えない——実機で詰めた寸法と
+ * 当たり判定を、画面が広いという理由で崩さない。
+ *
+ *   60rem（960px）から：行き先を下の帯から左の筋へ移す。中身は 1 列のまま。
+ *     タブレットの縦（768px）はここに入らない。指で使う幅では下の帯のほうが近い。
+ *   72rem（1152px）から：面を 2 列に割る。触る列と見ておく列を分ける。
+ *
+ * 2 列を 60rem から始めないのは、そこで割ると本文の列が 23rem しか残らず、
+ * **スマホより狭くなる**ため。広くしたのに窮屈になるのでは逆行になる。
+ */
+@media (min-width: 60rem) {
+  :root {
+    --gutter: 2rem;
+  }
+
+  /* 筋（左）と中身（右）。安全域は縦の概念なので広い画面では要らない */
+  .app {
+    flex-direction: row;
+    padding-top: 0;
+  }
+
+  .shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    /* min-width: 0 が無いと、中身の最小幅に押されて筋が縮む */
+    min-width: 0;
+  }
+
+  /* ── 左の筋 ────────────────────────────────── */
+
+  .tabbar {
+    order: -1;
+    flex: none;
+    width: 14rem;
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 0.125rem;
+    padding: 1.5rem 0.75rem 1rem;
+    border-top: none;
+    border-right: 1px solid var(--line);
+    /* 下の帯として敷いていたぼかしは、地の色で塗る面には要らない */
+    backdrop-filter: none;
+    background: var(--surface-2);
+  }
+
+  .rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.625rem 1.5rem;
+    color: var(--fg);
+  }
+
+  .rail-mark {
+    width: 1.5rem;
+    height: 1.5rem;
+    color: var(--accent);
+    flex: none;
+  }
+
+  /* 記号と字を横に並べ、行として押せるようにする */
+  .tabbar button {
+    display: flex;
+    align-items: center;
+    gap: 0.6875rem;
+    padding: 0.625rem 0.625rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    transition:
+      color 140ms ease-out,
+      background 140ms ease-out;
+  }
+
+  .tabbar .icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .tab-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .tabbar button:hover {
+    color: var(--fg);
+    background: var(--surface);
+  }
+
+  .tabbar button.is-active {
+    color: var(--fg);
+    background: var(--surface);
+  }
+
+  /*
+   * 現在地の印は下の短い線ではなく左の縦棒にする。行が縦に積まれているので、
+   * 下に引くと次の行の区切りに見える。
+   */
+  .tabbar button.is-active::after {
+    left: 0;
+    bottom: auto;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 1.125rem;
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* ── 面 ───────────────────────────────────── */
+
+  .view {
+    padding-top: 0.5rem;
+    padding-bottom: 3rem;
+    /* この段はまだ 1 列。1 行が長くなりすぎない幅で止める */
+    max-width: 44rem;
+  }
+
+  /*
+   * 上部バーは列をまたいで通す。名乗りは筋がやっているので落とし、
+   * 体重だけを右端に置く。
+   */
+  .topbar {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+  }
+
+  .topbar .brand {
+    display: none;
+  }
+
+  /* ── 種目：横に並べる ──────────────────────────── */
+
+  .ex-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.25rem 1.5rem;
+  }
+
+  /* ── セットの行：1 行に畳む ────────────────────── */
+
+  /*
+   * 狭い画面ではセット 1 つが 3 段（入力・実効負荷・前回との差）だったが、
+   * 広い画面では 1 行に収める。段のままだと入力欄が幅いっぱいに伸びて、
+   * 「32.5」の右に何も無い空白が広がる——数字を大きくしても読みやすくならない
+   * ので、余った幅は数字の意味（実効負荷・前回との差）を横に並べるほうに使う。
+   */
+  .set-item {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+  }
+
+  /*
+   * 入力欄は伸ばさない。実機で詰めた幅がそのまま指とカーソルの的でいい。
+   * 18rem なのは、この段の一番狭いところ（960px・本文の列が 38rem）でも実効負荷と
+   * 前回との差が同じ行に収まる幅だから。折り返すと 1 行に畳んだ意味がなくなる。
+   */
+  .set-main {
+    flex: none;
+    width: 18rem;
+  }
+
+  /* 段だったときの字下げは、横に並ぶと要らない */
+  .effective,
+  .set-extra {
+    padding-left: 0;
+  }
+
+  /*
+   * 前回との差とメモの印は、伸ばさず字の分だけの幅で並べる。
+   *
+   * 狭い画面ではメモの印を行の右端まで押していたが、横に並ぶと押した先が
+   * 遠すぎて、どのセットのメモか結びつかなくなる。差のすぐ隣に置く。
+   *
+   * 幅を固定しないので、入りきる画面では入力欄と同じ行に、狭い画面では
+   * 次の行へ自分で落ちる。段の数を画面幅ごとに決めなくて済む。
+   */
+  .set-extra {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  /* 1 段だったときは残りを埋めていた。横に並ぶと埋める必要がない */
+  .set-item .delta {
+    flex: 0 1 auto;
+  }
+
+  /*
+   * セットを増やす・減らすボタンも字の分だけ。カード幅いっぱいの ＋ と − は、
+   * 記録そのものより強い面になってしまう。
+   */
+  .set-actions .ghost {
+    flex: 0 0 auto;
+    min-width: 7rem;
+  }
+
+  /* メモは行の続きではなく、その下に 1 本で通す */
+  .set-note {
+    flex-basis: 100%;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  /* ── 設定：読める幅で止める ───────────────────────── */
+
+  /*
+   * 設定だけは広げない。1 行の長さが 60〜70 字を超えると読み返す位置を見失うし、
+   * 入力欄が画面幅まで伸びると打つ量に対して的が大きすぎる。
+   */
+  .view-settings {
+    max-width: 40rem;
+  }
+
+  /*
+   * 横幅いっぱいのボタンは、狭い画面では「押す場所が 1 つある」ことを示す形だが、
+   * 40rem に伸びると押す量に対して的が大きすぎて、何が主なのか分からなくなる。
+   * 字の分だけの幅にして左に寄せる。
+   */
+  .view-settings .wide {
+    width: auto;
+    min-width: 13rem;
+    align-self: flex-start;
+  }
+
+  .view-settings .btn-row .ghost {
+    flex: 0 0 auto;
+  }
+
+  /* 打つのは owner/repo くらいの短さ。欄も同じ長さで止める */
+  .view-settings .field input,
+  .view-settings .field select {
+    max-width: 22rem;
+  }
+
+  /* 3 つの選択肢に 35rem は要らない */
+  .weight-range {
+    max-width: 22rem;
+  }
+
+  /* ── 浮くものの位置 ──────────────────────────── */
+
+  /*
+   * 追加ボタンは右下へ。左下は筋の上になる。下の帯が無くなったので、
+   * 避ける高さも縦の安全域から普通の余白に変わる。
+   */
+  .fab {
+    left: auto;
+    right: 2rem;
+    bottom: 2rem;
+  }
+
+  /* 下から出るシートは、広い画面では中央の札にする */
+  .sheet-backdrop {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sheet {
+    border-radius: 14px;
+    border: 1px solid var(--line-strong);
+    max-height: 82dvh;
+    padding-bottom: 1.25rem;
+  }
+
+  /*
+   * 休憩タイマー。追加ボタンが右下に移ったので、避ける側も左から右へ入れ替える。
+   * 下の帯が無くなったぶん、床からの高さも詰める。
+   */
+  .rest-timer {
+    left: 2rem;
+    right: calc(2rem + 4.25rem);
+    bottom: 2.125rem;
+    margin: 0;
+  }
+}
+
+/* ══ 2 列にする幅（72rem / 1152px 以上） ══════════════════
+ *
+ * ここで初めて面を割る。左は触る列、右は見ておく列。右を貼り付けて残すので、
+ * 種目を送っているあいだも日付と要点が視界から消えない。
+ */
+@media (min-width: 72rem) {
+  .view {
+    max-width: 64rem;
+  }
+
+  /* ── 今日：左に種目、右に日付と要点 ──────────────── */
+
+  .view-today {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    grid-template-rows: auto 1fr;
+    align-items: start;
+    column-gap: 2rem;
+  }
+
+  .session-main,
+  .session-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-width: 0;
+  }
+
+  /*
+   * 段は明示する。DOM では右の列（日付・要点）が先に来るので、自動配置に任せると
+   * 左の列が次の段へ押し出されて、種目のはじまりが 1 画面ぶん下に落ちる。
+   */
+  .session-main {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  /*
+   * 右の列は貼り付けて残す。種目を送っているあいだも日付・要点・メモが視界に
+   * 残るので、いま何日のどこを見ているのか確かめに戻らなくて済む。
+   */
+  .session-aside {
+    grid-column: 2;
+    grid-row: 2;
+    position: sticky;
+    top: 4.5rem;
+    gap: 1.25rem;
+  }
+
+  /* 1 列だった名残り。列になったので区切り線は下ではなく面の縁に任せる */
+  .view-today .summary {
+    border-bottom: none;
+    padding-bottom: 0;
+    gap: 1.25rem;
+  }
+
+  .view-today .view-head {
+    padding-top: 0;
+  }
+
+  /* ── 記録：左にカレンダー、右に最近の記録 ───────────── */
+
+  /*
+   * カレンダー側は広げない。日の枠は正方形なので、列を広げると 1 マスが
+   * 巨大になって「月を一目で見る」道具でなくなる。余った幅は右の一覧に回す
+   * ——3 列（日付・部位・量）が狭い画面では窮屈だった側。
+   */
+  .view-calendar {
+    display: grid;
+    grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 2.5rem;
+  }
+
+  .cal-main,
+  .cal-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-width: 0;
+  }
+
+  .cal-aside {
+    gap: 0.75rem;
+  }
+
+  /* ── 体重：左に折れ線、右に一覧 ─────────────────── */
+
+  .view-weight {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    align-items: start;
+    column-gap: 2rem;
+  }
+
+  .weight-main,
+  .weight-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-width: 0;
+  }
+
+  /*
+   * 折れ線を縦に伸ばす。viewBox の比（およそ 2.4:1）に対して枠が横長すぎると、
+   * SVG は高さに合わせて縮み、左右に余白を残したまま平たい線になる。
+   * 枠の高さを比のぶんまで上げると、列の幅いっぱいを使って起伏が読める。
+   */
+  .weight-chart {
+    height: 15rem;
   }
 }
