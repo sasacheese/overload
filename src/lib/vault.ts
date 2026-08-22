@@ -29,6 +29,14 @@
 const STORAGE_KEY = 'overload:vault-key';
 /** 鍵を作らずにこの端末だけで使う、と決めた印。 */
 const LOCAL_ONLY_KEY = 'overload:local-only';
+/**
+ * サンプルを見ている印。**sessionStorage** に置く。
+ *
+ * サンプルは初めて開いた人が中身を確かめるためのもので、入り方の決定ではない。
+ * localStorage に置くと「サンプルを見た端末」が永久にサンプルへ入り続けてしまう。
+ * タブの寿命に合わせておけば、リロードには耐え、閉じれば入口に戻る。
+ */
+const DEMO_KEY = 'overload:demo';
 
 /** 見間違いと打ち間違いを避けるため I L O U を除いてある。 */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -100,29 +108,57 @@ export function clearEntry(): void {
   }
 }
 
-/** この端末の入り方。null は「まだ決めていない」。 */
-export type Entry = { kind: 'key'; key: string } | { kind: 'local' };
+/** サンプルを見始めた。 */
+export function storeDemo(): void {
+  try {
+    sessionStorage.setItem(DEMO_KEY, '1');
+  } catch {
+    // 覚えられなくてもこのタブでは見られる
+  }
+}
+
+/** サンプルを終えた。入口に戻るときに呼ぶ。 */
+export function clearDemo(): void {
+  try {
+    sessionStorage.removeItem(DEMO_KEY);
+  } catch {
+    // 消せなければタブを閉じたときに消える
+  }
+}
+
+/** この端末の入り方。null は「まだ決めていない」。demo は作りものの記録を見ている。 */
+export type Entry = { kind: 'key'; key: string } | { kind: 'local' } | { kind: 'demo' };
 
 /**
- * 2 つの印から入り方を決める。localStorage から切り離してあるのはここを試験するため。
+ * 3 つの印から入り方を決める。ストレージから切り離してあるのはここを試験するため。
  *
  * **鍵が勝つ。** 両方立つことは無いようにしてあるが（`storeKey` が印を落とす）、
  * もし立っていたら同期できる方を採る。鍵なしを採ると、同期していた記録に
  * 手が届かないまま使い続けることになる。
+ *
+ * サンプルの印は本物の入り方（鍵・鍵なし）より弱い。本物の記録がある端末で
+ * サンプルの印だけが残っていても、開くのは必ず本物の側。
  */
-export function entryFrom(key: string | null, localOnly: boolean): Entry | null {
+export function entryFrom(key: string | null, localOnly: boolean, demo = false): Entry | null {
   if (key !== null && key !== '') return { kind: 'key', key };
-  return localOnly ? { kind: 'local' } : null;
+  if (localOnly) return { kind: 'local' };
+  return demo ? { kind: 'demo' } : null;
 }
 
 export function storedEntry(): Entry | null {
   let localOnly = false;
+  let demo = false;
   try {
     localOnly = localStorage.getItem(LOCAL_ONLY_KEY) === '1';
   } catch {
     // 読めなければ「決めていない」として扱う
   }
-  return entryFrom(storedKey(), localOnly);
+  try {
+    demo = sessionStorage.getItem(DEMO_KEY) === '1';
+  } catch {
+    // 同上
+  }
+  return entryFrom(storedKey(), localOnly, demo);
 }
 
 /**

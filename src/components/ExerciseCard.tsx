@@ -13,8 +13,9 @@
  *  4. 機材の設定とコツを常に上に出す。毎回思い出す手間を消す
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { relativeLabel } from '../lib/calendar.ts';
+import { tapFeedback } from '../lib/haptics.ts';
 import { guideFor } from '../lib/presets.ts';
 import {
   compareToPrev,
@@ -23,6 +24,7 @@ import {
   loadOf,
   metrics,
   sessionsSinceBest,
+  trendLabel,
 } from '../lib/progression.ts';
 import { bestSeries, exerciseHistory, previousEntry } from '../lib/query.ts';
 import {
@@ -106,12 +108,18 @@ function setsLabel(ex: Exercise, sets: readonly SetRecord[]): string {
   if (sets.length === 0) return '記録なし';
   const reps = sets.map((s) => s.reps).join('・');
   if (ex.loadMode === 'bodyweight' && sets.every((s) => s.weight === 0)) return `${reps} レップ`;
-  const prefix = ex.loadMode === 'assist' ? '補助 ' : '';
+  /*
+   * 数字の意味を必ず言う。アシストは「補助」、自重に足したぶんは「加重」。
+   * 裸の kg にすると、あとで読み返したときに持ち上げた重量と区別が付かない。
+   */
+  const prefix = ex.loadMode === 'assist' ? '補助 ' : ex.loadMode === 'bodyweight' ? '加重 ' : '';
+  const one = (s: SetRecord) =>
+    ex.loadMode === 'bodyweight' && s.weight === 0 ? `自重×${s.reps}` : `${prefix}${format(s.weight)}×${s.reps}`;
   const weights = [...new Set(sets.map((s) => s.weight))];
   // 重量が揃っている日は「60kg × 8・8・8」、混ざっている日はセットごとに出す
   return weights.length === 1
     ? `${prefix}${format(weights[0]!)}kg × ${reps}`
-    : sets.map((s) => `${prefix}${format(s.weight)}×${s.reps}`).join(' / ');
+    : sets.map(one).join(' / ');
 }
 
 export function ExerciseCard({
@@ -126,6 +134,7 @@ export function ExerciseCard({
   onSetUndone,
 }: Props) {
   const { sessions, upsertExercise } = useStore();
+  const card = useRef<HTMLElement | null>(null);
   const [editingTips, setEditingTips] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   /*
@@ -175,6 +184,16 @@ export function ExerciseCard({
   const bestsNewestFirst = useMemo(() => [...series].reverse().map((s) => s.best), [series]);
 
   const todayMetrics = metrics(exercise, performance);
+  /*
+   * この種目を重さで測れているか。
+   *
+   * 今日の記録から決めると、まだ ✓ を 1 つも付けていない朝のあいだは常に
+   * 「測れていない」になり、推移の見出しが「最高レップ」に化けて、そこに推定 1RM の
+   * 数字がレップとして出る（`直近 200.66666 レップ`）。推移が見ているのは履歴なので、
+   * 測り方も履歴から決める。履歴も無ければ種目の設定に従う。
+   */
+  const historyByLoad = history[0] ? metrics(exercise, history[0]).byLoad : exercise.loadMode !== 'bodyweight';
+  const byLoad = todayMetrics.setCount > 0 ? todayMetrics.byLoad : historyByLoad;
   const stale = sessionsSinceBest(bestsNewestFirst);
   const group = MUSCLE_GROUPS[exercise.group];
   const guide = guideFor(exercise.id);
@@ -187,9 +206,31 @@ export function ExerciseCard({
     updateSets(entry.sets.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   };
 
+  /**
+   * 打ち終えた欄から次の欄へ送る。
+   *
+   * 重量 → レップ → 次のセットの重量、とカードの中を順に渡り歩く。並びは DOM の
+   * 順そのものなので、セットを増やしても列の持ち方を別に用意しなくていい。
+   * 最後の欄まで来たら閉じる（そこから先は ✓ を押す番）。
+   *
+   * 端末のキーボードの確定キーが「次へ」になっているのはこのため
+   * （Stepper が enterKeyHint を出している）。
+   */
+  const focusNextField = () => {
+    const root = card.current;
+    if (root === null) return;
+    const fields = [...root.querySelectorAll<HTMLInputElement>('.stepper-field input')];
+    const here = fields.indexOf(document.activeElement as HTMLInputElement);
+    const next = here < 0 ? undefined : fields[here + 1];
+    if (next) next.focus();
+    else (document.activeElement as HTMLElement | null)?.blur();
+  };
+
   const toggleDone = (index: number) => {
     const set = entry.sets[index];
     if (!set) return;
+    // 画面を見ずに押すことがあるので、入ったことを指に返す
+    tapFeedback();
     const nextEntry: SessionEntry = {
       ...entry,
       sets: entry.sets.map((s, i) => (i === index ? { ...s, done: !s.done } : s)),
@@ -217,7 +258,7 @@ export function ExerciseCard({
   };
 
   return (
-    <section className="card">
+    <section className="card" ref={card}>
       <header className="card-head">
         <span className="card-title">
           <span className="glyph" aria-hidden="true">
@@ -266,6 +307,13 @@ export function ExerciseCard({
           <Icon name="history" />
           {relativeLabel(prev.date, today)} · {setsLabel(exercise, prevSets)}
         </p>
+      ) : exercise.loadMode === 'bodyweight' ? (
+        /*
+          初めてやる自重種目にだけ、数字の入れ方を 1 行置く。マシンのレッグレイズや
+          バックエクステンションのように「重さを設定しない種目」で、重量の欄に
+          何を入れるのか迷われたため。2 回目以降は前回の行が同じ位置に出るので消える。
+        */
+        <p className="footnote">自重のままなら重さは空欄のまま ✓。ベルトやプレートで加重した日だけ +kg に入れる。</p>
       ) : null}
 
       <ol className="sets">
@@ -282,11 +330,20 @@ export function ExerciseCard({
                   value={set.weight}
                   step={exercise.increment}
                   min={0}
-                  label={`${i + 1}セット目の${LOAD_MODES[exercise.loadMode].label}`}
-                  suffix="kg"
+                  /*
+                    読み上げの名前。自重種目の欄が指すのは「自重」ではなく
+                    自重に足したぶんなので、モードの名前をそのまま使わない。
+                  */
+                  label={`${i + 1}セット目の${exercise.loadMode === 'bodyweight' ? '加重' : LOAD_MODES[exercise.loadMode].label}`}
+                  /*
+                    自重種目の欄は「自重に足したぶん」なので +kg。裸の kg だと
+                    体重を入れるのか総重量を入れるのか決まらず、実際に迷われた。
+                  */
+                  suffix={exercise.loadMode === 'bodyweight' ? '+kg' : 'kg'}
                   zeroLabel={exercise.loadMode === 'bodyweight' ? '自重' : undefined}
                   /* マシンごとに刻みが違うので、決まった量ずつ動かすボタンは役に立たない */
                   showSteps={false}
+                  onNext={focusNextField}
                   onChange={(weight) => patchSet(i, { weight })}
                 />
                 <Stepper
@@ -295,6 +352,7 @@ export function ExerciseCard({
                   min={0}
                   label={`${i + 1}セット目のレップ`}
                   suffix="回"
+                  onNext={focusNextField}
                   onChange={(reps) => patchSet(i, { reps })}
                 />
                 <button
@@ -444,7 +502,7 @@ export function ExerciseCard({
 
         {series.length >= 2 ? (
           <Disclosure
-            label={todayMetrics.byLoad ? '推定 1RM の推移' : '最高レップの推移'}
+            label={trendLabel(exercise, byLoad)}
             icon="trend"
             open={openSections.has('trend')}
             onToggle={() => toggleSection('trend')}
@@ -452,9 +510,7 @@ export function ExerciseCard({
             <div className="trend-head">
               <span className="muted">直近</span>
               <strong>
-                {todayMetrics.byLoad
-                  ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg`
-                  : `${series.at(-1)?.best ?? 0} レップ`}
+                {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} レップ`}
               </strong>
             </div>
             <Sparkline values={series.map((s) => s.best)} highlightLast={stale === 0 ? 'best' : 'normal'} />

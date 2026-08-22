@@ -6,9 +6,10 @@
  * オフラインでも遅延なく動く。
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Backup } from './lib/backup.ts';
 import * as db from './lib/db.ts';
+import { changedSessions, mergedInto } from './lib/merge.ts';
 import { presetExercises } from './lib/presets.ts';
 import { isTombstone, mergedExercises, mergedSessions } from './lib/sync.ts';
 import type { Exercise, ExerciseId, IsoDate, Session } from './lib/types.ts';
@@ -34,6 +35,13 @@ export type Store = {
    * archived の切り替えなら普通の更新として伝わる。
    */
   removeExercise: (id: ExerciseId) => void;
+  /**
+   * ある種目の記録を別の種目に移し、元の種目を非表示にする。
+   *
+   * 自分で作った種目とプリセットが同じものを指しているとき（あとからプリセットが
+   * 増えた場合など）に、記録を捨てずに片方へ寄せるための操作。判定は lib/merge.ts。
+   */
+  mergeExercise: (source: ExerciseId, target: ExerciseId) => Promise<void>;
   /** リモートから取り込んだぶんをまとめて反映する。 */
   applyRemote: (incoming: { sessions: readonly Session[]; exercises: readonly Exercise[] }) => Promise<void>;
   restore: (backup: Backup) => Promise<void>;
@@ -49,7 +57,10 @@ export function useStore(): Store {
   return store;
 }
 
-export function StoreProvider({ children }: { children: ReactNode }) {
+/** 差し込みの初期データ。渡されたら IndexedDB には一切触らない（サンプル表示用）。 */
+export type Seed = { exercises: Exercise[]; sessions: Session[] };
+
+export function StoreProvider({ children, seed }: { children: ReactNode; seed?: Seed | undefined }) {
   const [ready, setReady] = useState(false);
   const [persistent, setPersistent] = useState(true);
   const [durable, setDurable] = useState(false);
@@ -57,11 +68,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
 
+  /*
+   * seed が来たらメモリだけで動く。
+   *
+   * **マウント時の値で固定する。** 入り方が変わるときは App が key を変えて
+   * このプロバイダごと作り直すので、途中で切り替わることは無い。それでも ref で
+   * 留めているのは、もし作り直しに失敗して props だけが変わったとき、
+   * サンプルの記録が本物の保存先に書き込まれてしまうため（実際に一度そうなった）。
+   */
+  const inMemory = useRef(seed !== undefined).current;
+
   const report = useCallback((e: unknown) => {
     setError(e instanceof Error ? e.message : String(e));
   }, []);
 
   useEffect(() => {
+    if (seed) {
+      // サンプル。読むものも書くものも無いので、渡されたものを置いて終わり
+      setExercises(seed.exercises);
+      setSessions(seed.sessions);
+      setDurable(true);
+      setReady(true);
+      return;
+    }
     let cancelled = false;
     (async () => {
       const ok = await db.isPersistent();
@@ -93,6 +122,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report]);
 
   const saveSession = useCallback(
@@ -103,9 +133,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const rest = prev.filter((s) => s.date !== next.date);
         return keep ? [...rest, next] : rest;
       });
+      if (inMemory) return;
       (keep ? db.put(db.STORES.sessions, next) : db.deleteSession(next.date)).catch(report);
     },
-    [report],
+    [report, inMemory],
   );
 
   const upsertExercise = useCallback(
@@ -118,9 +149,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (i < 0) return [...prev, next];
         return prev.map((e) => (e.id === next.id ? next : e));
       });
+      if (inMemory) return;
       db.put(db.STORES.exercises, next).catch(report);
     },
-    [report],
+    [report, inMemory],
   );
 
   const removeExercise = useCallback(
@@ -131,6 +163,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [exercises, upsertExercise],
   );
 
+  const mergeExercise = useCallback(
+    async (source: ExerciseId, target: ExerciseId) => {
+      if (source === target) return;
+      const next = mergedInto(sessions, source, target, Date.now());
+      const changed = changedSessions(sessions, next);
+      try {
+        // 記録を移してから元を隠す。逆順だと、途中で失敗したときに
+        // 「隠れているのに記録はそこにある」種目が残る
+        if (!inMemory && changed.length > 0) await db.putMany(db.STORES.sessions, changed);
+      } catch (e) {
+        report(e);
+        throw e;
+      }
+      setSessions(next);
+      const from = exercises.find((e) => e.id === source);
+      if (from) upsertExercise({ ...from, archived: true });
+    },
+    [sessions, exercises, inMemory, report, upsertExercise],
+  );
+
   const applyRemote = useCallback(
     async ({ sessions: incomingSessions, exercises: incomingExercises }: {
       sessions: readonly Session[];
@@ -138,13 +190,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }) => {
       const keep = incomingSessions.filter((s) => !isTombstone(s));
       const drop = incomingSessions.filter(isTombstone).map((s) => s.date);
-      try {
-        await db.putMany(db.STORES.sessions, keep);
-        await Promise.all(drop.map((date) => db.deleteSession(date)));
-        if (incomingExercises.length > 0) await db.putMany(db.STORES.exercises, incomingExercises);
-      } catch (e) {
-        report(e);
-        throw e;
+      if (!inMemory) {
+        try {
+          await db.putMany(db.STORES.sessions, keep);
+          await Promise.all(drop.map((date) => db.deleteSession(date)));
+          if (incomingExercises.length > 0) await db.putMany(db.STORES.exercises, incomingExercises);
+        } catch (e) {
+          report(e);
+          throw e;
+        }
       }
       setSessions((prev) => mergedSessions(prev, incomingSessions));
       if (incomingExercises.length > 0) {
@@ -164,17 +218,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const restore = useCallback(
     async (backup: Backup) => {
       try {
-        await db.putMany(db.STORES.exercises, backup.exercises);
-        await db.putMany(db.STORES.sessions, backup.sessions);
+        if (!inMemory) {
+          await db.putMany(db.STORES.exercises, backup.exercises);
+          await db.putMany(db.STORES.sessions, backup.sessions);
 
-        const keptDates = new Set(backup.sessions.map((s) => s.date));
-        const keptIds = new Set(backup.exercises.map((e) => e.id));
-        const staleDates = sessions.map((s) => s.date).filter((d) => !keptDates.has(d));
-        const staleIds = exercises.map((e) => e.id).filter((id) => !keptIds.has(id));
-        await Promise.all([
-          ...staleDates.map((date) => db.deleteSession(date)),
-          ...staleIds.map((id) => db.remove(db.STORES.exercises, id)),
-        ]);
+          const keptDates = new Set(backup.sessions.map((s) => s.date));
+          const keptIds = new Set(backup.exercises.map((e) => e.id));
+          const staleDates = sessions.map((s) => s.date).filter((d) => !keptDates.has(d));
+          const staleIds = exercises.map((e) => e.id).filter((id) => !keptIds.has(id));
+          await Promise.all([
+            ...staleDates.map((date) => db.deleteSession(date)),
+            ...staleIds.map((id) => db.remove(db.STORES.exercises, id)),
+          ]);
+        }
 
         setExercises(backup.exercises);
         setSessions(backup.sessions);
@@ -183,21 +239,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         throw e;
       }
     },
-    [report, sessions, exercises],
+    [report, sessions, exercises, inMemory],
   );
 
   const wipe = useCallback(async () => {
     try {
-      await db.wipe();
       const seeded = presetExercises();
-      await db.putMany(db.STORES.exercises, seeded);
+      if (!inMemory) {
+        await db.wipe();
+        await db.putMany(db.STORES.exercises, seeded);
+      }
       setExercises(seeded);
       setSessions([]);
     } catch (e) {
       report(e);
       throw e;
     }
-  }, [report]);
+  }, [report, inMemory]);
 
   const value = useMemo<Store>(
     () => ({
@@ -210,6 +268,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveSession,
       upsertExercise,
       removeExercise,
+      mergeExercise,
       applyRemote,
       restore,
       wipe,
@@ -225,6 +284,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveSession,
       upsertExercise,
       removeExercise,
+      mergeExercise,
       applyRemote,
       restore,
       wipe,

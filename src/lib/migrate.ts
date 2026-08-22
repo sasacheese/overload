@@ -54,6 +54,7 @@ export function normalizeSession(raw: unknown): Session {
     entries: Array.isArray(o['entries']) ? o['entries'].map(normalizeEntry) : [],
     note: str(o['note']),
     bodyWeight: num(o['bodyWeight'], 0),
+    finishedAt: num(o['finishedAt'], 0),
     updatedAt: num(o['updatedAt'], 0),
   };
 }

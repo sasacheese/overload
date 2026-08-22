@@ -23,6 +23,7 @@ function session(date: string, sets: readonly (readonly [number, number])[], id 
     entries: [{ exerciseId: id, sets: sets.map(([weight, reps]) => ({ weight, reps, done: true, note: '' })), note: '' }],
     note: '',
     bodyWeight: 0,
+    finishedAt: 0,
     updatedAt: 0,
   };
 }
@@ -34,7 +35,7 @@ const sessions = [
 ];
 
 test('sortedSessions: 新しい順。記録の無いセッションは落とす', () => {
-  const empty: Session = { date: isoDate('2026-08-20'), entries: [], note: '', bodyWeight: 0, updatedAt: 0 };
+  const empty: Session = { date: isoDate('2026-08-20'), entries: [], note: '', bodyWeight: 0, finishedAt: 0, updatedAt: 0 };
   const sorted = sortedSessions([...sessions, empty]);
   assert.deepEqual(sorted.map((s) => s.date), ['2026-08-15', '2026-08-08', '2026-08-01']);
 });
@@ -68,6 +69,7 @@ test('sessionGroups / sessionVolume: 自重種目はボリュームに足さな�
     ],
     note: '',
     bodyWeight: 0,
+    finishedAt: 0,
     updatedAt: 0,
   };
   assert.deepEqual(sessionGroups(mixed, exercises).sort(), ['chest', 'core']);
@@ -80,6 +82,7 @@ test('lastPerformed: 種目ごとの最終実施日。未実施セットだけ�
     entries: [{ exerciseId: bench.id, sets: [{ weight: 65, reps: 5, done: false, note: '' }], note: '' }],
     note: '',
     bodyWeight: 0,
+    finishedAt: 0,
     updatedAt: 0,
   };
   const map = lastPerformed([...sessions, withPending]);
@@ -118,7 +121,7 @@ test('bodyWeightOn: その日 → それより前の直近 → 無ければ 0', 
 });
 
 test('bodyWeightOn: 体重だけの日（休養日）も引き当てに使う', () => {
-  const restDay: Session = { date: isoDate('2026-08-12'), entries: [], note: '', bodyWeight: 69.4, updatedAt: 0 };
+  const restDay: Session = { date: isoDate('2026-08-12'), entries: [], note: '', bodyWeight: 69.4, finishedAt: 0, updatedAt: 0 };
   const list = [{ ...session('2026-08-10', [[60, 8]]), bodyWeight: 70 }, restDay];
   // トレーニングの記録は無いが体重はある日。ここを飛ばすと古い値を使ってしまう
   assert.equal(bodyWeightOn(list, isoDate('2026-08-14')), 69.4);

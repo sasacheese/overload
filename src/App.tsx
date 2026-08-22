@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BodyWeightView } from './components/BodyWeightView.tsx';
 import { CalendarView } from './components/CalendarView.tsx';
 import { ExercisesView } from './components/ExercisesView.tsx';
@@ -9,10 +9,11 @@ import { Wordmark } from './components/Wordmark.tsx';
 import { SessionView } from './components/SessionView.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
 import { todayIso } from './lib/calendar.ts';
+import { demoData } from './lib/demo.ts';
 import { subscribeUpdate, updateReady, applyUpdate } from './lib/updates.ts';
 import type { IsoDate } from './lib/types.ts';
-import { type Entry, storeKey, storeLocalOnly, storedEntry } from './lib/vault.ts';
-import { useStore } from './store.tsx';
+import { clearDemo, storeDemo, storeKey, storeLocalOnly, storedEntry, type Entry } from './lib/vault.ts';
+import { StoreProvider, useStore } from './store.tsx';
 import { SyncProvider } from './sync.tsx';
 
 /** ラベルは置かずアイコンだけ。name は読み上げと aria に使う。 */
@@ -41,6 +42,36 @@ function useToday(): IsoDate {
     };
   }, []);
   return today;
+}
+
+/**
+ * URL でサンプルを名指ししているか。
+ *
+ * `#demo` を受けるのは、**リンクを渡すだけで中身を見せられる**ようにするため
+ * （`https://…/overload/#demo`）。既に自分の記録が入っている端末でも、この URL なら
+ * サンプルが開く——人に見せるときに自分の記録を出さずに済むし、開発中に空の状態から
+ * 作り直さなくても画面を確かめられる。`?demo` も同じ意味で受ける。
+ *
+ * 印は保存しない。URL から外して開き直せば、いつもの記録に戻る。
+ */
+function demoInUrl(): boolean {
+  try {
+    return location.hash === '#demo' || new URLSearchParams(location.search).has('demo');
+  } catch {
+    return false;
+  }
+}
+
+/** URL からサンプルの名指しを外す。戻ったあと再読み込みしても戻ってこないように。 */
+function dropDemoFromUrl(): void {
+  try {
+    const url = new URL(location.href);
+    url.hash = '';
+    url.searchParams.delete('demo');
+    history.replaceState(null, '', url.toString());
+  } catch {
+    // 触れなくても、このタブでは戻れている
+  }
 }
 
 /** どちらの軸の操作か決めるまでに要る移動量。 */
@@ -73,7 +104,21 @@ type Drag = {
  * SyncProvider は null を受け取ったら同期を無効にする作りにしてある。
  */
 export function App() {
-  const [entry, setEntry] = useState<Entry | null>(storedEntry);
+  /*
+   * URL の名指しは保存された入り方より強い。人に見せる・開発中に確かめる用途では、
+   * その端末に何が入っていようとサンプルが開いてほしい。
+   */
+  const [entry, setEntry] = useState<Entry | null>(() =>
+    demoInUrl() ? { kind: 'demo' } : storedEntry(),
+  );
+
+  /*
+   * サンプルの記録。入っているあいだだけ作る。
+   *
+   * 「今日」を基準に組み立てるので、開いたタイミングで一度だけ作れば、
+   * その表示のあいだ中は同じデータでいられる。
+   */
+  const seed = useMemo(() => (entry?.kind === 'demo' ? demoData() : undefined), [entry?.kind]);
 
   if (entry === null) {
     return (
@@ -86,18 +131,51 @@ export function App() {
           storeLocalOnly();
           setEntry({ kind: 'local' });
         }}
+        onDemo={() => {
+          storeDemo();
+          setEntry({ kind: 'demo' });
+        }}
       />
     );
   }
 
+  if (entry.kind === 'demo') {
+    /*
+     * サンプル。ストアはメモリだけ（seed 渡し）、同期は無効。
+     * 触っても何も保存されないので、終えれば跡形なく入口に戻る。
+     */
+    return (
+      /*
+        key を分けてある。分けないと React が同じ位置の StoreProvider を使い回し、
+        サンプルを抜けたあとも中身が残る（さらに、以降の書き込みが本物の保存先へ
+        向かってしまう）。入り方が変わったらストアごと作り直す。
+      */
+      <StoreProvider key="demo" seed={seed}>
+        <SyncProvider vaultKey={null}>
+          <Shell
+            demo
+            onExitDemo={() => {
+              clearDemo();
+              dropDemoFromUrl();
+              // 自分の記録があればそこへ、無ければ入口へ戻る
+              setEntry(storedEntry());
+            }}
+          />
+        </SyncProvider>
+      </StoreProvider>
+    );
+  }
+
   return (
-    <SyncProvider vaultKey={entry.kind === 'key' ? entry.key : null}>
-      <Shell />
-    </SyncProvider>
+    <StoreProvider key="own">
+      <SyncProvider vaultKey={entry.kind === 'key' ? entry.key : null}>
+        <Shell />
+      </SyncProvider>
+    </StoreProvider>
   );
 }
 
-function Shell() {
+function Shell({ demo = false, onExitDemo }: { demo?: boolean; onExitDemo?: () => void }) {
   const { ready, persistent, error, clearError } = useStore();
   const today = useToday();
   const [date, setDate] = useState<IsoDate>(today);
@@ -123,7 +201,7 @@ function Shell() {
     if (e.pointerType !== 'touch' || drag?.animating) return;
     const target = e.target as HTMLElement;
     // 数値欄やシートの上から始まった操作は奪わない
-    if (target.closest('input, textarea, select, .sheet, .celebrate, .confirm, .stepper')) {
+    if (target.closest('input, textarea, select, .sheet, .celebrate, .confirm, .stepper, .wrap')) {
       gesture.current = null;
       return;
     }
@@ -256,6 +334,15 @@ function Shell() {
         この div を無かったことにするので、並びは元のまま。
       */}
       <div className="shell">
+        {demo ? (
+          /*
+           * サンプルであることを常に出しておく。1 回のタップで入口に戻れる
+           * ——押し間違えても失うものが無いので、確認は挟まない。
+           */
+          <button type="button" className="banner demo" onClick={onExitDemo}>
+            サンプルの記録 — 触っても保存されない · 入口に戻る
+          </button>
+        ) : null}
         {!persistent ? (
           <p className="banner warn">
             この環境では記録を保存できない（プライベートブラウズなどで IndexedDB が使えない）。

@@ -11,6 +11,7 @@ const session: Session = {
   ],
   note: '睡眠 7 時間',
   bodyWeight: 0,
+  finishedAt: 0,
   updatedAt: 1_755_000_000_000,
 };
 

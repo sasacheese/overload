@@ -472,6 +472,28 @@ export function SettingsView() {
       </section>
 
       <section className="panel">
+        <h2>人に見せる</h2>
+        <p>
+          作りものの 9 週間ぶんの記録が入った状態で開く。自分の記録は出ないし、
+          サンプルの中で何をしても保存されない。帯を押せば戻る。
+        </p>
+        <p className="footnote">
+          リンクを渡すだけでも見せられる（URL の末尾に <code>#demo</code> を足す）。
+        </p>
+        <button
+          type="button"
+          className="ghost wide"
+          onClick={() => {
+            // 入り方は App が URL を見て決める。ここは名指しして開き直すだけ
+            location.hash = 'demo';
+            location.reload();
+          }}
+        >
+          サンプルの記録を開く
+        </button>
+      </section>
+
+      <section className="panel">
         <h2>データ</h2>
         {confirmWipe ? (
           <>
@@ -502,7 +524,7 @@ export function SettingsView() {
       </section>
 
       {message ? <p className="hint">{message}</p> : null}
-      <p className="footnote">OVERLOAD v1.1.0</p>
+      <p className="footnote">OVERLOAD v1.2.0</p>
     </>
   );
 }

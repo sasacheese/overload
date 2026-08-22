@@ -2,17 +2,16 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { registerServiceWorker } from './lib/updates.ts';
-import { StoreProvider } from './store.tsx';
 import './styles.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root が無い');
 
+// StoreProvider は App の中で入り方（鍵・鍵なし・サンプル）を見てから立てる。
+// サンプルは IndexedDB に触らないストアを使うので、ここで一律に包めない。
 createRoot(root).render(
   <StrictMode>
-    <StoreProvider>
-      <App />
-    </StoreProvider>
+    <App />
   </StrictMode>,
 );
 

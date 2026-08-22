@@ -17,6 +17,7 @@ function session(date: string, entries: readonly [string, readonly (readonly [nu
     })),
     note,
     bodyWeight: 0,
+    finishedAt: 0,
     updatedAt: 0,
   };
 }

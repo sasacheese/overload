@@ -74,7 +74,7 @@ export type Muscle = keyof typeof MUSCLES;
  */
 export const LOAD_MODES = {
   weight: { label: '重量', unit: 'kg', hint: '持ち上げる重量' },
-  bodyweight: { label: '自重', unit: 'kg', hint: '加重があれば入力する' },
+  bodyweight: { label: '自重', unit: 'kg', hint: '重さを設定しない種目。加重した日だけ入力する' },
   assist: { label: 'アシスト', unit: 'kg', hint: 'マシンに設定する補助重量。下げるほど負荷が上がる' },
 } as const;
 
@@ -148,11 +148,20 @@ export type Session = {
    * セッションに持つ。過去の記録を後から計算し直しても当時の体重で出る。
    */
   bodyWeight: number;
+  /**
+   * その日を「終えた」と押した時刻（epoch ms）。0 は押していない。
+   *
+   * 記録そのものには一切効かない——集計も祝福もこの値を見ない。効くのは画面だけで、
+   * 締めの画面をもう一度開けることと、終えたあとに終わりのボタンを出さないことに使う。
+   * 真偽値ではなく時刻にしてあるのは、同期の突き合わせで「あとから終えた方」を
+   * 残せるようにするため（updatedAt と同じ理由）。
+   */
+  finishedAt: number;
   updatedAt: number;
 };
 
 export function emptySession(date: IsoDate): Session {
-  return { date, entries: [], note: '', bodyWeight: 0, updatedAt: 0 };
+  return { date, entries: [], note: '', bodyWeight: 0, finishedAt: 0, updatedAt: 0 };
 }
 
 /** 実施済みのセットだけ。集計はすべてこれを通す。 */
@@ -179,5 +188,10 @@ export function hasRecord(session: Session): boolean {
  * 入力途中が消えないようにするため。
  */
 export function worthStoring(session: Session): boolean {
-  return session.entries.length > 0 || session.note.trim() !== '' || session.bodyWeight > 0;
+  return (
+    session.entries.length > 0 ||
+    session.note.trim() !== '' ||
+    session.bodyWeight > 0 ||
+    session.finishedAt > 0
+  );
 }
