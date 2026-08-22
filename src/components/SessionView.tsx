@@ -45,6 +45,8 @@ type Props = {
 const REST_KEY = 'overload:rest';
 /** 出し終えた祝福。同じ種類を 1 セッションで繰り返さないために覚えておく。 */
 const SHOWN_KEY = 'overload:shownRecords';
+/** 畳んでいる種目。タブを行き来しても畳んだままにするために外へ出す。 */
+const FOLD_KEY = 'overload:folded';
 
 /** どのセットが始めた休憩かを覚えておく。✓ を外したときに畳むため。 */
 type Rest = { at: number; targetSec: number; exerciseId: string; index: number };
@@ -73,11 +75,33 @@ function readShown(): Set<string> {
   }
 }
 
+/**
+ * 畳んでいる種目。日付とセットで持つ。
+ *
+ * 日付を含めているのは、別の日へ送ったときに畳みを持ち越さないため。日ごとに
+ * 並ぶ種目が違うので、前の日で閉じたものが次の日でも閉じていると、開いた覚えの
+ * 無いものが閉じたまま並ぶ。
+ */
+function readFolded(date: IsoDate): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(FOLD_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return new Set();
+    const { date: on, ids } = parsed as Record<string, unknown>;
+    if (on !== date || !Array.isArray(ids)) return new Set();
+    return new Set(ids.filter((v): v is string => typeof v === 'string'));
+  } catch {
+    return new Set();
+  }
+}
+
 export function SessionView({ date, today, onDateChange, onCreateExercise }: Props) {
   const { exercises, sessions, saveSession } = useStore();
   const session = useSession(date);
   const [picking, setPicking] = useState(false);
   const [rest, setRest] = useState(readRest);
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() => readFolded(date));
   const [celebration, setCelebration] = useState<{ achievement: Achievement; exerciseName: string } | null>(null);
   /** 締めの画面。fresh は「いま押して締めた」——あとから見直したときは光を出さない。 */
   const [wrap, setWrap] = useState<{ fresh: boolean } | null>(null);
@@ -98,6 +122,25 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // 日付を送ったら、その日の畳みを読み直す（別の日の畳みを持ち越さない）
+  useEffect(() => {
+    setFolded(readFolded(date));
+  }, [date]);
+
+  const toggleFold = (exerciseId: string) => {
+    setFolded((prev) => {
+      const next = new Set(prev);
+      if (next.has(exerciseId)) next.delete(exerciseId);
+      else next.add(exerciseId);
+      try {
+        sessionStorage.setItem(FOLD_KEY, JSON.stringify({ date, ids: [...next] }));
+      } catch {
+        // 覚えられなければ、タブを離れたときに開いた状態へ戻るだけ
+      }
+      return next;
+    });
+  };
 
   const byId = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
   const last = useMemo(() => lastPerformed(sessions), [sessions]);
@@ -330,6 +373,8 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
             today={today}
             entry={entry}
             bodyWeight={bodyWeight}
+            folded={folded.has(entry.exerciseId)}
+            onToggleFold={() => toggleFold(entry.exerciseId)}
             onChange={(next) => setEntries(session.entries.map((e, j) => (j === i ? next : e)))}
             onRemove={() => setEntries(session.entries.filter((_, j) => j !== i))}
             onSetCompleted={onSetCompleted}

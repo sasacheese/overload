@@ -51,6 +51,9 @@ type Props = {
   entry: SessionEntry;
   /** その日の体重。アシスト種目の実効負荷に使う。0 は未記録。 */
   bodyWeight: number;
+  /** 畳んでいるか。何種目も並ぶ日に、終えたものを閉じて縦を詰められるようにしてある。 */
+  folded: boolean;
+  onToggleFold: () => void;
   onChange: (entry: SessionEntry) => void;
   onRemove: () => void;
   onSetCompleted: (exercise: Exercise, entry: SessionEntry, index: number) => void;
@@ -128,6 +131,8 @@ export function ExerciseCard({
   today,
   entry,
   bodyWeight,
+  folded,
+  onToggleFold,
   onChange,
   onRemove,
   onSetCompleted,
@@ -199,6 +204,8 @@ export function ExerciseCard({
   const guide = guideFor(exercise.id);
   const isAssist = exercise.loadMode === 'assist';
   const prevSets = prev ? doneSets(prev.entry) : [];
+  /** 今日 ✓ を付けたセット。畳んだときの 1 行に出す。 */
+  const todayDone = doneSets(entry);
 
   const updateSets = (sets: SetRecord[]) => onChange({ ...entry, sets });
 
@@ -258,14 +265,20 @@ export function ExerciseCard({
   };
 
   return (
-    <section className="card" ref={card}>
+    <section className={`card ${folded ? 'is-folded' : ''}`} ref={card}>
       <header className="card-head">
-        <span className="card-title">
+        {/*
+          見出しそのものが畳む操作。1 日に何種目も並ぶと縦に長くなるので、
+          終えた種目を閉じて先へ進めるようにした。押せる幅は見出しいっぱいに
+          取ってある——狭い矢印だけを狙わせない。
+        */}
+        <button type="button" className="card-title card-fold" aria-expanded={!folded} onClick={onToggleFold}>
           <span className="glyph" aria-hidden="true">
             {group.short}
           </span>
           <span className="card-name">{exercise.name}</span>
-        </span>
+          <Icon name="down" className="card-chevron" />
+        </button>
         <button
           type="button"
           className="icon-btn"
@@ -276,263 +289,280 @@ export function ExerciseCard({
         </button>
       </header>
 
-      {/* 機材の設定とコツ。セットに入る前に目に入る位置に置く */}
-      {editingTips ? (
-        <label className="note tips-edit">
-          <span className="muted">コツ・機材の設定（この種目をやるときは常に出る）</span>
-          <textarea
-            rows={3}
-            autoFocus
-            value={exercise.tips}
-            placeholder="ラックは8段目 / シートは4段目 / 肩を落としてから引く"
-            onChange={(e) => upsertExercise({ ...exercise, tips: e.target.value })}
-          />
-          <button type="button" className="ghost small" onClick={() => setEditingTips(false)}>
-            閉じる
-          </button>
-        </label>
-      ) : exercise.tips.trim() !== '' ? (
-        <button type="button" className="tips" onClick={() => setEditingTips(true)}>
-          {exercise.tips}
-        </button>
-      ) : (
-        <button type="button" className="tips-empty with-icon" onClick={() => setEditingTips(true)}>
-          <Icon name="plus" />
-          コツ・機材の設定
-        </button>
-      )}
-
-      {prev ? (
-        <p className="prev-line with-icon">
-          <Icon name="history" />
-          {relativeLabel(prev.date, today)} · {setsLabel(exercise, prevSets)}
-        </p>
-      ) : exercise.loadMode === 'bodyweight' ? (
-        /*
-          初めてやる自重種目にだけ、数字の入れ方を 1 行置く。マシンのレッグレイズや
-          バックエクステンションのように「重さを設定しない種目」で、重量の欄に
-          何を入れるのか迷われたため。2 回目以降は前回の行が同じ位置に出るので消える。
-        */
-        <p className="footnote">自重のままなら重さは空欄のまま ✓。ベルトやプレートで加重した日だけ +kg に入れる。</p>
-      ) : null}
-
-      <ol className="sets">
-        {entry.sets.map((set, i) => {
-          const delta = set.done ? compareToPrev(exercise, set, prevSets[i]) : null;
-          const noteOpen = openNotes.has(i);
-          const prevSet = prevSets[i];
-          const effective = isAssist ? loadOf(exercise, set, bodyWeight) : 0;
-          return (
-            <li key={i} className={`set-item ${set.done ? 'is-done' : ''}`}>
-              <div className="set-main">
-                <span className="set-index">{i + 1}</span>
-                <Stepper
-                  value={set.weight}
-                  step={exercise.increment}
-                  min={0}
-                  /*
-                    読み上げの名前。自重種目の欄が指すのは「自重」ではなく
-                    自重に足したぶんなので、モードの名前をそのまま使わない。
-                  */
-                  label={`${i + 1}セット目の${exercise.loadMode === 'bodyweight' ? '加重' : LOAD_MODES[exercise.loadMode].label}`}
-                  /*
-                    自重種目の欄は「自重に足したぶん」なので +kg。裸の kg だと
-                    体重を入れるのか総重量を入れるのか決まらず、実際に迷われた。
-                  */
-                  suffix={exercise.loadMode === 'bodyweight' ? '+kg' : 'kg'}
-                  zeroLabel={exercise.loadMode === 'bodyweight' ? '自重' : undefined}
-                  /* マシンごとに刻みが違うので、決まった量ずつ動かすボタンは役に立たない */
-                  showSteps={false}
-                  onNext={focusNextField}
-                  onChange={(weight) => patchSet(i, { weight })}
-                />
-                <Stepper
-                  value={set.reps}
-                  step={1}
-                  min={0}
-                  label={`${i + 1}セット目のレップ`}
-                  suffix="回"
-                  onNext={focusNextField}
-                  onChange={(reps) => patchSet(i, { reps })}
-                />
-                <button
-                  type="button"
-                  className={`check ${set.done ? 'is-on' : ''}`}
-                  aria-label={`${i + 1}セット目を${set.done ? '未実施に戻す' : '実施済みにする'}`}
-                  aria-pressed={set.done}
-                  onClick={() => toggleDone(i)}
-                >
-                  <Icon name="check" />
-                </button>
-              </div>
-
-              {isAssist && bodyWeight > 0 ? (
-                <p className="effective">
-                  → 実際に引く重さ <strong>{format(effective)}kg</strong>
-                </p>
-              ) : null}
-
-              <div className="set-extra">
-                {delta && delta.label !== '' ? (
-                  <span className={`delta delta-${delta.kind}`}>{delta.label}</span>
-                ) : !set.done && prevSet ? (
-                  <span className="delta ghost-prev with-icon">
-                    <Icon name="history" />
-                    {setsLabel(exercise, [prevSet])}
-                  </span>
-                ) : (
-                  <span className="delta" />
-                )}
-                <button
-                  type="button"
-                  className={`icon-chip ${set.note.trim() !== '' ? 'is-on' : ''}`}
-                  aria-label={`${i + 1}セット目のメモ`}
-                  aria-expanded={noteOpen}
-                  onClick={() => toggleNote(i)}
-                >
-                  <Icon name="note" />
-                </button>
-              </div>
-
-              {noteOpen ? (
-                <input
-                  className="set-note"
-                  value={set.note}
-                  placeholder="気づいたこと"
-                  onChange={(e) => patchSet(i, { note: e.target.value })}
-                />
-              ) : null}
-            </li>
-          );
-        })}
-      </ol>
-
-      <div className="set-actions">
-        <button type="button" className="ghost" aria-label="セットを増やす" onClick={addSet}>
-          <Icon name="plus" />
-        </button>
-        {entry.sets.length > 0 ? (
-          <button
-            type="button"
-            className="ghost"
-            aria-label="セットを減らす"
-            onClick={() => updateSets(entry.sets.slice(0, -1))}
-          >
-            <Icon name="minus" />
-          </button>
-        ) : null}
-      </div>
-
-      {/* 停滞は開かなくても見えるところに出す。開くまで気づけないと意味がない */}
-      {stale >= 3 ? (
-        <p className="hint">
-          自己ベストから {stale} セッション。負荷を 10% ほど落として組み直すか、いつもと違う角度・
-          グリップに変えると動き出すことがある。
+      {/*
+        畳んでいるあいだも、その日の記録だけは 1 行残す。閉じたものが何だったのかを
+        開き直さずに読めないと、畳むこと自体が「隠す」になってしまう。
+      */}
+      {folded ? (
+        <p className="card-folded">
+          <span className="card-folded-count">
+            {todayDone.length}/{entry.sets.length}
+          </span>
+          <span className="card-folded-sets">{setsLabel(exercise, todayDone)}</span>
         </p>
       ) : null}
 
-      <div className="sections">
-        {guide ? (
-          <Disclosure
-            label="やり方と効く場所"
-            icon="target"
-            open={openSections.has('guide')}
-            onToggle={() => toggleSection('guide')}
-          >
-            <p className="guide-how">{guide.howTo}</p>
-            <div className="guide-body">
-              <BodyMap primary={guide.primary} secondary={guide.secondary} />
-              <div className="muscle-list">
-                {guide.primary.map((m) => (
-                  <span className="muscle-row" key={m}>
-                    <span className="muscle-swatch" aria-hidden="true" />
-                    {MUSCLES[m]}
-                  </span>
-                ))}
-                {guide.secondary.map((m) => (
-                  <span className="muscle-row" key={m}>
-                    <span className="muscle-swatch is-secondary" aria-hidden="true" />
-                    <span className="muted">{MUSCLES[m]}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-            {guide.cues.length > 0 ? (
-              <ul className="cues">
-                {guide.cues.map((cue) => (
-                  <li key={cue}>
-                    <span>{cue}</span>
-                  </li>
-                ))}
-              </ul>
+      {folded ? null : (
+        <>
+          {/* 機材の設定とコツ。セットに入る前に目に入る位置に置く */}
+          {editingTips ? (
+            <label className="note tips-edit">
+              <span className="muted">コツ・機材の設定（この種目をやるときは常に出る）</span>
+              <textarea
+                rows={3}
+                autoFocus
+                value={exercise.tips}
+                placeholder="ラックは8段目 / シートは4段目 / 肩を落としてから引く"
+                onChange={(e) => upsertExercise({ ...exercise, tips: e.target.value })}
+              />
+              <button type="button" className="ghost small" onClick={() => setEditingTips(false)}>
+                閉じる
+              </button>
+            </label>
+          ) : exercise.tips.trim() !== '' ? (
+            <button type="button" className="tips" onClick={() => setEditingTips(true)}>
+              {exercise.tips}
+            </button>
+          ) : (
+            <button type="button" className="tips-empty with-icon" onClick={() => setEditingTips(true)}>
+              <Icon name="plus" />
+              コツ・機材の設定
+            </button>
+          )}
+
+          {prev ? (
+            <p className="prev-line with-icon">
+              <Icon name="history" />
+              {relativeLabel(prev.date, today)} · {setsLabel(exercise, prevSets)}
+            </p>
+          ) : exercise.loadMode === 'bodyweight' ? (
+            /*
+              初めてやる自重種目にだけ、数字の入れ方を 1 行置く。マシンのレッグレイズや
+              バックエクステンションのように「重さを設定しない種目」で、重量の欄に
+              何を入れるのか迷われたため。2 回目以降は前回の行が同じ位置に出るので消える。
+            */
+            <p className="footnote">自重のままなら重さは空欄のまま ✓。ベルトやプレートで加重した日だけ +kg に入れる。</p>
+          ) : null}
+
+          <ol className="sets">
+            {entry.sets.map((set, i) => {
+              const delta = set.done ? compareToPrev(exercise, set, prevSets[i]) : null;
+              const noteOpen = openNotes.has(i);
+              const prevSet = prevSets[i];
+              const effective = isAssist ? loadOf(exercise, set, bodyWeight) : 0;
+              return (
+                <li key={i} className={`set-item ${set.done ? 'is-done' : ''}`}>
+                  <div className="set-main">
+                    <span className="set-index">{i + 1}</span>
+                    <Stepper
+                      value={set.weight}
+                      step={exercise.increment}
+                      min={0}
+                      /*
+                        読み上げの名前。自重種目の欄が指すのは「自重」ではなく
+                        自重に足したぶんなので、モードの名前をそのまま使わない。
+                      */
+                      label={`${i + 1}セット目の${exercise.loadMode === 'bodyweight' ? '加重' : LOAD_MODES[exercise.loadMode].label}`}
+                      /*
+                        自重種目の欄は「自重に足したぶん」なので +kg。裸の kg だと
+                        体重を入れるのか総重量を入れるのか決まらず、実際に迷われた。
+                      */
+                      suffix={exercise.loadMode === 'bodyweight' ? '+kg' : 'kg'}
+                      zeroLabel={exercise.loadMode === 'bodyweight' ? '自重' : undefined}
+                      /* マシンごとに刻みが違うので、決まった量ずつ動かすボタンは役に立たない */
+                      showSteps={false}
+                      onNext={focusNextField}
+                      onChange={(weight) => patchSet(i, { weight })}
+                    />
+                    <Stepper
+                      value={set.reps}
+                      step={1}
+                      min={0}
+                      label={`${i + 1}セット目のレップ`}
+                      suffix="回"
+                      onNext={focusNextField}
+                      onChange={(reps) => patchSet(i, { reps })}
+                    />
+                    <button
+                      type="button"
+                      className={`check ${set.done ? 'is-on' : ''}`}
+                      aria-label={`${i + 1}セット目を${set.done ? '未実施に戻す' : '実施済みにする'}`}
+                      aria-pressed={set.done}
+                      onClick={() => toggleDone(i)}
+                    >
+                      <Icon name="check" />
+                    </button>
+                  </div>
+
+                  {isAssist && bodyWeight > 0 ? (
+                    <p className="effective">
+                      → 実際に引く重さ <strong>{format(effective)}kg</strong>
+                    </p>
+                  ) : null}
+
+                  <div className="set-extra">
+                    {delta && delta.label !== '' ? (
+                      <span className={`delta delta-${delta.kind}`}>{delta.label}</span>
+                    ) : !set.done && prevSet ? (
+                      <span className="delta ghost-prev with-icon">
+                        <Icon name="history" />
+                        {setsLabel(exercise, [prevSet])}
+                      </span>
+                    ) : (
+                      <span className="delta" />
+                    )}
+                    <button
+                      type="button"
+                      className={`icon-chip ${set.note.trim() !== '' ? 'is-on' : ''}`}
+                      aria-label={`${i + 1}セット目のメモ`}
+                      aria-expanded={noteOpen}
+                      onClick={() => toggleNote(i)}
+                    >
+                      <Icon name="note" />
+                    </button>
+                  </div>
+
+                  {noteOpen ? (
+                    <input
+                      className="set-note"
+                      value={set.note}
+                      placeholder="気づいたこと"
+                      onChange={(e) => patchSet(i, { note: e.target.value })}
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+
+          <div className="set-actions">
+            <button type="button" className="ghost" aria-label="セットを増やす" onClick={addSet}>
+              <Icon name="plus" />
+            </button>
+            {entry.sets.length > 0 ? (
+              <button
+                type="button"
+                className="ghost"
+                aria-label="セットを減らす"
+                onClick={() => updateSets(entry.sets.slice(0, -1))}
+              >
+                <Icon name="minus" />
+              </button>
             ) : null}
-          </Disclosure>
-        ) : null}
+          </div>
 
-        {past.length > 0 ? (
-          <Disclosure
-            label="これまでの記録"
-            icon="history"
-            count={past.length}
-            open={openSections.has('history')}
-            onToggle={() => toggleSection('history')}
-          >
-            <ul className="past-list">
-              {past.map((h) => (
-                <li key={h.date}>
-                  <span className="past-date">
-                    {h.date.slice(5).replace('-', '/')}
-                    <span className="muted"> {relativeLabel(h.date, today)}</span>
-                  </span>
-                  <span className="past-sets">{setsLabel(exercise, doneSets(h.entry))}</span>
-                  {h.entry.note.trim() !== '' ? <span className="past-note">{h.entry.note}</span> : null}
-                  {doneSets(h.entry)
-                    .map((s, i) => (s.note.trim() !== '' ? `${i + 1}セット目: ${s.note}` : null))
-                    .filter((v): v is string => v !== null)
-                    .map((line) => (
-                      <span key={line} className="past-note">
-                        {line}
+          {/* 停滞は開かなくても見えるところに出す。開くまで気づけないと意味がない */}
+          {stale >= 3 ? (
+            <p className="hint">
+              自己ベストから {stale} セッション。負荷を 10% ほど落として組み直すか、いつもと違う角度・
+              グリップに変えると動き出すことがある。
+            </p>
+          ) : null}
+
+          <div className="sections">
+            {guide ? (
+              <Disclosure
+                label="やり方と効く場所"
+                icon="target"
+                open={openSections.has('guide')}
+                onToggle={() => toggleSection('guide')}
+              >
+                <p className="guide-how">{guide.howTo}</p>
+                <div className="guide-body">
+                  <BodyMap primary={guide.primary} secondary={guide.secondary} />
+                  <div className="muscle-list">
+                    {guide.primary.map((m) => (
+                      <span className="muscle-row" key={m}>
+                        <span className="muscle-swatch" aria-hidden="true" />
+                        {MUSCLES[m]}
                       </span>
                     ))}
-                </li>
-              ))}
-            </ul>
-          </Disclosure>
-        ) : null}
+                    {guide.secondary.map((m) => (
+                      <span className="muscle-row" key={m}>
+                        <span className="muscle-swatch is-secondary" aria-hidden="true" />
+                        <span className="muted">{MUSCLES[m]}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {guide.cues.length > 0 ? (
+                  <ul className="cues">
+                    {guide.cues.map((cue) => (
+                      <li key={cue}>
+                        <span>{cue}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </Disclosure>
+            ) : null}
 
-        {series.length >= 2 ? (
-          <Disclosure
-            label={trendLabel(exercise, byLoad)}
-            icon="trend"
-            open={openSections.has('trend')}
-            onToggle={() => toggleSection('trend')}
-          >
-            <div className="trend-head">
-              <span className="muted">直近</span>
-              <strong>
-                {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} レップ`}
-              </strong>
-            </div>
-            <Sparkline values={series.map((s) => s.best)} highlightLast={stale === 0 ? 'best' : 'normal'} />
-          </Disclosure>
-        ) : null}
+            {past.length > 0 ? (
+              <Disclosure
+                label="これまでの記録"
+                icon="history"
+                count={past.length}
+                open={openSections.has('history')}
+                onToggle={() => toggleSection('history')}
+              >
+                <ul className="past-list">
+                  {past.map((h) => (
+                    <li key={h.date}>
+                      <span className="past-date">
+                        {h.date.slice(5).replace('-', '/')}
+                        <span className="muted"> {relativeLabel(h.date, today)}</span>
+                      </span>
+                      <span className="past-sets">{setsLabel(exercise, doneSets(h.entry))}</span>
+                      {h.entry.note.trim() !== '' ? <span className="past-note">{h.entry.note}</span> : null}
+                      {doneSets(h.entry)
+                        .map((s, i) => (s.note.trim() !== '' ? `${i + 1}セット目: ${s.note}` : null))
+                        .filter((v): v is string => v !== null)
+                        .map((line) => (
+                          <span key={line} className="past-note">
+                            {line}
+                          </span>
+                        ))}
+                    </li>
+                  ))}
+                </ul>
+              </Disclosure>
+            ) : null}
 
-        <Disclosure
-          label="この日のメモ"
-          icon="note"
-          marked={entry.note.trim() !== ''}
-          open={openSections.has('note')}
-          onToggle={() => toggleSection('note')}
-        >
-          <textarea
-            className="section-textarea"
-            rows={3}
-            value={entry.note}
-            placeholder="フォーム・体感・痛みなど"
-            onChange={(e) => onChange({ ...entry, note: e.target.value })}
-          />
-        </Disclosure>
-      </div>
+            {series.length >= 2 ? (
+              <Disclosure
+                label={trendLabel(exercise, byLoad)}
+                icon="trend"
+                open={openSections.has('trend')}
+                onToggle={() => toggleSection('trend')}
+              >
+                <div className="trend-head">
+                  <span className="muted">直近</span>
+                  <strong>
+                    {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} レップ`}
+                  </strong>
+                </div>
+                <Sparkline values={series.map((s) => s.best)} highlightLast={stale === 0 ? 'best' : 'normal'} />
+              </Disclosure>
+            ) : null}
+
+            <Disclosure
+              label="この日のメモ"
+              icon="note"
+              marked={entry.note.trim() !== ''}
+              open={openSections.has('note')}
+              onToggle={() => toggleSection('note')}
+            >
+              <textarea
+                className="section-textarea"
+                rows={3}
+                value={entry.note}
+                placeholder="フォーム・体感・痛みなど"
+                onChange={(e) => onChange({ ...entry, note: e.target.value })}
+              />
+            </Disclosure>
+          </div>
+        </>
+      )}
 
       {confirmRemove ? (
         <ConfirmDialog

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { byRecentUse } from '../lib/query.ts';
 import { Icon } from './Icon.tsx';
+import { Overlay } from './Overlay.tsx';
 import { MUSCLE_GROUPS, MUSCLE_GROUP_KEYS, type Exercise, type ExerciseId, type IsoDate } from '../lib/types.ts';
 
 type Props = {
@@ -29,35 +30,37 @@ export function ExercisePicker({ exercises, exclude, onPick, onClose, onCreate, 
   }, [exercises, exclude, query, lastPerformed]);
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="種目を追加">
-        <header className="sheet-head">
-          <strong>種目を追加</strong>
-          <button type="button" className="icon-btn" aria-label="閉じる" onClick={onClose}>
-            <Icon name="close" />
-          </button>
-        </header>
-        <input className="search" type="search" placeholder="種目名で絞る" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <div className="sheet-body">
-          {groups.map(({ key, items }) => (
-            <div key={key} className="picker-group">
-              <h3>{MUSCLE_GROUPS[key].label}</h3>
-              <div className="picker-items">
-                {items.map((e) => (
-                  <button type="button" key={e.id} className="picker-item" onClick={() => onPick(e)}>
-                    {e.name}
-                  </button>
-                ))}
+    <Overlay>
+      <div className="sheet-backdrop" onClick={onClose}>
+        <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="種目を追加">
+          <header className="sheet-head">
+            <strong>種目を追加</strong>
+            <button type="button" className="icon-btn" aria-label="閉じる" onClick={onClose}>
+              <Icon name="close" />
+            </button>
+          </header>
+          <input className="search" type="search" placeholder="種目名で絞る" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <div className="sheet-body">
+            {groups.map(({ key, items }) => (
+              <div key={key} className="picker-group">
+                <h3>{MUSCLE_GROUPS[key].label}</h3>
+                <div className="picker-items">
+                  {items.map((e) => (
+                    <button type="button" key={e.id} className="picker-item" onClick={() => onPick(e)}>
+                      {e.name}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-          {groups.length === 0 ? <p className="muted center">該当する種目がない</p> : null}
+            ))}
+            {groups.length === 0 ? <p className="muted center">該当する種目がない</p> : null}
+          </div>
+          <button type="button" className="ghost wide with-icon center-icon" onClick={onCreate}>
+            <Icon name="plus" />
+            新しい種目を作る
+          </button>
         </div>
-        <button type="button" className="ghost wide with-icon center-icon" onClick={onCreate}>
-          <Icon name="plus" />
-          新しい種目を作る
-        </button>
       </div>
-    </div>
+    </Overlay>
   );
 }
