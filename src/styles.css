@@ -1835,6 +1835,24 @@ button {
   gap: 0.5rem;
 }
 
+/*
+ * 記録を別の種目にまとめる操作。
+ *
+ * シートの設定項目とは別の話なので、罫線で仕切って 1 つの塊にする。面や枠で
+ * 囲まないのは、設定より強く見えてしまうため——ここは押す前に一段挟む操作。
+ */
+.merge {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--line);
+}
+
+.merge .btn-row .ghost {
+  flex: 1 1 6rem;
+}
+
 /* ── 種目一覧 ────────────────────────────────────── */
 
 .ex-list {

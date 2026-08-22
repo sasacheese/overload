@@ -9,6 +9,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Backup } from './lib/backup.ts';
 import * as db from './lib/db.ts';
+import { changedSessions, mergedInto } from './lib/merge.ts';
 import { presetExercises } from './lib/presets.ts';
 import { isTombstone, mergedExercises, mergedSessions } from './lib/sync.ts';
 import type { Exercise, ExerciseId, IsoDate, Session } from './lib/types.ts';
@@ -34,6 +35,13 @@ export type Store = {
    * archived の切り替えなら普通の更新として伝わる。
    */
   removeExercise: (id: ExerciseId) => void;
+  /**
+   * ある種目の記録を別の種目に移し、元の種目を非表示にする。
+   *
+   * 自分で作った種目とプリセットが同じものを指しているとき（あとからプリセットが
+   * 増えた場合など）に、記録を捨てずに片方へ寄せるための操作。判定は lib/merge.ts。
+   */
+  mergeExercise: (source: ExerciseId, target: ExerciseId) => Promise<void>;
   /** リモートから取り込んだぶんをまとめて反映する。 */
   applyRemote: (incoming: { sessions: readonly Session[]; exercises: readonly Exercise[] }) => Promise<void>;
   restore: (backup: Backup) => Promise<void>;
@@ -155,6 +163,26 @@ export function StoreProvider({ children, seed }: { children: ReactNode; seed?: 
     [exercises, upsertExercise],
   );
 
+  const mergeExercise = useCallback(
+    async (source: ExerciseId, target: ExerciseId) => {
+      if (source === target) return;
+      const next = mergedInto(sessions, source, target, Date.now());
+      const changed = changedSessions(sessions, next);
+      try {
+        // 記録を移してから元を隠す。逆順だと、途中で失敗したときに
+        // 「隠れているのに記録はそこにある」種目が残る
+        if (!inMemory && changed.length > 0) await db.putMany(db.STORES.sessions, changed);
+      } catch (e) {
+        report(e);
+        throw e;
+      }
+      setSessions(next);
+      const from = exercises.find((e) => e.id === source);
+      if (from) upsertExercise({ ...from, archived: true });
+    },
+    [sessions, exercises, inMemory, report, upsertExercise],
+  );
+
   const applyRemote = useCallback(
     async ({ sessions: incomingSessions, exercises: incomingExercises }: {
       sessions: readonly Session[];
@@ -240,6 +268,7 @@ export function StoreProvider({ children, seed }: { children: ReactNode; seed?: 
       saveSession,
       upsertExercise,
       removeExercise,
+      mergeExercise,
       applyRemote,
       restore,
       wipe,
@@ -255,6 +284,7 @@ export function StoreProvider({ children, seed }: { children: ReactNode; seed?: 
       saveSession,
       upsertExercise,
       removeExercise,
+      mergeExercise,
       applyRemote,
       restore,
       wipe,

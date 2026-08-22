@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { mergeImpact } from '../lib/merge.ts';
 import { byRecentUse, lastPerformed } from '../lib/query.ts';
 import {
   LOAD_MODES,
@@ -16,6 +17,7 @@ import {
   type Exercise,
 } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
+import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { Icon } from './Icon.tsx';
 
 type Draft = Omit<Exercise, 'id'> & { id: string | null };
@@ -43,10 +45,18 @@ type Props = {
 };
 
 export function ExercisesView({ startNew, onStartNewHandled }: Props) {
-  const { exercises, sessions, upsertExercise, removeExercise } = useStore();
+  const { exercises, sessions, upsertExercise, removeExercise, mergeExercise } = useStore();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  /*
+   * まとめ先の種目 id。null は「まとめる操作を開いていない」、'' は「開いたがまだ選んでいない」。
+   *
+   * 主たる操作（保存・非表示）と並べず、押す前に一段挟む。取り消せない操作なので、
+   * 確認では何日ぶんの記録が動くかを数で出す。
+   */
+  const [mergeTo, setMergeTo] = useState<string | null>(null);
+  const [confirmMerge, setConfirmMerge] = useState(false);
 
   useEffect(() => {
     if (!startNew) return;
@@ -65,8 +75,28 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
       name,
       id: draft.id === null ? exerciseId(`custom-${crypto.randomUUID()}`) : exerciseId(draft.id),
     });
-    setDraft(null);
+    closeDraft();
     setMessage(null);
+  };
+
+  /** まとめ先の候補。自分自身と、非表示の種目は出さない。 */
+  const mergeTargets = useMemo(
+    () => exercises.filter((e) => !e.archived && e.id !== draft?.id).sort((a, b) => a.name.localeCompare(b.name, 'ja')),
+    [exercises, draft?.id],
+  );
+
+  const impact = useMemo(
+    () =>
+      draft?.id && mergeTo
+        ? mergeImpact(sessions, exerciseId(draft.id), exerciseId(mergeTo))
+        : null,
+    [sessions, draft?.id, mergeTo],
+  );
+
+  const closeDraft = () => {
+    setDraft(null);
+    setMergeTo(null);
+    setConfirmMerge(false);
   };
 
   const last = useMemo(() => lastPerformed(sessions), [sessions]);
@@ -116,11 +146,11 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
       </button>
 
       {draft ? (
-        <div className="sheet-backdrop" onClick={() => setDraft(null)}>
+        <div className="sheet-backdrop" onClick={closeDraft}>
           <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="種目の設定">
             <header className="sheet-head">
               <strong>{draft.id === null ? '新しい種目' : draft.name || '種目'}</strong>
-              <button type="button" className="icon-btn" aria-label="閉じる" onClick={() => setDraft(null)}>
+              <button type="button" className="icon-btn" aria-label="閉じる" onClick={closeDraft}>
                 <Icon name="close" />
               </button>
             </header>
@@ -225,6 +255,60 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                   : ''}
                 {` 重量の刻みは入力欄の増減には使わない（マシンごとに違うため）。Claude に相談するときの参考値として渡している。`}
               </p>
+              {/*
+                記録を別の種目にまとめる。
+
+                自分で作った種目とプリセットが同じものを指しているとき
+                （あとからプリセットが増えた場合など）に、記録を捨てずに片方へ寄せる。
+                保存・非表示と並べず、文字だけの静かな操作にして一段挟む。
+              */}
+              {draft.id !== null && mergeTargets.length > 0 ? (
+                mergeTo === null ? (
+                  <button type="button" className="quiet-action" onClick={() => setMergeTo('')}>
+                    記録を別の種目にまとめる
+                  </button>
+                ) : (
+                  <div className="merge">
+                    <label>
+                      <span>まとめ先</span>
+                      <select value={mergeTo} onChange={(e) => setMergeTo(e.target.value)}>
+                        <option value="">選ぶ</option>
+                        {/*
+                          負荷のかけ方を名前に添える。この操作が要る場面は、たいてい
+                          同じ名前の種目が 2 つある場面（自分で作った側とプリセット）なので、
+                          名前だけでは選び分けられない。
+                        */}
+                        {mergeTargets.map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.name}（{LOAD_MODES[e.loadMode].label}）
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="footnote">
+                      この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・レップの目安・
+                      コツ）は移らないので、残したいものはまとめ先の側で直す。
+                    </p>
+                    <div className="btn-row">
+                      <button type="button" className="ghost" onClick={() => setMergeTo(null)}>
+                        やめる
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost danger"
+                        disabled={mergeTo === '' || impact === null || impact.days === 0}
+                        onClick={() => setConfirmMerge(true)}
+                      >
+                        まとめる
+                      </button>
+                    </div>
+                    {impact && mergeTo !== '' && impact.days === 0 ? (
+                      <p className="footnote">この種目にはまだ移す記録が無い。そのまま非表示にすれば済む。</p>
+                    ) : null}
+                  </div>
+                )
+              ) : null}
+
               {message ? <p className="gate-error">{message}</p> : null}
             </div>
             <div className="sheet-actions">
@@ -234,7 +318,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                   className="ghost danger"
                   onClick={() => {
                     removeExercise(exerciseId(draft.id!));
-                    setDraft(null);
+                    closeDraft();
                     setMessage('非表示にした（記録は残る。一覧の下から戻せる）');
                   }}
                 >
@@ -247,6 +331,31 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {/*
+        取り消せない操作なので、押す前に何が動くかを数で出す
+        （「よろしいですか」ではなく「12 日ぶん・36 セットが移る」）。
+      */}
+      {confirmMerge && draft?.id && mergeTo && impact ? (
+        <ConfirmDialog
+          title={`${draft.name || 'この種目'}の記録を${
+            mergeTargets.find((e) => e.id === mergeTo)?.name ?? ''
+          }にまとめる`}
+          detail={`${impact.days} 日ぶん・${impact.sets} セットの記録が移る。${
+            impact.collisions > 0 ? `うち ${impact.collisions} 日は同じ日に両方あるので、セットが続けて並ぶ。` : ''
+          }この種目は非表示になる（一覧の下から戻せる）。`}
+          confirmLabel="まとめる"
+          onConfirm={() => {
+            const name = mergeTargets.find((e) => e.id === mergeTo)?.name ?? '';
+            const moved = impact.days;
+            mergeExercise(exerciseId(draft.id!), exerciseId(mergeTo))
+              .then(() => setMessage(`${moved} 日ぶんの記録を${name}にまとめた`))
+              .catch(() => undefined);
+            closeDraft();
+          }}
+          onCancel={() => setConfirmMerge(false)}
+        />
       ) : null}
 
       {message && !draft ? <p className="hint">{message}</p> : null}
