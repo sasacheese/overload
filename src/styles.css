@@ -2392,17 +2392,28 @@ button {
 }
 
 /*
- * この画面の主題。
- *
- * 数字より先に読ませたいので、画面の中でいちばん大きい字にしてある。
- * 中身は事実の言い換え（lib/wrapup.ts）で、何をしても同じ文にはならない。
+ * この画面の主題は挨拶。数字より先に読ませたいので、いちばん大きい字にしてある。
+ * 日によって変わらない一言なので、字面が主張しすぎないよう字間は詰めない。
  */
-.wrap-praise {
+.wrap-greeting {
   margin: 0;
   font-size: var(--fs-2xl);
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.45;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+/*
+ * その日を一言でいうと何だったか（lib/wrapup.ts）。挨拶の下に添える。
+ *
+ * 上下の間を詰めて 1 つの塊として読ませる。離すと、挨拶とは無関係の
+ * 別の見出しに見えてしまう。
+ */
+.wrap-praise {
+  margin: -0.75rem 0 0;
+  font-size: var(--fs-md);
+  color: var(--fg-dim);
+  line-height: 1.6;
 }
 
 .wrap-stats {

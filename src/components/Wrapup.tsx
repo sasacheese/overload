@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cardDateLabel, drawShareCard, shareCard, shareFileName } from '../lib/sharecard.ts';
 import { MUSCLE_GROUPS } from '../lib/types.ts';
-import type { WrapUp } from '../lib/wrapup.ts';
+import { GREETING, type WrapUp } from '../lib/wrapup.ts';
 import { Icon } from './Icon.tsx';
 import { Mark } from './Mark.tsx';
 
@@ -142,7 +142,11 @@ export function Wrapup({
           </button>
         </header>
 
-        {/* この画面の主題。事実の言い換えなので、いちばん大きい字に置く */}
+        {/*
+          いちばん大きい字は挨拶。事実の言い換えはその下に小さく添える。
+          事実を最大の文字に置くと、機械が読み上げているように見えた。
+        */}
+        <p className="wrap-greeting">{GREETING}</p>
         <p className="wrap-praise">{summary.praise}</p>
 
         <div className="wrap-stats">

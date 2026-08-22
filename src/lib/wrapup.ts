@@ -25,6 +25,19 @@ import { metrics } from './progression.ts';
 import { findRecords, sessionVolumeRecord, type Achievement } from './records.ts';
 import { doneSets, type Exercise, type IsoDate, type MuscleGroup, type Session } from './types.ts';
 
+/**
+ * 締めの挨拶。日によって変わらない。
+ *
+ * 以前は事実の言い換え（`praise`）を画面のいちばん大きい字に置いていたが、
+ * 「今日、記録が動いた。」が最大の文字で出ると、機械が読み上げているように見える。
+ * **人が言う一言を上に置き、事実はその下に小さく添える。** 数字と更新は
+ * そのまま下に並ぶので、伝わる中身は減っていない。
+ *
+ * 変わらない文をここに置いているのは、締めで出す言葉を 1 箇所にまとめておくため
+ * （画面側は並べるだけにする）。
+ */
+export const GREETING = 'お疲れ様でした';
+
 /** 締めの画面に出す記録更新。種目に属さないもの（1 日の総量）は name が null。 */
 export type DayRecord = {
   /** どの種目で出たか。セッション全体の記録なら null。 */
@@ -58,7 +71,10 @@ export type WrapUp = {
    * 相手がいない・どちらかが 0（重さで測れない日）なら null。
    */
   volumeRatio: number | null;
-  /** 事実に基づく一言。 */
+  /**
+   * 事実に基づく一言。挨拶（`GREETING`）の下に添える行で、
+   * 「今日の一枚」では逆にこちらが主題になる（人に見せるのは事実のほう）。
+   */
   praise: string;
 };
 
