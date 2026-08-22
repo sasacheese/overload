@@ -352,7 +352,18 @@ button {
   letter-spacing: 0.03em;
 }
 
+/*
+ * 帯の重なりは数字で決めておく。
+ *
+ * backdrop-filter を持つだけで合成の層ができるので、z-index を書かないと
+ * 「auto の層」として扱われ、どちらが手前かの解釈が環境ごとに割れる。実際、
+ * iOS Safari では上に積んだはずのシート（z-index: 20）より帯のほうが手前に出て、
+ * 「保存」の下半分が帯に隠れて押せなかった。低い数字を明示して、覆うもの
+ * （シート・確認・祝福・締め）が必ず上に来るようにする。
+ */
 .tabbar {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   flex: none;
