@@ -716,6 +716,40 @@ const PRESETS: readonly Preset[] = [
       cues: ['脚の高さより骨盤を丸めることを優先する', '振り子にならないよう、下で止めてから上げる'],
     },
   },
+  {
+    slug: 'leg-raise',
+    name: 'レッグレイズ',
+    group: 'core',
+    loadMode: 'bodyweight',
+    increment: 2.5,
+    repMin: 10,
+    repMax: 15,
+    sets: 3,
+    restSec: 60,
+    guide: {
+      howTo: 'チェア（肘置きのあるマシン）か仰向けで脚を持ち上げる。自重のまま回数で伸ばす種目。',
+      primary: ['abs'],
+      secondary: ['obliques'],
+      cues: ['腰を反らせない。骨盤を後傾させてから上げる', '下ろすときも力を抜かず、ゆっくり戻す'],
+    },
+  },
+  {
+    slug: 'back-extension',
+    name: 'バックエクステンション',
+    group: 'core',
+    loadMode: 'bodyweight',
+    increment: 2.5,
+    repMin: 10,
+    repMax: 15,
+    sets: 3,
+    restSec: 60,
+    guide: {
+      howTo: '45 度のベンチやマシンで上体を倒し、背中側で起こす。自重で回数を伸ばし、足りなくなったらプレートを抱えて加重する。',
+      primary: ['lowerBack'],
+      secondary: ['glutes', 'hams'],
+      cues: ['勢いで反り上げない。上では体が一直線になる位置で止める', '目線を落とすと首と腰が守れる'],
+    },
+  },
 ];
 
 const GUIDES = new Map<string, Guide>(PRESETS.map((p) => [p.slug, p.guide]));

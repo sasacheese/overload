@@ -10,6 +10,7 @@ function session(date: string, updatedAt: number, reps = 8): Session {
     entries: [{ exerciseId: 'bench-press' as Session['entries'][number]['exerciseId'], sets: [{ weight: 60, reps, done: true, note: '' }], note: '' }],
     note: '',
     bodyWeight: 0,
+    finishedAt: 0,
     updatedAt,
   };
 }
@@ -19,6 +20,7 @@ const empty = (date: string, updatedAt: number): Session => ({
   entries: [],
   note: '',
   bodyWeight: 0,
+  finishedAt: 0,
   updatedAt,
 });
 
@@ -113,6 +115,7 @@ test('体重だけの日は同期先で消されない（保存する条件と�
     entries: [],
     note: '',
     bodyWeight: 69.8,
+    finishedAt: 0,
     updatedAt: 500,
   };
   // 受け取り側で落とされないこと
@@ -123,7 +126,7 @@ test('体重だけの日は同期先で消されない（保存する条件と�
 });
 
 test('本当に空になった日は消した印として働く', () => {
-  const cleared: Session = { date: isoDate('2026-08-18'), entries: [], note: '', bodyWeight: 0, updatedAt: 900 };
+  const cleared: Session = { date: isoDate('2026-08-18'), entries: [], note: '', bodyWeight: 0, finishedAt: 0, updatedAt: 900 };
   assert.ok(isTombstone(cleared));
   assert.deepEqual(mergedSessions([session('2026-08-18', 100)], [cleared]), []);
 });

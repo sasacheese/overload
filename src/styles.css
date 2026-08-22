@@ -25,12 +25,24 @@
   /*
    * 無彩色。ベージュや焙煎色のような色味を地に置くと、それ自体が主張して
    * 記録の数字より先に目に入る。地は完全に無彩色にして、色は赤 1 色だけに任せる。
+   *
+   * 段は 3 つだけ（地・面・面の中の面）。段を増やすと、どれが押せる面なのかが
+   * 濃さでは読めなくなる。段どうしの差は 1 段につき明度で 4〜6 ポイント——
+   * これ以上離すと 1 枚 1 枚が箱に見え、これ以下だと段の存在が消える。
    */
-  --bg: #0e0e0e;
-  --surface: #181818;
-  --surface-2: #222222;
-  --line: rgb(255 255 255 / 0.08);
-  --line-strong: rgb(255 255 255 / 0.16);
+  --bg: #0d0d0d;
+  --surface: #171717;
+  --surface-2: #212121;
+  --line: rgb(255 255 255 / 0.07);
+  --line-strong: rgb(255 255 255 / 0.15);
+  /*
+   * 面の上端に 1px だけ置く光。
+   *
+   * 暗い地では、境界線だけだと面が「切り抜かれた穴」に見える。上端にごく弱い
+   * 光を入れると、面が地より手前にあるものとして読める。強くすると縁取りに
+   * 見えるので、線として見えない濃さで止めてある。
+   */
+  --sheen: rgb(255 255 255 / 0.05);
   --fg: #ededed;
   --fg-dim: #b0b0b0;
   --muted: #858585;
@@ -60,12 +72,72 @@
    */
   --sat: #63b0d6;
 
-  --radius: 10px;
-  --radius-sm: 8px;
+  /*
+   * 角の丸み。4 段。
+   *
+   * 入れ子になったときに輪郭が平行に見えるよう、外側 = 内側 + 内側の余白 で
+   * 決めてある（カード 13px の中に 12px の余白を空けて、その中の欄が 9px）。
+   * 同じ値を全部に使うと、大きい面では角が立って見え、小さい部品では丸すぎる。
+   */
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius: 13px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  /*
+   * 影。3 段。地から浮いている高さの違いを、ぼかしの広さで示す。
+   * 暗い地では黒い影がほとんど見えないので、上端の光（--sheen）と組で使う。
+   */
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.28);
+  --shadow-2: 0 6px 20px rgb(0 0 0 / 0.34);
+  --shadow-3: 0 18px 48px rgb(0 0 0 / 0.5);
+
+  /*
+   * 時間と曲線。
+   *
+   * 触った瞬間の反応は速く（--t-fast）、面の入れ替わりはゆっくり（--t-slow）。
+   * 曲線は 2 種類だけ——普通の減速と、行き過ぎてから戻る跳ね。跳ねは
+   * 「入った」ことを示す場所（✓・祝福）にだけ使い、常用しない。
+   */
+  --t-fast: 130ms;
+  --t: 190ms;
+  --t-slow: 280ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --ease-out: cubic-bezier(0.33, 0, 0.1, 1);
+  --spring: cubic-bezier(0.2, 1.25, 0.35, 1);
+
+  /*
+   * 字の大きさ。10 / 11 / 12 / 13 / 14 / 15 / 17 / 22 / 28px。
+   *
+   * 隣り合う段の差を 1〜2px に抑えてあるのは、この画面のほとんどが「数字と、
+   * その数字が何なのかを言う小さな字」の 2 つでできているから。段を大きく開けると、
+   * 説明の字が本文に見えたり、記録の数字が見出しに見えたりする。
+   */
+  --fs-2xs: 0.625rem;
+  --fs-xs: 0.6875rem;
+  --fs-sm: 0.75rem;
+  --fs-md: 0.8125rem;
+  --fs-base: 0.875rem;
+  --fs-lg: 0.9375rem;
+  --fs-xl: 1.0625rem;
+  --fs-2xl: 1.375rem;
+  --fs-3xl: 1.75rem;
+
   /* ステッパーの −/+ の幅。「62.5」と単位が入る余地を数値欄に残す必要がある */
   --tap: 1.875rem;
   /* 画面の左右余白。スティッキーな帯を画面幅に伸ばすときにも使う */
   --gutter: 1.25rem;
+
+  /*
+   * 画面に貼り付いているもの（追加ボタン・休憩タイマー）が占める高さ。
+   *
+   * 面の一番下に置いたボタンは、スクロールしきった位置でこれらの下に潜る
+   * ——実際に休憩タイマーが「種目を追加」の上に重なって、字が半分隠れていた。
+   * 避ける高さを数として持っておき、面の末尾がこのぶんだけ空けるようにする。
+   * 浮いているものの位置（bottom）を変えたらここも一緒に変える。
+   */
+  --float-clear: 4.75rem;
 
   --sans: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Helvetica Neue', Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -73,11 +145,13 @@
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #ececec;
-    --surface: #fbfbfb;
-    --surface-2: #e1e1e1;
-    --line: rgb(0 0 0 / 0.1);
-    --line-strong: rgb(0 0 0 / 0.2);
+    --bg: #eaeaea;
+    --surface: #fcfcfc;
+    --surface-2: #e2e2e2;
+    --line: rgb(0 0 0 / 0.09);
+    --line-strong: rgb(0 0 0 / 0.19);
+    /* 明るい地では上端の光は効かない。白を重ねても差が出ないので、ほぼ消す */
+    --sheen: rgb(255 255 255 / 0.9);
     --fg: #141414;
     --fg-dim: #3a3a3a;
     --muted: #6b6b6b;
@@ -89,6 +163,10 @@
     --accent-fg: #fff;
 
     --sat: #1f6d92;
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.07);
+    --shadow-2: 0 6px 20px rgb(0 0 0 / 0.1);
+    --shadow-3: 0 18px 48px rgb(0 0 0 / 0.18);
   }
 }
 
@@ -112,7 +190,12 @@ body {
   background: var(--bg);
   color: var(--fg);
   font: 14px/1.7 var(--sans);
-  letter-spacing: 0.005em;
+  /*
+   * 字間をわずかに開けている。和文と欧文が同じ行に混ざる画面なので、
+   * 既定の詰まりのままだと「62.5kg × 8」のような並びが 1 語に見える。
+   * 0.01em を超えると、こんどは説明文が間延びして読み進めにくくなる。
+   */
+  letter-spacing: 0.006em;
   /* 数字を読み違えないよう桁を揃える */
   font-variant-numeric: tabular-nums;
   -webkit-text-size-adjust: 100%;
@@ -145,7 +228,7 @@ textarea {
 :focus-visible {
   outline: 2px solid var(--accent-text);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 button {
@@ -245,10 +328,14 @@ button {
 
 .view {
   /*
-   * タブバーは面の外にある。末尾の追加ボタンが浮くボタンと入れ替わる作りなので、
-   * 浮くボタンのぶんの余白は要らない。最後の要素が窮屈に見えないぶんだけ空ける。
+   * タブバーは面の外にあるので、その高さを避ける必要は無い。空けているのは
+   * 最後の要素が縁に張り付いて見えないぶんだけ。
+   *
+   * 画面に貼り付いているもの（追加ボタン・休憩タイマー）を避けるのは面全体では
+   * なく、その下に置いた塊（.session-foot）の役目にしてある。全部の面に一律で
+   * 空けると、浮くものが何も無いタブでも底に空白が残る。
    */
-  padding: 0 var(--gutter) 1.75rem;
+  padding: 0 var(--gutter) 2rem;
   max-width: 32rem;
   margin: 0 auto;
   width: 100%;
@@ -269,8 +356,8 @@ button {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   flex: none;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(16px) saturate(1.4);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(1.6);
   border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -282,12 +369,21 @@ button {
   position: relative;
   display: grid;
   place-items: center;
-  transition: color 140ms ease-out;
+  transition: color var(--t-fast) var(--ease-out);
 }
 
+/*
+ * 記号そのものをわずかに持ち上げる。色だけで現在地を示すと、暗い地では
+ * 明るさの差が 1 段しかなく、視界の隅では動いたことに気づけない。
+ */
 .tabbar .icon {
   width: 1.375rem;
   height: 1.375rem;
+  transition: transform var(--t) var(--spring);
+}
+
+.tabbar button.is-active .icon {
+  transform: translateY(-1px);
 }
 
 /*
@@ -314,15 +410,27 @@ button {
   color: var(--fg);
 }
 
-.tabbar button.is-active::after {
+/*
+ * 現在地の印。伸びて出る。
+ *
+ * 出たり消えたりさせると、押した場所と関係なく点滅して見える。幅 0 から
+ * 開くと、押した中心から線が引かれたように読める。
+ */
+.tabbar button::after {
   content: '';
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
   bottom: 0.3125rem;
   width: 1rem;
   height: 1.5px;
+  border-radius: 1px;
   background: var(--accent);
+  transform: translateX(-50%) scaleX(0);
+  transition: transform var(--t) var(--ease);
+}
+
+.tabbar button.is-active::after {
+  transform: translateX(-50%) scaleX(1);
 }
 
 .view-head {
@@ -334,7 +442,7 @@ button {
 }
 
 .view-title {
-  font-size: 1.0625rem;
+  font-size: var(--fs-xl);
   letter-spacing: 0.03em;
   margin: 0;
   font-weight: 600;
@@ -356,13 +464,13 @@ button {
 }
 
 .date-current strong {
-  font-size: 1.0625rem;
+  font-size: var(--fs-xl);
   letter-spacing: 0.02em;
   font-weight: 600;
 }
 
 .date-current .muted {
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   letter-spacing: 0.02em;
 }
 
@@ -390,18 +498,24 @@ button {
   gap: 0.0625rem;
 }
 
+/*
+ * 数字は 1 段大きく、字間を詰める。
+ *
+ * 単位と同じ大きさで並べると、どちらが読むべき数なのか決まらない。数字を上げて
+ * 単位を下げるほど「量」として読めるが、離しすぎると 2 つが別の行に見える
+ * ——1.375rem と 0.625rem が、隣り合ったまま主従が付く組み合わせだった。
+ */
 .summary strong {
-  font-size: 1.0625rem;
-  line-height: 1.15;
+  font-size: var(--fs-2xl);
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
 }
 
 .summary .unit {
-  font-size: 0.625rem;
+  font-size: var(--fs-2xs);
   color: var(--muted);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.08em;
 }
 
 .summary .hit strong {
@@ -418,8 +532,8 @@ button {
 
 /* 節のラベル。明朝＋広いトラッキングで、内容より前に出ないようにする */
 .section-title {
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.07em;
   color: var(--muted);
   margin: 0.5rem 0 0;
   display: flex;
@@ -436,13 +550,18 @@ button {
   line-height: 1.7;
 }
 
+/*
+ * 補足。赤い縦線を 1 本だけ立てて、面は無彩色のまま置く。
+ * 面ごと赤くすると、注意書きが記録より強くなる。
+ */
 .hint {
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   color: var(--fg-dim);
   margin: 0;
   background: var(--surface-2);
-  border-left: 1px solid var(--accent);
-  padding: 0.5rem 0.75rem;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  padding: 0.5625rem 0.8125rem;
   line-height: 1.7;
 }
 
@@ -452,7 +571,7 @@ button {
   flex: none;
   text-align: left;
   padding: 0.6875rem var(--gutter);
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   margin: 0;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
@@ -468,6 +587,19 @@ button {
   color: var(--fg);
 }
 
+/*
+ * サンプルを見ていることの帯。押せば入口に戻る。
+ * 注意の赤ではなく無彩色——サンプルは危険ではない。常時出るものなので静かに。
+ */
+.banner.demo {
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.banner.demo:active {
+  background: var(--surface);
+}
+
 .warn {
   color: var(--accent-text);
 }
@@ -478,13 +610,25 @@ button {
 .ghost {
   border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
-  font-size: 0.8125rem;
+  font-size: var(--fs-md);
   font-weight: 600;
   letter-spacing: 0.04em;
   border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--fg);
-  transition: background 0.15s ease;
+  /*
+   * 押した瞬間だけわずかに沈む。塗りの変化だけだと、指の下に隠れて見えない
+   * ——縮む動きは指の外にも出るので、押せたことが周辺視でも分かる。
+   */
+  transition:
+    background var(--t-fast) var(--ease-out),
+    border-color var(--t-fast) var(--ease-out),
+    transform var(--t-fast) var(--ease-out);
+}
+
+.primary:active,
+.ghost:active {
+  transform: scale(0.985);
 }
 
 .primary {
@@ -505,6 +649,7 @@ button {
 
 .ghost:active {
   background: var(--surface-2);
+  border-color: var(--line-strong);
 }
 
 .ghost.danger,
@@ -528,7 +673,7 @@ button {
 
 .small {
   padding: 0.4375rem 0.75rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
 }
 
 .icon-btn {
@@ -539,10 +684,14 @@ button {
   font-size: 1.125rem;
   display: grid;
   place-items: center;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
 }
 
 .icon-btn:active {
   background: var(--surface-2);
+  color: var(--fg);
 }
 
 .btn-row {
@@ -557,43 +706,49 @@ button {
 
 /* 部位は色ではなく明朝の 1 文字で示す。細い枠で囲って記号として立てる */
 .glyph {
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   line-height: 1;
   width: 1.375rem;
   height: 1.375rem;
   display: inline-grid;
   place-items: center;
   border: 1px solid var(--line-strong);
+  /*
+   * ほとんど角のまま。ここは「印」なので、丸めると押せる部品に見える。
+   * それでも 2px 落としているのは、22px の枠で数学どおりの直角にすると、
+   * 角だけ線が濃く溜まって汚れのように見えるため。
+   */
+  border-radius: 2px;
   color: var(--fg-dim);
   flex: none;
 }
 
 .chip {
-  font-size: 0.625rem;
+  font-size: var(--fs-2xs);
   letter-spacing: 0.03em;
   padding: 0.125rem 0.4375rem;
   border: 1px solid var(--line-strong);
+  border-radius: 3px;
   color: var(--muted);
   white-space: nowrap;
 }
 
-.chip.mark {
-  color: var(--accent-text);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  font-weight: 700;
-}
-
-.chip.kind-load-up {
-  color: var(--accent-text);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-}
-
 /* ── 種目カード ─────────────────────────────────── */
 
+/*
+ * 種目 1 枚。
+ *
+ * 上端の光（--sheen）を 1px 入れて、地から浮いているものとして読ませる。線だけで
+ * 囲うと、暗い地では面が「切り抜かれた穴」に見えて、押せる場所に見えない。
+ * 影はほとんど付けない——20 枚並ぶ画面で影が効くと、それだけで賑やかになる。
+ */
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    var(--shadow-1);
   padding: 1.25rem 1.125rem;
   display: flex;
   flex-direction: column;
@@ -615,7 +770,7 @@ button {
 }
 
 .card-name {
-  font-size: 0.9375rem;
+  font-size: var(--fs-lg);
   font-weight: 600;
   letter-spacing: 0.01em;
   overflow: hidden;
@@ -623,46 +778,12 @@ button {
   white-space: nowrap;
 }
 
-/* 今日の目標。カードの中で最も大きく、最初に目に入る要素 */
-.target-label {
-  font-size: 0.6875rem;
-  letter-spacing: 0.03em;
-  color: var(--muted);
-  display: block;
-  margin-bottom: 0.1875rem;
-}
-
-.target-main {
-  display: flex;
-  align-items: baseline;
-  gap: 0.625rem;
-  flex-wrap: wrap;
-}
-
-.target-value {
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-}
-
-.target-value .sub {
-  font-size: 0.875rem;
-  font-weight: 400;
-  color: var(--muted);
-  letter-spacing: 0;
-}
-
-.target-reason,
+/* 前回の記録。カードの見出しの下に 1 行だけ置く */
 .prev-line {
   margin: 0.375rem 0 0;
-  font-size: 0.75rem;
-  color: var(--muted);
-  line-height: 1.65;
-}
-
-.prev-line {
+  font-size: var(--fs-sm);
   color: var(--fg-dim);
+  line-height: 1.65;
 }
 
 /* ── セット行 ────────────────────────────────────── */
@@ -691,13 +812,18 @@ button {
 }
 
 .set-index {
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   color: var(--muted);
   text-align: center;
+  transition: color var(--t-fast) var(--ease-out);
 }
 
+/*
+ * ✓ が付いた行の番号。塗りの赤ではなく小文字用の赤を使う。
+ * 12px の字に塗りの赤を当てると、暗い地で 3.9:1 しか出ない。
+ */
 .set-item.is-done .set-index {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .stepper {
@@ -713,6 +839,29 @@ button {
    */
   height: 2.75rem;
   overflow: hidden;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    background var(--t-fast) var(--ease-out);
+}
+
+/*
+ * 打っているあいだの欄。
+ *
+ * 縁を上げて、面をわずかに沈める。赤い枠は使わない——赤は「前進した」の合図に
+ * 取ってあるので、まだ何も決まっていない入力中に渡すと意味が薄まる。
+ */
+.stepper:focus-within {
+  border-color: var(--line-strong);
+  /*
+   * 地の明るさに依らず効く輪。本文の色を薄めて敷いているので、暗い地では
+   * 淡い光、明るい地では淡い影になる。どちらでも「いまここ」が読める。
+   */
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+/* 値が入っていない欄。触る前は `—` が出ているので、その字を沈めておく */
+.stepper.is-blank .stepper-suffix {
+  color: var(--faint);
 }
 
 /* −/+ を出さない欄。数値だけなので 1 列にして、両端に余白を取る */
@@ -735,6 +884,9 @@ button {
   place-items: center;
   /* 枠いっぱいに伸ばす。中途半端な高さだと上下の端を押しても反応しない */
   height: 100%;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
 }
 
 .stepper-btn:active {
@@ -766,9 +918,9 @@ button {
   text-align: right;
   width: 100%;
   min-width: 0;
-  font-size: 0.9375rem;
+  font-size: var(--fs-lg);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   padding: 0;
   /* 行の高さを 1 にしないと、行間ぶんの余白が上下非対称に効いて中央から外れる */
   line-height: 1;
@@ -776,6 +928,22 @@ button {
 
 .stepper-field input:focus {
   outline: none;
+}
+
+/*
+ * まだ ✓ の付いていない行の数字は一段落とす。
+ *
+ * 入力欄に入っているのは前回と同じ数字で、まだ今日の記録ではない。同じ濃さで
+ * 置くと、並べただけの行が全部「やったこと」に見える。✓ を付けた行だけが
+ * 本文の濃さになるので、カードを上から下へ埋めていく手応えが出る。
+ */
+.set-item:not(.is-done) .stepper-field input {
+  color: var(--fg-dim);
+  transition: color var(--t) var(--ease-out);
+}
+
+.set-item.is-done .stepper-field input {
+  color: var(--fg);
 }
 
 /*
@@ -794,6 +962,7 @@ button {
   flex: none;
   letter-spacing: 0;
   transform: translateY(1px);
+  transition: color var(--t-fast) var(--ease-out);
 }
 
 .check {
@@ -801,14 +970,15 @@ button {
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   color: var(--faint);
-  font-size: 0.9375rem;
+  font-size: var(--fs-lg);
   display: grid;
   place-items: center;
   /* 一番よく押す場所。切り替わりが瞬間だと機械的なので、わずかに時間をかける */
   transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out;
+    background-color var(--t-fast) var(--ease-out),
+    border-color var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out),
+    transform var(--t) var(--spring);
 }
 
 .check:active {
@@ -821,6 +991,29 @@ button {
   color: var(--accent-fg);
 }
 
+/*
+ * ✓ が引かれる。
+ *
+ * 塗りが変わるだけだと、押した結果が「色」でしか返ってこない。線が引かれる
+ * 動きを足すと、書き込んだ操作として読める。長さは字形の実測（24 の枠で
+ * およそ 20）に少し足した値で、これより短いと最後まで引かれない。
+ *
+ * 外したときには逆再生しない。取り消しは記録ではないので、静かに消えるだけでいい。
+ */
+.check.is-on .icon path {
+  stroke-dasharray: 22;
+  animation: check-draw 260ms var(--ease-out) both;
+}
+
+@keyframes check-draw {
+  from {
+    stroke-dashoffset: 22;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 .set-extra {
   display: flex;
   align-items: baseline;
@@ -829,7 +1022,7 @@ button {
 }
 
 .delta {
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -881,21 +1074,6 @@ button {
 
 .icon-chip::after {
   inset: -0.5rem;
-}
-
-.note-btn {
-  font-size: 0.625rem;
-  letter-spacing: 0.03em;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.125rem 0.5rem;
-  flex: none;
-}
-
-.note-btn.has-note {
-  color: var(--fg-dim);
-  border-color: var(--line-strong);
 }
 
 /*
@@ -954,65 +1132,6 @@ button {
   border-color: var(--line);
 }
 
-/* ── 前回比ゲージ ───────────────────────────────── */
-
-.gauge {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4375rem;
-}
-
-.gauge-track {
-  position: relative;
-  height: 2px;
-  background: var(--line-strong);
-}
-
-.gauge-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--accent);
-  transition: width 0.3s cubic-bezier(0.2, 0.7, 0.3, 1);
-}
-
-/* 前回の位置。ここを越えたかどうかがこの画面の主題 */
-.gauge-mark {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 1px;
-  margin-left: -0.5px;
-  background: var(--fg);
-  opacity: 0.65;
-}
-
-.gauge-text {
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-  font-size: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.gauge-text strong {
-  letter-spacing: 0.06em;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.gauge.status-achieved .gauge-text strong,
-.gauge.status-exceeded .gauge-text strong {
-  color: var(--accent);
-}
-
-.gauge.status-in-progress .gauge-text strong,
-.gauge.status-below .gauge-text strong,
-.gauge.status-matched .gauge-text strong,
-.gauge.status-first .gauge-text strong {
-  color: var(--fg-dim);
-}
-
 /* ── コツ・機材の設定 ───────────────────────────── */
 
 .tips {
@@ -1020,9 +1139,10 @@ button {
   text-align: left;
   width: 100%;
   background: var(--surface-2);
-  border-left: 1px solid var(--accent);
-  padding: 0.5625rem 0.75rem;
-  font-size: 0.8125rem;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  padding: 0.5625rem 0.8125rem;
+  font-size: var(--fs-md);
   line-height: 1.7;
   color: var(--fg-dim);
   white-space: pre-wrap;
@@ -1066,8 +1186,13 @@ button {
   padding: 0.75rem 0;
   text-align: left;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   letter-spacing: 0.02em;
+  transition: color var(--t-fast) var(--ease-out);
+}
+
+.disclosure-head:active {
+  color: var(--fg-dim);
 }
 
 .disclosure.is-open .disclosure-head {
@@ -1107,7 +1232,7 @@ button {
   width: 1rem;
   height: 1rem;
   color: var(--faint);
-  transition: transform 0.18s ease-out;
+  transition: transform var(--t) var(--ease);
   flex: none;
 }
 
@@ -1121,7 +1246,7 @@ button {
   flex-direction: column;
   gap: 0.875rem;
   padding: 0.25rem 0 1.125rem;
-  animation: unfold 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  animation: unfold var(--t-slow) var(--ease);
 }
 
 @keyframes unfold {
@@ -1137,6 +1262,13 @@ button {
   }
   .check:active {
     transform: none;
+  }
+  .check.is-on .icon path {
+    animation: none;
+    stroke-dasharray: none;
+  }
+  .tabbar button::after {
+    transition: none;
   }
 }
 
@@ -1154,7 +1286,7 @@ button {
   gap: 0.125rem 0.75rem;
   padding: 0.4375rem 0;
   border-top: 1px solid var(--line);
-  font-size: 0.8125rem;
+  font-size: var(--fs-md);
 }
 
 .past-date {
@@ -1360,39 +1492,8 @@ button {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 var(--sheen);
   padding: 0.875rem 1.125rem 1rem;
-}
-
-/* 体重。アシスト種目の実効負荷に使うので、置き場所は今日の画面の中 */
-.bodyweight {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0.625rem 0.875rem;
-}
-
-.bodyweight-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.0625rem;
-}
-
-.bodyweight-label span:first-child {
-  font-size: 0.8125rem;
-  letter-spacing: 0.04em;
-}
-
-.bodyweight-label .footnote {
-  font-size: 0.625rem;
-}
-
-.bodyweight .stepper {
-  width: 9.5rem;
-  flex: none;
 }
 
 /* ── カレンダー ─────────────────────────────────── */
@@ -1493,7 +1594,7 @@ button {
   text-align: left;
   border-top: 1px solid var(--line);
   padding: 0.6875rem 0;
-  font-size: 0.8125rem;
+  font-size: var(--fs-md);
 }
 
 .recent-date {
@@ -1520,6 +1621,7 @@ button {
   gap: 0.625rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 var(--sheen);
   padding: 0.875rem;
   background: var(--surface);
 }
@@ -1540,9 +1642,12 @@ button {
 
 .ask-periods button {
   padding: 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   color: var(--muted);
   border-right: 1px solid var(--line);
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
 }
 
 .ask-periods button:last-child {
@@ -1566,23 +1671,59 @@ button {
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 0.6);
+  /*
+   * 下の画面を沈める。透けすぎると、札の下の帯（タブ）と札の縁が同じ強さで
+   * 並んで、どちらが手前なのか読めない。ぼかしを少しだけ添えて奥行きを付ける。
+   */
+  background: rgb(0 0 0 / 0.62);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
   z-index: 20;
+  animation: fade-in var(--t) var(--ease-out);
 }
 
+/*
+ * 下から出る札。
+ *
+ * 上の 2 つの角だけを大きく丸めてある（18px）。下は画面の縁に接しているので、
+ * そこを丸めると地との間に隙間が見えて、浮いているのか収まっているのか決まらない。
+ */
 .sheet {
   background: var(--surface);
   width: min(32rem, 100%);
   max-height: 88dvh;
-  border-radius: 14px 14px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   border-top: 1px solid var(--line-strong);
-  padding: 1.125rem var(--gutter) calc(1.25rem + env(safe-area-inset-bottom));
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    var(--shadow-3);
+  /* 下端の余白は安全域に足す。ホームバーのある端末では札の底が指の帯に接しない */
+  padding: 1.125rem var(--gutter) calc(1.5rem + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  animation: sheet-rise var(--t-slow) var(--ease) both;
+}
+
+/*
+ * 出るときに下から上がる。いきなり現れると、押した操作と札の関係が読めない。
+ * 距離は札の高さぶんではなく 1.5rem だけ——全部せり上がると、その間じゅう
+ * 下の画面が動いて見えて落ち着かない。
+ */
+@keyframes sheet-rise {
+  from {
+    transform: translateY(1.5rem);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet-backdrop {
+    animation: none;
+  }
 }
 
 .sheet-head {
@@ -1592,7 +1733,7 @@ button {
 }
 
 .sheet-head strong {
-  font-size: 0.9375rem;
+  font-size: var(--fs-lg);
   letter-spacing: 0.03em;
   font-weight: 600;
 }
@@ -1615,8 +1756,8 @@ button {
 }
 
 .picker-group h3 {
-  font-size: 0.6875rem;
-  letter-spacing: 0.06em;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.07em;
   color: var(--muted);
   margin: 0 0 0.5rem;
   display: flex;
@@ -1635,13 +1776,20 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0.5rem 0.6875rem;
-  font-size: 0.8125rem;
+  font-size: var(--fs-md);
   color: var(--fg-dim);
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out),
+    border-color var(--t-fast) var(--ease-out),
+    transform var(--t-fast) var(--ease-out);
 }
 
 .picker-item:active {
   background: var(--surface-2);
+  border-color: var(--line-strong);
   color: var(--fg);
+  transform: scale(0.97);
 }
 
 .form {
@@ -1689,7 +1837,7 @@ button {
 
 .ex-name {
   font-weight: 600;
-  font-size: 0.9375rem;
+  font-size: var(--fs-lg);
   display: flex;
   align-items: center;
   gap: 0.4375rem;
@@ -1705,6 +1853,9 @@ button {
 .panel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    var(--shadow-1);
   padding: 1.125rem;
   display: flex;
   flex-direction: column;
@@ -1713,15 +1864,15 @@ button {
 }
 
 .panel h2 {
-  font-size: 0.8125rem;
-  letter-spacing: 0.06em;
+  font-size: var(--fs-md);
+  letter-spacing: 0.07em;
   margin: 0;
   font-weight: 600;
 }
 
 .panel p {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   line-height: 1.75;
   color: var(--fg-dim);
 }
@@ -1784,11 +1935,11 @@ button {
   color: var(--bg);
   display: grid;
   place-items: center;
-  box-shadow: 0 5px 18px rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-2);
   z-index: 15;
   transition:
-    opacity 180ms ease-out,
-    transform 180ms cubic-bezier(0.2, 0.8, 0.3, 1);
+    opacity var(--t) var(--ease-out),
+    transform var(--t) var(--ease);
 }
 
 .fab:active {
@@ -1805,6 +1956,64 @@ button {
 .fab .icon {
   width: 1.5rem;
   height: 1.5rem;
+}
+
+/* ── 面のいちばん下（追加と、今日を終える） ────────── */
+
+/*
+ * 末尾の塊。
+ *
+ * ここに置いたボタンは、スクロールしきった位置で**画面に貼り付いているもの**の
+ * 下に潜る（左下の追加ボタンと、その隣に出る休憩タイマー）。実際に休憩中は
+ * 「種目を追加」の字が半分隠れていた。避ける高さをこの塊が自分で持つ。
+ *
+ * 面全体（.view）ではなくここで持つのは、浮くものが何も無いタブ（種目・記録・体重）
+ * で底に空白が残らないようにするため。
+ */
+.session-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-bottom: var(--float-clear);
+}
+
+/*
+ * その場で一番強い操作（今日を終える / 今日の一枚を書き出す）。
+ *
+ * 面は赤で塗らない。赤は「前進した」の合図に取ってあるので、押す前の操作には
+ * 渡さない——地と反転した無彩色にしてある（浮いている追加ボタンと同じ扱い）。
+ * 赤が出るのは、押したあとのまとめの中だけ。
+ *
+ * 枠付きのボタン（.ghost）と並べたときに、こちらが主だと形で分かる。同じ枠付きを
+ * 2 つ並べるとどちらが先なのか決まらないので、主のほうだけ塗りにしてある。
+ */
+.solid {
+  border-radius: var(--radius-sm);
+  padding: 0.875rem 1rem;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  background: var(--fg);
+  color: var(--bg);
+  border: 1px solid var(--fg);
+  transition:
+    transform var(--t-fast) var(--ease-out),
+    opacity var(--t-fast) var(--ease-out);
+}
+
+.solid:active {
+  transform: scale(0.985);
+  opacity: 0.88;
+}
+
+.solid .icon {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+
+/* 終えたあと。もう一度開けるが、押す前の操作ではないので字だけにする */
+.finish-again {
+  align-self: center;
 }
 
 /*
@@ -1835,10 +2044,13 @@ button {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(18px) saturate(1.3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    var(--shadow-2);
   padding: 0.5625rem 0.875rem;
   overflow: hidden;
   isolation: isolate;
@@ -1868,14 +2080,14 @@ button {
 .rest-text strong {
   font-size: 1rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .rest-target,
 .rest-state {
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   color: var(--muted);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
 }
 
 .rest-timer.is-ready .rest-state {
@@ -2024,11 +2236,14 @@ button {
   gap: 0.1875rem;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    var(--shadow-3);
   padding: 1.5rem 1.75rem;
   min-width: 14rem;
   text-align: center;
-  animation: pop 420ms cubic-bezier(0.2, 1.1, 0.3, 1) both;
+  animation: pop 420ms var(--spring) both;
 }
 
 @keyframes pop {
@@ -2046,26 +2261,26 @@ button {
 }
 
 .celebrate-title {
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.09em;
   color: var(--accent-text);
   font-weight: 700;
 }
 
 .celebrate-exercise {
-  font-size: 0.8125rem;
+  font-size: var(--fs-md);
   color: var(--muted);
 }
 
 .celebrate-detail {
-  font-size: 1.375rem;
+  font-size: var(--fs-2xl);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   margin-top: 0.125rem;
 }
 
 .celebrate-prev {
-  font-size: 0.6875rem;
+  font-size: var(--fs-xs);
   color: var(--muted);
 }
 
@@ -2080,59 +2295,261 @@ button {
   }
 }
 
-/* ── 体重 ────────────────────────────────────────── */
+/* ── 1 日の締め ─────────────────────────────────── */
 
 /*
- * 体重の帯。トレーニングの有無に関わらず毎日入れるものなので一番上に置き、
- * スクロールしても残るようにしてある。左右の余白を打ち消して画面幅まで
- * 伸ばしているのは、追従したときに地の色が透けて中途半端に見えないため。
+ * 「今日を終える」を押したときのまとめ。
+ *
+ * 祝福（.celebrate）と役割が違う。あちらはセット 1 つぶんの前進を一瞬だけ映して
+ * 勝手に消えるもの、こちらは**その日ぜんぶ**を受け取る場所なので、読み終わるまで残す。
+ * だから地に触れても閉じない——読んでいる途中に消えると、何が出ていたのか確かめられない。
  */
-.weigh-in {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+/*
+ * 中央に置くが、札が画面より高い日（更新が多かった日）はスクロールさせる。
+ *
+ * grid の place-items: center だと、はみ出したときに上端が画面の外へ出たまま
+ * 戻せなくなる。flex + margin: auto なら、収まるときは中央、はみ出すときは
+ * 上端から始まってスクロールできる。
+ */
+.wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+  padding: var(--gutter);
+  /* 記録の画面をいったん引っ込める。地が透けていると数字が二重に見える */
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(1.1);
+  animation: fade-in var(--t) var(--ease-out);
+  overflow-y: auto;
+}
+
+.wrap-card {
+  position: relative;
+  margin: auto;
+  width: min(24rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    var(--shadow-3);
+  padding: 1.375rem 1.375rem 1.125rem;
+  animation: wrap-rise 420ms var(--spring) both;
+}
+
+@keyframes wrap-rise {
+  from {
+    transform: translateY(0.75rem) scale(0.97);
+    opacity: 0;
+  }
+}
+
+.wrap-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0 calc(var(--gutter) * -1);
-  padding: 0.75rem var(--gutter);
-  background: color-mix(in srgb, var(--bg) 90%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
-  border-bottom: 1px solid var(--line);
+  gap: 0.5rem;
 }
 
-.weigh-in-label {
+.wrap-eyebrow {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-width: 0;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.06em;
+  color: var(--muted);
 }
 
-/* 上部バーの左端に置くアプリの印。ここだけは常に赤で出す */
-.app-mark {
-  width: 1.125rem;
-  height: 1.125rem;
+.wrap-mark {
+  width: 1rem;
+  height: 1rem;
   color: var(--accent);
   flex: none;
 }
 
-.weigh-in-label strong {
-  font-size: 0.8125rem;
+/*
+ * この画面の主題。
+ *
+ * 数字より先に読ませたいので、画面の中でいちばん大きい字にしてある。
+ * 中身は事実の言い換え（lib/wrapup.ts）で、何をしても同じ文にはならない。
+ */
+.wrap-praise {
+  margin: 0;
+  font-size: var(--fs-2xl);
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.01em;
+  line-height: 1.45;
 }
 
-/* 直近の実測。今日まだ入れていない日でも、どこから動くのかが分かる */
-.weigh-in-latest {
-  font-size: 0.8125rem;
+.wrap-stats {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 0.125rem 0 1.125rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.wrap-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+.wrap-stat strong {
+  font-size: var(--fs-3xl);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.wrap-stat .unit {
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+
+.wrap-groups {
+  margin: -0.375rem 0 0;
+  font-size: var(--fs-md);
+  color: var(--fg-dim);
+  letter-spacing: 0.04em;
+}
+
+/*
+ * その日に動いた記録。赤い縦棒を 1 本立てて並べる。
+ * 面を赤で塗らないのは、更新が 3 つ出た日に画面の半分が赤くなるため。
+ */
+.wrap-records {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6875rem;
+}
+
+.wrap-records li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--accent);
+}
+
+.wrap-record-title {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.09em;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+
+.wrap-record-detail {
+  grid-row: 2;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.wrap-record-where {
+  grid-row: 2;
+  align-self: baseline;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 続いていることの数。出るのは積み上がった側だけで、少ない日を責める欄は無い */
+.wrap-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 1.375rem;
+  margin: 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.wrap-facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.wrap-facts dt {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.08em;
   color: var(--muted);
 }
 
-.weigh-in .stepper {
-  width: 8.75rem;
-  flex: none;
+.wrap-facts dd {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
 }
+
+.wrap-facts dd.is-up {
+  color: var(--accent-text);
+}
+
+.wrap-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wrap-done {
+  align-self: center;
+  border-bottom: none;
+}
+
+.wrap-note {
+  margin: 0;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+/*
+ * 締めのときだけ出る光。祝福と同じ「細い線が外へ走る」だけの演出で、
+ * こちらは本数を増やして少し長く走らせてある（1 日ぶんなので祝福より強い）。
+ */
+.wrap-rays {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.wrap-rays span {
+  position: absolute;
+  width: 1px;
+  height: 6rem;
+  background: linear-gradient(to top, var(--accent), transparent);
+  transform-origin: 50% 100%;
+  opacity: 0;
+  animation: ray 1200ms var(--ease) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap,
+  .wrap-card {
+    animation: none;
+  }
+  .wrap-rays {
+    display: none;
+  }
+}
+
+/* ── 体重 ────────────────────────────────────────── */
 
 .weight-chart {
   width: 100%;
@@ -2182,7 +2599,7 @@ button {
   align-items: baseline;
   border-top: 1px solid var(--line);
   padding: 0.625rem 0;
-  font-size: 0.8125rem;
+  font-size: var(--fs-md);
 }
 
 .weight-row .value {
@@ -2211,9 +2628,12 @@ button {
 .weight-range button {
   flex: 1;
   padding: 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   color: var(--muted);
   border-right: 1px solid var(--line);
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
 }
 
 .weight-range button:last-child {
@@ -2306,9 +2726,9 @@ button {
   justify-content: space-between;
   gap: 0.75rem;
   margin: 0 calc(var(--gutter) * -1);
-  padding: 0.625rem var(--gutter);
-  background: color-mix(in srgb, var(--bg) 90%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
+  padding: 0.6875rem var(--gutter);
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(20px) saturate(1.5);
   border-bottom: 1px solid var(--line);
 }
 
@@ -2422,9 +2842,12 @@ button {
   width: min(20rem, 100%);
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    var(--shadow-3);
   padding: 1.25rem;
-  animation: pop 240ms cubic-bezier(0.2, 1.05, 0.3, 1) both;
+  animation: pop 240ms var(--spring) both;
 }
 
 .confirm-title {
@@ -2709,6 +3132,15 @@ button {
   }
 
   /* ── 浮くものの位置 ──────────────────────────── */
+
+  /*
+   * 浮くものが避ける高さ。面の下の余白（3rem）と合わせて、右下の追加ボタン
+   * （床から 5.25rem）と休憩タイマー（同 5rem）の両方を越える。
+   * ちょうど届く値ではなく、指 1 本ぶん余らせてある。
+   */
+  :root {
+    --float-clear: 3.25rem;
+  }
 
   /*
    * 追加ボタンは右下へ。左下は筋の上になる。下の帯が無くなったので、

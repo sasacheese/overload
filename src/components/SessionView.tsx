@@ -20,10 +20,13 @@ import {
   sessionVolume,
 } from '../lib/query.ts';
 
+import { recordFeedback } from '../lib/haptics.ts';
 import { findRecords, type Achievement, type RecordKind } from '../lib/records.ts';
 import type { Exercise, IsoDate, Session, SessionEntry } from '../lib/types.ts';
+import { canFinish, wrapUp } from '../lib/wrapup.ts';
 import { useSession, useStore } from '../store.tsx';
 import { Celebration } from './Celebration.tsx';
+import { Wrapup } from './Wrapup.tsx';
 import { ExerciseCard } from './ExerciseCard.tsx';
 import { ExercisePicker } from './ExercisePicker.tsx';
 import { Icon } from './Icon.tsx';
@@ -76,6 +79,8 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
   const [picking, setPicking] = useState(false);
   const [rest, setRest] = useState(readRest);
   const [celebration, setCelebration] = useState<{ achievement: Achievement; exerciseName: string } | null>(null);
+  /** 締めの画面。fresh は「いま押して締めた」——あとから見直したときは光を出さない。 */
+  const [wrap, setWrap] = useState<{ fresh: boolean } | null>(null);
 
   /*
    * 一番下まで来たら、浮いているボタンを引っこめて末尾の普通のボタンに任せる。
@@ -178,6 +183,8 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     }
 
     if (!fresh) return;
+    // 目で見る前に指へ返す。祝福の絵が出るより先に「動いた」ことが分かる
+    recordFeedback();
     setCelebration({ achievement: fresh, exerciseName: exercise.name });
   };
 
@@ -204,6 +211,22 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     });
   };
 
+  /*
+   * 締めの数字。開いているあいだだけ作る。
+   *
+   * 保存前の session をそのまま渡している。締めた瞬間に finishedAt を押すので
+   * 保存済みの配列にはまだ反映されていないが、集計は entries しか見ないので
+   * 結果は変わらない。
+   */
+  const summary = useMemo(
+    () => (wrap === null ? null : wrapUp(session, exercises, sessions)),
+    [wrap, session, exercises, sessions],
+  );
+
+  const finishable = canFinish(session, exercises);
+  const finished = session.finishedAt > 0;
+  const isToday = date === today;
+
   const dismissRest = () => {
     setRest(null);
     try {
@@ -211,6 +234,14 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     } catch {
       // 何もしない
     }
+  };
+
+  /** 今日を締める。押した時刻を残して、まとめを出す。 */
+  const finishDay = () => {
+    saveSession({ ...session, finishedAt: Date.now() });
+    setWrap({ fresh: true });
+    // 締めたら休憩の残り時間は用が済んでいる。数え続ける意味がない
+    dismissRest();
   };
 
   return (
@@ -311,15 +342,52 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         <p className="empty">種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して ✓ を押す。</p>
       ) : null}
 
-      <button
-        type="button"
-        className="ghost accent wide center-icon add-exercise"
-        ref={addButton}
-        onClick={() => setPicking(true)}
-      >
-        <Icon name="plus" />
-        種目を追加
-      </button>
+      {/*
+        面のいちばん下。浮いているもの（追加ボタン・休憩タイマー）は画面に貼り付いて
+        いるので、ここに置いたボタンはスクロールしきった位置でその下に潜る。
+        避ける高さはこの塊が自分で持つ（.session-foot の余白）。
+      */}
+      <div className="session-foot">
+        <button
+          type="button"
+          className="ghost accent wide center-icon add-exercise"
+          ref={addButton}
+          onClick={() => setPicking(true)}
+        >
+          <Icon name="plus" />
+          種目を追加
+        </button>
+
+        {/*
+          今日を締める。✓ が 1 つも無い日には出さない——何もしていない日に
+          終わりのボタンがあると、押すこと自体が記録のように見える。
+
+          面は赤で塗らない。赤は「前進した」の合図に取ってあるので、押す前の操作には
+          渡さない（地と反転した無彩色にしてある。浮いている追加ボタンと同じ扱い）。
+          赤が出るのは押したあとのまとめの中だけ。
+
+          過ぎた日には「終える」を出さない。もう終わっている日に終わりを宣言させても
+          意味が無いので、まとめを開くだけの静かな操作にしてある（時刻も残さない）。
+        */}
+        {finishable && !finished ? (
+          isToday ? (
+            <button type="button" className="solid wide center-icon" onClick={finishDay}>
+              <Icon name="flag" />
+              今日を終える
+            </button>
+          ) : (
+            <button type="button" className="quiet-action finish-again" onClick={() => setWrap({ fresh: false })}>
+              この日のまとめを見る
+            </button>
+          )
+        ) : null}
+
+        {finished ? (
+          <button type="button" className="quiet-action finish-again" onClick={() => setWrap({ fresh: false })}>
+            この日は終えた · まとめをもう一度見る
+          </button>
+        ) : null}
+      </div>
 
       </div>
 
@@ -357,6 +425,8 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
           onClose={() => setCelebration(null)}
         />
       ) : null}
+
+      {wrap && summary ? <Wrapup summary={summary} fresh={wrap.fresh} onClose={() => setWrap(null)} /> : null}
     </>
   );
 }

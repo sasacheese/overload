@@ -215,6 +215,14 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
               <p className="hint">
                 {`初めてこの種目をやる日は ${draft.repMin} レップ × ${draft.sets} セットの空欄が並ぶ。2 回目以降は前回と同じ数字が入るので、この目安は使わない。`}
                 {draft.loadMode === 'assist' ? ' 補助は下げるほど負荷が上がる。' : ''}
+                {/*
+                  自重を選んだときだけ、記録の付け方を書く。マシンのレッグレイズや
+                  バックエクステンションのように「重さを設定しない種目」で、
+                  重量の欄に何を入れるのか迷われたため。
+                */}
+                {draft.loadMode === 'bodyweight'
+                  ? ' マシンのレッグレイズやバックエクステンションもこれ。重さの欄は空欄のままでよく、ベルトやプレートで加重した日だけ数字を入れる。伸びはレップで測る。'
+                  : ''}
                 {` 重量の刻みは入力欄の増減には使わない（マシンごとに違うため）。Claude に相談するときの参考値として渡している。`}
               </p>
               {message ? <p className="gate-error">{message}</p> : null}

@@ -27,7 +27,16 @@
  * @see https://pmc.ncbi.nlm.nih.gov/articles/PMC9528903/
  */
 
-import { e1rm, formatEstimate, format, loadOf, metrics, type ExerciseHistory, type Performance } from './progression.ts';
+import {
+  e1rm,
+  format,
+  formatEstimate,
+  loadOf,
+  metrics,
+  peakName,
+  type ExerciseHistory,
+  type Performance,
+} from './progression.ts';
 import { doneSets, type Exercise, type SetRecord } from './types.ts';
 
 /** 強い順。この順で最初に当たったものだけを出す。 */
@@ -61,6 +70,23 @@ const LABEL: Record<RecordKind, string> = {
   'session-volume': '1日の総量更新',
 };
 
+/**
+ * その日のセッション全体の総量の更新。
+ *
+ * 種目ごとの判定（findRecords）から切り離してあるのは、これだけが種目に属さない
+ * 記録だから。種目ごとの呼び出しに混ぜると、その日にやった種目の数だけ同じ更新が
+ * 出てくる。文言をここに置いておくのは、祝福と締めの画面で言い方を揃えるため。
+ */
+export function sessionVolumeRecord(today: number, bestPast: number): Achievement | null {
+  if (bestPast <= 0 || today <= bestPast) return null;
+  return {
+    kind: 'session-volume',
+    title: LABEL['session-volume'],
+    detail: `${Math.round(today).toLocaleString('ja-JP')}kg`,
+    previous: `${Math.round(bestPast).toLocaleString('ja-JP')}kg`,
+  };
+}
+
 export type RecordInput = {
   exercise: Exercise;
   /** 今日のその種目（✓ を付けた直後の状態）。 */
@@ -81,7 +107,7 @@ function bestRepsAt(history: ExerciseHistory, weight: number): number | undefine
 
 function loadWord(exercise: Exercise, weight: number): string {
   if (exercise.loadMode === 'assist') return `補助 ${format(weight)}kg`;
-  if (exercise.loadMode === 'bodyweight' && weight === 0) return '自重';
+  if (exercise.loadMode === 'bodyweight') return weight === 0 ? '自重' : `加重 ${format(weight)}kg`;
   return `${format(weight)}kg`;
 }
 
@@ -106,7 +132,7 @@ export function findRecords(input: RecordInput): Achievement[] {
       found.push({
         kind: 'e1rm',
         title: LABEL.e1rm,
-        detail: `推定 1RM ${formatEstimate(now.best)}kg`,
+        detail: `${peakName(exercise)} ${formatEstimate(now.best)}kg`,
         previous: bestPast > 0 ? `${formatEstimate(bestPast)}kg` : null,
       });
     }
@@ -167,14 +193,8 @@ export function findRecords(input: RecordInput): Achievement[] {
   }
 
   // ── 6. その日のセッション全体の総量
-  if (bestPastSessionVolume > 0 && todaySessionVolume > bestPastSessionVolume) {
-    found.push({
-      kind: 'session-volume',
-      title: LABEL['session-volume'],
-      detail: `${Math.round(todaySessionVolume).toLocaleString('ja-JP')}kg`,
-      previous: `${Math.round(bestPastSessionVolume).toLocaleString('ja-JP')}kg`,
-    });
-  }
+  const wholeDay = sessionVolumeRecord(todaySessionVolume, bestPastSessionVolume);
+  if (wholeDay) found.push(wholeDay);
 
   return found.sort((a, b) => RECORD_ORDER.indexOf(a.kind) - RECORD_ORDER.indexOf(b.kind));
 }

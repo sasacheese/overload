@@ -27,6 +27,7 @@ test('normalizeSession: entries が無ければ空配列', () => {
     entries: [],
     note: '',
     bodyWeight: 0,
+    finishedAt: 0,
     updatedAt: 0,
   });
 });

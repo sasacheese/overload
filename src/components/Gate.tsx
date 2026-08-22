@@ -16,9 +16,12 @@ import { Mark } from './Mark.tsx';
 export function Gate({
   onKey,
   onLocalOnly,
+  onDemo,
 }: {
   onKey: (key: string) => void;
   onLocalOnly: () => void;
+  /** サンプルの記録を開く。何も保存されず、閉じればここに戻る。 */
+  onDemo: () => void;
 }) {
   const [mode, setMode] = useState<'enter' | 'create'>('enter');
   const [input, setInput] = useState('');
@@ -101,9 +104,17 @@ export function Gate({
           <button type="button" className="tips-empty" onClick={onLocalOnly}>
             鍵を使わずにこの端末だけで使う
           </button>
+          {/*
+            決める前に中身を見られる道。作りものの 9 週間ぶんの記録が入った状態で
+            開くので、空の画面から想像しなくていい。何も保存されない。
+          */}
+          <button type="button" className="tips-empty" onClick={onDemo}>
+            まずは中身を見る — サンプルの記録で試す
+          </button>
           <p className="footnote">
             鍵なしでも機能は何も減らない。同期だけが無効になり、記録はこの端末の中に残る。
             あとから鍵を作れば、それまでの記録ごと同期が始まる。
+            サンプルは作りものの記録で、触っても何も保存されない。
           </p>
         </form>
       )}

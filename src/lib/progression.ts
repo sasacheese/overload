@@ -114,7 +114,8 @@ export function compareToPrev(ex: Exercise, now: SetRecord, prev: SetRecord | un
   const parts: string[] = [];
   if (dw !== 0) {
     const sign = dw > 0 ? '+' : '−';
-    const prefix = ex.loadMode === 'assist' ? '補助 ' : '';
+    // 数字の意味を必ず言う。補助が動いたのか、自重に足したぶんが動いたのか
+    const prefix = ex.loadMode === 'assist' ? '補助 ' : ex.loadMode === 'bodyweight' ? '加重 ' : '';
     parts.push(`${prefix}${sign}${format(Math.abs(dw))}kg`);
   }
   if (dr !== 0) parts.push(`${dr > 0 ? '+' : '−'}${Math.abs(dr)}レップ`);
@@ -162,6 +163,31 @@ export function round(n: number): number {
 /** 62.5 → "62.5"、60 → "60"。kg 表示の末尾 .0 を出さない。 */
 export function format(n: number): string {
   return String(round(n));
+}
+
+/**
+ * 到達点の呼び名。
+ *
+ * 加重した自重種目（バックエクステンションにプレートを抱えるなど）の到達点を
+ * 「推定 1RM」と呼ぶと、**その種目を 1 回だけやるときの重さ**に見える。実際に出して
+ * いるのは自重に足したぶんの到達点で、自重そのものは数に入っていない。数えていない
+ * ものを名前で数えたことにしないため、自重種目だけ語を変える。
+ *
+ * 重さで測れない日（加重なしの自重）はそもそも到達点がレップなので、呼び名も要らない。
+ */
+export function peakName(ex: Exercise): string {
+  return ex.loadMode === 'bodyweight' ? '到達点' : '推定 1RM';
+}
+
+/**
+ * 推移の見出し。重さで測れているかは呼ぶ側が決める（今日ではなく履歴で決まる）。
+ *
+ * 組み立てず 3 つ書き分けているのは、日本語の切れ目が語ごとに違うため
+ * （`推定 1RM の推移` には中黒代わりの空きが要るが、`到達点の推移` には要らない）。
+ */
+export function trendLabel(ex: Exercise, byLoad: boolean): string {
+  if (!byLoad) return '最高レップの推移';
+  return ex.loadMode === 'bodyweight' ? '到達点の推移' : '推定 1RM の推移';
 }
 
 /**
