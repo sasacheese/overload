@@ -448,10 +448,20 @@ button {
   font-weight: 600;
 }
 
+/*
+ * 日付（と月）の送り。行の幅いっぱいを取って中央に置く。
+ *
+ * 右に何も置かない日——つまり今日を見ているとき——は「今日へ戻る」が消えるので、
+ * 左に寄ったまま右だけ空いて据わりが悪かった。いちばんよく見る状態が中央に
+ * 収まるほうを採る（別の日を見ているあいだは戻るボタンのぶんだけ左へずれる）。
+ */
 .date-nav {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
 }
 
 /* 2 段だと視線が縦に動く。日付・曜日・今日を 1 行に並べる */
@@ -859,9 +869,17 @@ button {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 8%, transparent);
 }
 
-/* 値が入っていない欄。触る前は `—` が出ているので、その字を沈めておく */
+/* 値が入っていない欄。単位は沈めて、状態の字（自重 / —）のほうを立てる */
 .stepper.is-blank .stepper-suffix {
   color: var(--faint);
+}
+
+/*
+ * 触る前に出ている「自重」「—」は、消えるべき影ではなく**状態そのもの**。
+ * 打ちかけのときに出る前の値の影（--faint）より一段はっきり出す。
+ */
+.stepper.is-blank .stepper-field input::placeholder {
+  color: var(--muted);
 }
 
 /* −/+ を出さない欄。数値だけなので 1 列にして、両端に余白を取る */
