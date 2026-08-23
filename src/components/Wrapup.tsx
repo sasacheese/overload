@@ -17,6 +17,7 @@ import { cardDateLabel, drawShareCard, shareCard, shareFileName } from '../lib/s
 import { MUSCLE_GROUPS } from '../lib/types.ts';
 import { GREETING, type WrapUp } from '../lib/wrapup.ts';
 import { Icon } from './Icon.tsx';
+import { Overlay } from './Overlay.tsx';
 import { Mark } from './Mark.tsx';
 
 /** 数え上がりにかける時間。長いと待たされ、短いと数えたことが分からない。 */
@@ -122,103 +123,105 @@ export function Wrapup({
   };
 
   return (
-    <div className="wrap" role="dialog" aria-modal="true" aria-label="今日のまとめ">
-      {fresh ? (
-        <div className="wrap-rays" aria-hidden="true">
-          {Array.from({ length: RAYS }, (_, i) => (
-            <span key={i} style={{ '--angle': `${(360 / RAYS) * i}deg` } as React.CSSProperties} />
-          ))}
-        </div>
-      ) : null}
-
-      <div className="wrap-card">
-        <header className="wrap-head">
-          <span className="wrap-eyebrow">
-            <Mark className="wrap-mark" />
-            {cardDateLabel(summary.date)}
-          </span>
-          <button type="button" className="icon-btn" aria-label="閉じる" ref={closeRef} onClick={onClose}>
-            <Icon name="close" />
-          </button>
-        </header>
-
-        {/*
-          いちばん大きい字は挨拶。事実の言い換えはその下に小さく添える。
-          事実を最大の文字に置くと、機械が読み上げているように見えた。
-        */}
-        <p className="wrap-greeting">{GREETING}</p>
-        <p className="wrap-praise">{summary.praise}</p>
-
-        <div className="wrap-stats">
-          <Stat value={summary.sets} unit="セット" />
-          <Stat value={summary.exercises} unit="種目" />
-          {summary.volume > 0 ? (
-            <Stat value={Math.round(summary.volume)} unit="kg" format={(n) => n.toLocaleString('ja-JP')} />
-          ) : (
-            <Stat value={summary.reps} unit="レップ" />
-          )}
-        </div>
-
-        {summary.groups.length > 0 ? (
-          <p className="wrap-groups">{summary.groups.map((g) => MUSCLE_GROUPS[g].label).join(' · ')}</p>
-        ) : null}
-
-        {summary.records.length > 0 ? (
-          <ul className="wrap-records">
-            {summary.records.map((r, i) => (
-              <li key={`${r.achievement.kind}-${r.exerciseName ?? ''}-${i}`}>
-                <span className="wrap-record-title">{r.achievement.title}</span>
-                <span className="wrap-record-detail">{r.achievement.detail}</span>
-                <span className="wrap-record-where">{r.exerciseName ?? 'この日ぜんぶ'}</span>
-              </li>
+    <Overlay>
+      <div className="wrap" role="dialog" aria-modal="true" aria-label="今日のまとめ">
+        {fresh ? (
+          <div className="wrap-rays" aria-hidden="true">
+            {Array.from({ length: RAYS }, (_, i) => (
+              <span key={i} style={{ '--angle': `${(360 / RAYS) * i}deg` } as React.CSSProperties} />
             ))}
-          </ul>
+          </div>
         ) : null}
 
-        {/*
-          続いていることを数字で置く。
+        <div className="wrap-card">
+          <header className="wrap-head">
+            <span className="wrap-eyebrow">
+              <Mark className="wrap-mark" />
+              {cardDateLabel(summary.date)}
+            </span>
+            <button type="button" className="icon-btn" aria-label="閉じる" ref={closeRef} onClick={onClose}>
+              <Icon name="close" />
+            </button>
+          </header>
 
-          前回比は落ちた日にも出すが、色は付けない——差を出すだけで良し悪しは
-          言わない（セット行の前回比と同じ扱い）。比べる相手は「今日と同じ種目を
-          やった直近の日」なので、分割して回していても意味のある数字になる。
-        */}
-        <dl className="wrap-facts">
-          <div>
-            <dt>今週</dt>
-            <dd>{summary.weekCount} 回目</dd>
-          </div>
-          {summary.weekStreak >= 2 ? (
-            <div>
-              <dt>連続</dt>
-              <dd>{summary.weekStreak} 週</dd>
-            </div>
-          ) : null}
-          <div>
-            <dt>通算</dt>
-            <dd>{summary.totalDays} 日</dd>
-          </div>
-          {summary.volumeRatio !== null ? (
-            <div>
-              <dt>前回比</dt>
-              <dd className={summary.volumeRatio > 0 ? 'is-up' : ''}>
-                {summary.volumeRatio > 0 ? '+' : summary.volumeRatio < 0 ? '−' : '±'}
-                {Math.abs(Math.round(summary.volumeRatio * 100))}%
-              </dd>
-            </div>
-          ) : null}
-        </dl>
+          {/*
+            いちばん大きい字は挨拶。事実の言い換えはその下に小さく添える。
+            事実を最大の文字に置くと、機械が読み上げているように見えた。
+          */}
+          <p className="wrap-greeting">{GREETING}</p>
+          <p className="wrap-praise">{summary.praise}</p>
 
-        <div className="wrap-actions">
-          <button type="button" className="solid wide center-icon" onClick={onShare}>
-            <Icon name="share" />
-            今日の一枚
-          </button>
-          <button type="button" className="quiet-action wrap-done" onClick={onClose}>
-            閉じる
-          </button>
+          <div className="wrap-stats">
+            <Stat value={summary.sets} unit="セット" />
+            <Stat value={summary.exercises} unit="種目" />
+            {summary.volume > 0 ? (
+              <Stat value={Math.round(summary.volume)} unit="kg" format={(n) => n.toLocaleString('ja-JP')} />
+            ) : (
+              <Stat value={summary.reps} unit="レップ" />
+            )}
+          </div>
+
+          {summary.groups.length > 0 ? (
+            <p className="wrap-groups">{summary.groups.map((g) => MUSCLE_GROUPS[g].label).join(' · ')}</p>
+          ) : null}
+
+          {summary.records.length > 0 ? (
+            <ul className="wrap-records">
+              {summary.records.map((r, i) => (
+                <li key={`${r.achievement.kind}-${r.exerciseName ?? ''}-${i}`}>
+                  <span className="wrap-record-title">{r.achievement.title}</span>
+                  <span className="wrap-record-detail">{r.achievement.detail}</span>
+                  <span className="wrap-record-where">{r.exerciseName ?? 'この日ぜんぶ'}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {/*
+            続いていることを数字で置く。
+
+            前回比は落ちた日にも出すが、色は付けない——差を出すだけで良し悪しは
+            言わない（セット行の前回比と同じ扱い）。比べる相手は「今日と同じ種目を
+            やった直近の日」なので、分割して回していても意味のある数字になる。
+          */}
+          <dl className="wrap-facts">
+            <div>
+              <dt>今週</dt>
+              <dd>{summary.weekCount} 回目</dd>
+            </div>
+            {summary.weekStreak >= 2 ? (
+              <div>
+                <dt>連続</dt>
+                <dd>{summary.weekStreak} 週</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt>通算</dt>
+              <dd>{summary.totalDays} 日</dd>
+            </div>
+            {summary.volumeRatio !== null ? (
+              <div>
+                <dt>前回比</dt>
+                <dd className={summary.volumeRatio > 0 ? 'is-up' : ''}>
+                  {summary.volumeRatio > 0 ? '+' : summary.volumeRatio < 0 ? '−' : '±'}
+                  {Math.abs(Math.round(summary.volumeRatio * 100))}%
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+
+          <div className="wrap-actions">
+            <button type="button" className="solid wide center-icon" onClick={onShare}>
+              <Icon name="share" />
+              今日の一枚
+            </button>
+            <button type="button" className="quiet-action wrap-done" onClick={onClose}>
+              閉じる
+            </button>
+          </div>
+          {saved ? <p className="wrap-note">{saved}</p> : null}
         </div>
-        {saved ? <p className="wrap-note">{saved}</p> : null}
       </div>
-    </div>
+    </Overlay>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Overlay } from './Overlay.tsx';
 
 /**
  * 取り消せない操作の前に一段挟む問いかけ。
@@ -39,25 +40,27 @@ export function ConfirmDialog({
   }, [onCancel]);
 
   return (
-    <div className="confirm" onClick={onCancel}>
-      <div
-        className="confirm-card"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <strong className="confirm-title">{title}</strong>
-        {detail ? <p className="confirm-detail">{detail}</p> : null}
-        <div className="confirm-actions">
-          <button type="button" className="ghost" ref={cancel} onClick={onCancel}>
-            やめる
-          </button>
-          <button type="button" className="ghost danger" onClick={onConfirm}>
-            {confirmLabel}
-          </button>
+    <Overlay>
+      <div className="confirm" onClick={onCancel}>
+        <div
+          className="confirm-card"
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <strong className="confirm-title">{title}</strong>
+          {detail ? <p className="confirm-detail">{detail}</p> : null}
+          <div className="confirm-actions">
+            <button type="button" className="ghost" ref={cancel} onClick={onCancel}>
+              やめる
+            </button>
+            <button type="button" className="ghost danger" onClick={onConfirm}>
+              {confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

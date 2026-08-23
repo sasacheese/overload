@@ -352,7 +352,18 @@ button {
   letter-spacing: 0.03em;
 }
 
+/*
+ * 帯の重なりは数字で決めておく。
+ *
+ * backdrop-filter を持つだけで合成の層ができるので、z-index を書かないと
+ * 「auto の層」として扱われ、どちらが手前かの解釈が環境ごとに割れる。実際、
+ * iOS Safari では上に積んだはずのシート（z-index: 20）より帯のほうが手前に出て、
+ * 「保存」の下半分が帯に隠れて押せなかった。低い数字を明示して、覆うもの
+ * （シート・確認・祝福・締め）が必ず上に来るようにする。
+ */
 .tabbar {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   flex: none;
@@ -783,6 +794,60 @@ button {
   font-size: var(--fs-lg);
   font-weight: 600;
   letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * 畳んだカード。
+ *
+ * 何種目も入れた日は縦に長くなり、下の種目へ届くまで指を何度も送ることになる。
+ * 終えたものを閉じられるようにして、その日の並びを一目に収める。
+ */
+.card-fold {
+  text-align: left;
+}
+
+/* 節（.disclosure）と同じ向きで回す。1 枚の中で開閉の合図を 2 通りにしない */
+.card-chevron {
+  width: 1rem;
+  height: 1rem;
+  color: var(--faint);
+  flex: none;
+  transform: rotate(180deg);
+  transition: transform var(--t) var(--ease);
+}
+
+.card.is-folded .card-chevron {
+  transform: rotate(0deg);
+}
+
+/* 閉じているあいだは、上下の余白も畳む。閉じたのに嵩が残ると畳んだ甲斐がない */
+.card.is-folded {
+  padding: 0.875rem 1.125rem;
+  gap: 0.375rem;
+}
+
+/* 閉じたカードに残す 1 行。その日の記録だけを出す */
+.card-folded {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  min-width: 0;
+}
+
+/* ✓ の数。畳んだままでも「あと 1 セット」が読める */
+.card-folded-count {
+  font-size: 0.6875rem;
+  color: var(--faint);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-folded-sets {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

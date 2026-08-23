@@ -19,6 +19,7 @@ import {
 import { useStore } from '../store.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { Icon } from './Icon.tsx';
+import { Overlay } from './Overlay.tsx';
 
 type Draft = Omit<Exercise, 'id'> & { id: string | null };
 
@@ -146,191 +147,193 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
       </button>
 
       {draft ? (
-        <div className="sheet-backdrop" onClick={closeDraft}>
-          <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="種目の設定">
-            <header className="sheet-head">
-              <strong>{draft.id === null ? '新しい種目' : draft.name || '種目'}</strong>
-              <button type="button" className="icon-btn" aria-label="閉じる" onClick={closeDraft}>
-                <Icon name="close" />
-              </button>
-            </header>
-            <div className="sheet-body form">
-              <label>
-                <span>種目名</span>
-                <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-              </label>
-              <label>
-                <span>部位</span>
-                <select
-                  value={draft.group}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (isMuscleGroup(v)) setDraft({ ...draft, group: v });
-                  }}
-                >
-                  {MUSCLE_GROUP_KEYS.map((key) => (
-                    <option key={key} value={key}>
-                      {MUSCLE_GROUPS[key].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>負荷のかけ方</span>
-                <select
-                  value={draft.loadMode}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (isLoadMode(v)) setDraft({ ...draft, loadMode: v });
-                  }}
-                >
-                  {LOAD_MODE_KEYS.map((key) => (
-                    <option key={key} value={key}>
-                      {LOAD_MODES[key].label} — {LOAD_MODES[key].hint}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>重量の刻み（kg）</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.5"
-                  value={draft.increment}
-                  onChange={(e) => setDraft({ ...draft, increment: Number(e.target.value) })}
-                />
-              </label>
-              <div className="pair">
-                <label>
-                  <span>レップの目安 下限</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={draft.repMin}
-                    onChange={(e) => setDraft({ ...draft, repMin: Number(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  <span>レップの目安 上限</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={draft.repMax}
-                    onChange={(e) => setDraft({ ...draft, repMax: Number(e.target.value) })}
-                  />
-                </label>
-              </div>
-              <div className="pair">
-                <label>
-                  <span>初回のセット数</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={draft.sets}
-                    onChange={(e) => setDraft({ ...draft, sets: Number(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  <span>休憩（秒）</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    step="15"
-                    value={draft.restSec}
-                    onChange={(e) => setDraft({ ...draft, restSec: Number(e.target.value) })}
-                  />
-                </label>
-              </div>
-              <p className="hint">
-                {`初めてこの種目をやる日は ${draft.repMin} レップ × ${draft.sets} セットの空欄が並ぶ。2 回目以降は前回と同じ数字が入るので、この目安は使わない。`}
-                {draft.loadMode === 'assist' ? ' 補助は下げるほど負荷が上がる。' : ''}
-                {/*
-                  自重を選んだときだけ、記録の付け方を書く。マシンのレッグレイズや
-                  バックエクステンションのように「重さを設定しない種目」で、
-                  重量の欄に何を入れるのか迷われたため。
-                */}
-                {draft.loadMode === 'bodyweight'
-                  ? ' マシンのレッグレイズやバックエクステンションもこれ。重さの欄は空欄のままでよく、ベルトやプレートで加重した日だけ数字を入れる。伸びはレップで測る。'
-                  : ''}
-                {` 重量の刻みは入力欄の増減には使わない（マシンごとに違うため）。Claude に相談するときの参考値として渡している。`}
-              </p>
-              {/*
-                記録を別の種目にまとめる。
-
-                自分で作った種目とプリセットが同じものを指しているとき
-                （あとからプリセットが増えた場合など）に、記録を捨てずに片方へ寄せる。
-                保存・非表示と並べず、文字だけの静かな操作にして一段挟む。
-              */}
-              {draft.id !== null && mergeTargets.length > 0 ? (
-                mergeTo === null ? (
-                  <button type="button" className="quiet-action" onClick={() => setMergeTo('')}>
-                    記録を別の種目にまとめる
-                  </button>
-                ) : (
-                  <div className="merge">
-                    <label>
-                      <span>まとめ先</span>
-                      <select value={mergeTo} onChange={(e) => setMergeTo(e.target.value)}>
-                        <option value="">選ぶ</option>
-                        {/*
-                          負荷のかけ方を名前に添える。この操作が要る場面は、たいてい
-                          同じ名前の種目が 2 つある場面（自分で作った側とプリセット）なので、
-                          名前だけでは選び分けられない。
-                        */}
-                        {mergeTargets.map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {e.name}（{LOAD_MODES[e.loadMode].label}）
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <p className="footnote">
-                      この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・レップの目安・
-                      コツ）は移らないので、残したいものはまとめ先の側で直す。
-                    </p>
-                    <div className="btn-row">
-                      <button type="button" className="ghost" onClick={() => setMergeTo(null)}>
-                        やめる
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost danger"
-                        disabled={mergeTo === '' || impact === null || impact.days === 0}
-                        onClick={() => setConfirmMerge(true)}
-                      >
-                        まとめる
-                      </button>
-                    </div>
-                    {impact && mergeTo !== '' && impact.days === 0 ? (
-                      <p className="footnote">この種目にはまだ移す記録が無い。そのまま非表示にすれば済む。</p>
-                    ) : null}
-                  </div>
-                )
-              ) : null}
-
-              {message ? <p className="gate-error">{message}</p> : null}
-            </div>
-            <div className="sheet-actions">
-              {draft.id !== null ? (
-                <button
-                  type="button"
-                  className="ghost danger"
-                  onClick={() => {
-                    removeExercise(exerciseId(draft.id!));
-                    closeDraft();
-                    setMessage('非表示にした（記録は残る。一覧の下から戻せる）');
-                  }}
-                >
-                  非表示にする
+        <Overlay>
+          <div className="sheet-backdrop" onClick={closeDraft}>
+            <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="種目の設定">
+              <header className="sheet-head">
+                <strong>{draft.id === null ? '新しい種目' : draft.name || '種目'}</strong>
+                <button type="button" className="icon-btn" aria-label="閉じる" onClick={closeDraft}>
+                  <Icon name="close" />
                 </button>
-              ) : null}
-              <button type="button" className="primary" onClick={save}>
-                保存
-              </button>
+              </header>
+              <div className="sheet-body form">
+                <label>
+                  <span>種目名</span>
+                  <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                </label>
+                <label>
+                  <span>部位</span>
+                  <select
+                    value={draft.group}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (isMuscleGroup(v)) setDraft({ ...draft, group: v });
+                    }}
+                  >
+                    {MUSCLE_GROUP_KEYS.map((key) => (
+                      <option key={key} value={key}>
+                        {MUSCLE_GROUPS[key].label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>負荷のかけ方</span>
+                  <select
+                    value={draft.loadMode}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (isLoadMode(v)) setDraft({ ...draft, loadMode: v });
+                    }}
+                  >
+                    {LOAD_MODE_KEYS.map((key) => (
+                      <option key={key} value={key}>
+                        {LOAD_MODES[key].label} — {LOAD_MODES[key].hint}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>重量の刻み（kg）</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.5"
+                    value={draft.increment}
+                    onChange={(e) => setDraft({ ...draft, increment: Number(e.target.value) })}
+                  />
+                </label>
+                <div className="pair">
+                  <label>
+                    <span>レップの目安 下限</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={draft.repMin}
+                      onChange={(e) => setDraft({ ...draft, repMin: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    <span>レップの目安 上限</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={draft.repMax}
+                      onChange={(e) => setDraft({ ...draft, repMax: Number(e.target.value) })}
+                    />
+                  </label>
+                </div>
+                <div className="pair">
+                  <label>
+                    <span>初回のセット数</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={draft.sets}
+                      onChange={(e) => setDraft({ ...draft, sets: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    <span>休憩（秒）</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      step="15"
+                      value={draft.restSec}
+                      onChange={(e) => setDraft({ ...draft, restSec: Number(e.target.value) })}
+                    />
+                  </label>
+                </div>
+                <p className="hint">
+                  {`初めてこの種目をやる日は ${draft.repMin} レップ × ${draft.sets} セットの空欄が並ぶ。2 回目以降は前回と同じ数字が入るので、この目安は使わない。`}
+                  {draft.loadMode === 'assist' ? ' 補助は下げるほど負荷が上がる。' : ''}
+                  {/*
+                    自重を選んだときだけ、記録の付け方を書く。マシンのレッグレイズや
+                    バックエクステンションのように「重さを設定しない種目」で、
+                    重量の欄に何を入れるのか迷われたため。
+                  */}
+                  {draft.loadMode === 'bodyweight'
+                    ? ' マシンのレッグレイズやバックエクステンションもこれ。重さの欄は空欄のままでよく、ベルトやプレートで加重した日だけ数字を入れる。伸びはレップで測る。'
+                    : ''}
+                  {` 重量の刻みは入力欄の増減には使わない（マシンごとに違うため）。Claude に相談するときの参考値として渡している。`}
+                </p>
+                {/*
+                  記録を別の種目にまとめる。
+
+                  自分で作った種目とプリセットが同じものを指しているとき
+                  （あとからプリセットが増えた場合など）に、記録を捨てずに片方へ寄せる。
+                  保存・非表示と並べず、文字だけの静かな操作にして一段挟む。
+                */}
+                {draft.id !== null && mergeTargets.length > 0 ? (
+                  mergeTo === null ? (
+                    <button type="button" className="quiet-action" onClick={() => setMergeTo('')}>
+                      記録を別の種目にまとめる
+                    </button>
+                  ) : (
+                    <div className="merge">
+                      <label>
+                        <span>まとめ先</span>
+                        <select value={mergeTo} onChange={(e) => setMergeTo(e.target.value)}>
+                          <option value="">選ぶ</option>
+                          {/*
+                            負荷のかけ方を名前に添える。この操作が要る場面は、たいてい
+                            同じ名前の種目が 2 つある場面（自分で作った側とプリセット）なので、
+                            名前だけでは選び分けられない。
+                          */}
+                          {mergeTargets.map((e) => (
+                            <option key={e.id} value={e.id}>
+                              {e.name}（{LOAD_MODES[e.loadMode].label}）
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <p className="footnote">
+                        この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・レップの目安・
+                        コツ）は移らないので、残したいものはまとめ先の側で直す。
+                      </p>
+                      <div className="btn-row">
+                        <button type="button" className="ghost" onClick={() => setMergeTo(null)}>
+                          やめる
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost danger"
+                          disabled={mergeTo === '' || impact === null || impact.days === 0}
+                          onClick={() => setConfirmMerge(true)}
+                        >
+                          まとめる
+                        </button>
+                      </div>
+                      {impact && mergeTo !== '' && impact.days === 0 ? (
+                        <p className="footnote">この種目にはまだ移す記録が無い。そのまま非表示にすれば済む。</p>
+                      ) : null}
+                    </div>
+                  )
+                ) : null}
+
+                {message ? <p className="gate-error">{message}</p> : null}
+              </div>
+              <div className="sheet-actions">
+                {draft.id !== null ? (
+                  <button
+                    type="button"
+                    className="ghost danger"
+                    onClick={() => {
+                      removeExercise(exerciseId(draft.id!));
+                      closeDraft();
+                      setMessage('非表示にした（記録は残る。一覧の下から戻せる）');
+                    }}
+                  >
+                    非表示にする
+                  </button>
+                ) : null}
+                <button type="button" className="primary" onClick={save}>
+                  保存
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </Overlay>
       ) : null}
 
       {/*

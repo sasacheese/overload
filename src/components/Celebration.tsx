@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Achievement } from '../lib/records.ts';
 import { Icon } from './Icon.tsx';
+import { Overlay } from './Overlay.tsx';
 
 /**
  * 記録を更新したときに出す祝福。
@@ -40,19 +41,21 @@ export function Celebration({
   }, [achievement]);
 
   return (
-    <div className="celebrate" onClick={onClose} role="status" aria-live="polite">
-      <div className="celebrate-rays" aria-hidden="true">
-        {Array.from({ length: RAYS }, (_, i) => (
-          <span key={i} style={{ '--angle': `${(360 / RAYS) * i}deg` } as React.CSSProperties} />
-        ))}
+    <Overlay>
+      <div className="celebrate" onClick={onClose} role="status" aria-live="polite">
+        <div className="celebrate-rays" aria-hidden="true">
+          {Array.from({ length: RAYS }, (_, i) => (
+            <span key={i} style={{ '--angle': `${(360 / RAYS) * i}deg` } as React.CSSProperties} />
+          ))}
+        </div>
+        <div className="celebrate-card">
+          <Icon name="rise" className="celebrate-icon" />
+          <strong className="celebrate-title">{achievement.title}</strong>
+          <span className="celebrate-exercise">{exerciseName}</span>
+          <span className="celebrate-detail">{achievement.detail}</span>
+          {achievement.previous ? <span className="celebrate-prev">これまで {achievement.previous}</span> : null}
+        </div>
       </div>
-      <div className="celebrate-card">
-        <Icon name="rise" className="celebrate-icon" />
-        <strong className="celebrate-title">{achievement.title}</strong>
-        <span className="celebrate-exercise">{exerciseName}</span>
-        <span className="celebrate-detail">{achievement.detail}</span>
-        {achievement.previous ? <span className="celebrate-prev">これまで {achievement.previous}</span> : null}
-      </div>
-    </div>
+    </Overlay>
   );
 }
