@@ -15,13 +15,19 @@
  * 一言（`praise`）も強い順に並べた事実の言い換えで、どれにも当てはまらない日は
  * 「やった、が残った」に落ちる。回数が少ない日を責める文は持たない。
  *
+ * 数字（セット・種目・総量）だけでは「今日は何をやったのか」が残らないので、
+ * **種目ごとの明細**（`entries`）も併せて出す。重量とレップの並びがそのまま読めれば、
+ * あとから見返したときに他の記録を開かなくてもその日を思い出せる。
+ * 明細には、その種目で動いた更新もぶら下げてある——何がどう進んだのかは、
+ * 更新の一覧としてではなく、やった種目の隣にあるほうが読める。
+ *
  * 判定はすべてここに閉じ込めてあり、画面（components/Wrapup.tsx）は
  * 出てきたものを並べるだけにしてある。
  */
 
 import { weekStart, weekStreak } from './calendar.ts';
 import { bodyWeightOn, countedSets, exerciseHistory, sessionGroups, sessionVolume, sortedSessions } from './query.ts';
-import { metrics } from './progression.ts';
+import { metrics, setLine } from './progression.ts';
 import { findRecords, sessionVolumeRecord, type Achievement } from './records.ts';
 import { doneSets, type Exercise, type IsoDate, type MuscleGroup, type Session } from './types.ts';
 
@@ -45,6 +51,20 @@ export type DayRecord = {
   achievement: Achievement;
 };
 
+/** その日にやった種目 1 つぶんの明細。 */
+export type DayEntry = {
+  exerciseName: string;
+  group: MuscleGroup;
+  /** 「60kg × 10 · 10 · 8」。同じ重量が続くところはまとめてある。 */
+  sets: string;
+  setCount: number;
+  reps: number;
+  /** その種目の総量（kg）。重さで測れない種目は 0。 */
+  volume: number;
+  /** この種目で動いた更新。強い順。無ければ空。 */
+  records: readonly Achievement[];
+};
+
 export type WrapUp = {
   date: IsoDate;
   /** 実際に ✓ が付いた種目の数。行だけ足して触らなかった種目は数えない。 */
@@ -54,8 +74,17 @@ export type WrapUp = {
   /** 総ボリューム（kg）。重さで測れない種目しか無い日は 0。 */
   volume: number;
   groups: MuscleGroup[];
-  /** その日に出た記録更新。強い順。 */
+  /** その日にやった種目の明細。入力した順。 */
+  entries: DayEntry[];
+  /** その日に出た記録更新。種目ごとに強い順、最後にセッション全体のもの。 */
   records: DayRecord[];
+  /**
+   * 記録が動いた「もの」の数。種目 1 つで 3 種類当たっても 1 と数える。
+   *
+   * 一言（`praise`）に出す数はこちら。更新の件数を出すと、重量を 2.5kg 上げた
+   * だけの日が「記録が 4 つ動いた日。」になり、数が中身と合わなくなる。
+   */
+  progressed: number;
   /** この日を含む週にトレーニングした日数。 */
   weekCount: number;
   /** 週単位の連続記録。日単位にしないのは、休養日で切れて休むことが罰になるため。 */
@@ -79,32 +108,52 @@ export type WrapUp = {
 };
 
 /**
- * その日に出た記録更新を集める。
+ * その日にやった種目の明細を、更新つきで組み立てる。
  *
- * 種目ごとに一番強いものを 1 つだけ拾う。セットごとに全部拾うと、3 セットで
- * 3 回同じ種類が並んで、締めの画面が更新の一覧になってしまう。
- * 1 日の総量は種目に属さないので、種目ごとの判定から外して 1 回だけ見る。
+ * 種目ごとに当たった更新を**全部**ぶら下げる。祝福は 1 回ぶんの前進を一瞬映すものなので
+ * 一番強い 1 つでよかったが、締めは「何がどう進んだのか」を確かめる場所なので、
+ * 重量も伸びてレップも伸びた日にその両方が残らないと、まとめとして足りない。
+ * 並ぶ数が増えても読めるのは、更新の一覧ではなく**種目の下に添える**形にしてあるから。
  */
-function recordsOfDay(session: Session, exercises: readonly Exercise[], sessions: readonly Session[]): DayRecord[] {
+function entriesOfDay(session: Session, exercises: readonly Exercise[], sessions: readonly Session[]): DayEntry[] {
   const byId = new Map(exercises.map((e) => [e.id, e]));
   const bodyWeight = bodyWeightOn(sessions, session.date);
-  const out: DayRecord[] = [];
+  const out: DayEntry[] = [];
 
   for (const entry of session.entries) {
     const exercise = byId.get(entry.exerciseId);
-    if (!exercise || doneSets(entry).length === 0) continue;
-    const found = findRecords({
-      exercise,
-      today: { entry, bodyWeight },
-      history: exerciseHistory(sessions, exercise.id).filter((h) => h.date < session.date),
-      // 1 日の総量はここでは見ない（種目の数だけ同じ更新が出てしまう）
-      todaySessionVolume: 0,
-      bestPastSessionVolume: 0,
+    if (!exercise) continue;
+    const sets = doneSets(entry);
+    if (sets.length === 0) continue;
+    const m = metrics(exercise, { entry, bodyWeight });
+    out.push({
+      exerciseName: exercise.name,
+      group: exercise.group,
+      sets: setLine(exercise, sets),
+      setCount: m.setCount,
+      reps: m.totalReps,
+      volume: m.byLoad ? m.volume : 0,
+      records: findRecords({
+        exercise,
+        today: { entry, bodyWeight },
+        history: exerciseHistory(sessions, exercise.id).filter((h) => h.date < session.date),
+        // 1 日の総量はここでは見ない（種目の数だけ同じ更新が出てしまう）
+        todaySessionVolume: 0,
+        bestPastSessionVolume: 0,
+      }),
     });
-    const best = found[0];
-    if (best) out.push({ exerciseName: exercise.name, achievement: best });
   }
 
+  return out;
+}
+
+/** セッション全体の総量の更新。種目に属さないので 1 回だけ見る。 */
+function wholeDayRecord(
+  session: Session,
+  exercises: readonly Exercise[],
+  sessions: readonly Session[],
+): Achievement | null {
+  const bodyWeight = bodyWeightOn(sessions, session.date);
   const todayVolume = sessionVolume(session, exercises, bodyWeight);
   const bestPast = Math.max(
     0,
@@ -112,10 +161,7 @@ function recordsOfDay(session: Session, exercises: readonly Exercise[], sessions
       .filter((s) => s.date < session.date)
       .map((s) => sessionVolume(s, exercises, bodyWeightOn(sessions, s.date))),
   );
-  const whole = sessionVolumeRecord(todayVolume, bestPast);
-  if (whole) out.push({ exerciseName: null, achievement: whole });
-
-  return out;
+  return sessionVolumeRecord(todayVolume, bestPast);
 }
 
 /**
@@ -129,8 +175,8 @@ function recordsOfDay(session: Session, exercises: readonly Exercise[], sessions
  * ここが空になる経路を作らないため。
  */
 function praiseFor(w: Omit<WrapUp, 'praise'>): string {
-  if (w.records.length >= 2) return `記録が ${w.records.length} つ動いた日。`;
-  if (w.records.length === 1) return '今日、記録が動いた。';
+  if (w.progressed >= 2) return `記録が ${w.progressed} つ動いた日。`;
+  if (w.progressed === 1) return '今日、記録が動いた。';
   if (w.volumeRatio !== null && w.volumeRatio >= 0.05) {
     return `前回より総量が ${Math.round(w.volumeRatio * 100)}% 多い。`;
   }
@@ -172,6 +218,13 @@ export function wrapUp(session: Session, exercises: readonly Exercise[], session
   const thisWeek = weekStart(session.date);
   const weekCount = new Set(withToday.filter((d) => weekStart(d) === thisWeek)).size;
 
+  const entries = entriesOfDay(session, exercises, sessions);
+  const whole = wholeDayRecord(session, exercises, sessions);
+  const records: DayRecord[] = [
+    ...entries.flatMap((e) => e.records.map((achievement) => ({ exerciseName: e.exerciseName, achievement }))),
+    ...(whole ? [{ exerciseName: null, achievement: whole }] : []),
+  ];
+
   const base: Omit<WrapUp, 'praise'> = {
     date: session.date,
     exercises: worked.length,
@@ -179,7 +232,9 @@ export function wrapUp(session: Session, exercises: readonly Exercise[], session
     reps,
     volume,
     groups: sessionGroups(session, exercises),
-    records: recordsOfDay(session, exercises, sessions),
+    entries,
+    records,
+    progressed: entries.filter((e) => e.records.length > 0).length + (whole ? 1 : 0),
     weekCount,
     weekStreak: weekStreak(withToday, session.date),
     totalDays: new Set(withToday).size,

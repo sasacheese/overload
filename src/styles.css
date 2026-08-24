@@ -2385,6 +2385,60 @@ button {
   color: var(--muted);
 }
 
+/*
+ * どれだけ動いたか。到達した数字と前の記録の間に置く。
+ *
+ * 数字が 2 つ出ていても、進んだ量はその場で引き算しないと出てこない。
+ * 祝う場面で計算をさせないために、増分だけを 1 語で置く。
+ */
+.celebrate-gain {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--accent-text);
+  letter-spacing: 0.01em;
+}
+
+/*
+ * 同じ ✓ で一緒に動いたもの。主役の下に細く並べる。
+ *
+ * 重量も上がって同じ重さでのレップも伸びた日に片方しか映らないと、何がどう
+ * 動いたのかが分からない。ただし主役と同じ大きさで並べると 3 つとも読まれずに
+ * 消えるので、行の高さを詰めて添え物にしてある。
+ */
+.celebrate-more {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0.6875rem 0 0;
+  width: 100%;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+}
+
+.celebrate-more li {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  font-size: var(--fs-sm);
+}
+
+.celebrate-more-title {
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.celebrate-more-detail {
+  font-weight: 600;
+}
+
+.celebrate-more-gain {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .celebrate,
   .celebrate-card,
@@ -2534,8 +2588,72 @@ button {
 }
 
 /*
+ * 締めの中の節（やったこと / 進んだこと）。
+ *
+ * 見出しは細く小さく置いて、面や罫で囲わない。囲うと札の中に札が並んで、
+ * 1 枚として読めなくなる。
+ */
+.wrap-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6875rem;
+}
+
+.wrap-section-head {
+  margin: 0;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/*
+ * やったこと。種目名と、その日の重量・レップ。
+ *
+ * 数字だけの締めは「何をやったか」を何も語らない。重量とレップの並びを
+ * そのまま置けば、あとから開いたときに他の画面へ行かずに中身を思い出せる。
+ * 記録が動いた種目にだけ赤い印を立てる（動かなかった種目を沈ませない）。
+ */
+.wrap-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5625rem;
+}
+
+.wrap-entries li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--line);
+}
+
+.wrap-entries li.is-progressed {
+  border-left-color: var(--accent);
+}
+
+.wrap-entry-name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.wrap-entry-sets {
+  font-size: var(--fs-sm);
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/*
  * その日に動いた記録。赤い縦棒を 1 本立てて並べる。
  * 面を赤で塗らないのは、更新が 3 つ出た日に画面の半分が赤くなるため。
+ *
+ * 1 行に「見出し・出どころ・到達した数字・増分・前の記録」を組む。増分を右に
+ * 置いているのは、並んだときに数字の柱として読めるから（何がどれだけ動いたかを
+ * 縦に追える）。
  */
 .wrap-records {
   list-style: none;
@@ -2554,29 +2672,57 @@ button {
   border-left: 2px solid var(--accent);
 }
 
+/*
+ * 置き場所は 5 つとも明示する。
+ *
+ * 一部だけ行を指定して残りを自動配置に任せると、行を指定した要素が先に場所を
+ * 取って、見出しが右の列へ押し出される（実際にそうなった）。
+ */
 .wrap-record-title {
+  grid-row: 1;
+  grid-column: 1;
   font-size: var(--fs-xs);
   letter-spacing: 0.09em;
   font-weight: 700;
   color: var(--accent-text);
 }
 
-.wrap-record-detail {
-  grid-row: 2;
-  font-size: var(--fs-lg);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
 .wrap-record-where {
-  grid-row: 2;
+  grid-row: 1;
+  grid-column: 2;
   align-self: baseline;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--muted);
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.wrap-record-detail {
+  grid-row: 2;
+  grid-column: 1;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.wrap-record-gain {
+  grid-row: 2;
+  grid-column: 2;
+  align-self: baseline;
+  text-align: right;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--accent-text);
+  white-space: nowrap;
+}
+
+.wrap-record-prev {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  font-size: var(--fs-xs);
+  color: var(--muted);
 }
 
 /* 続いていることの数。出るのは積み上がった側だけで、少ない日を責める欄は無い */

@@ -77,11 +77,98 @@ test('その重量を初めてやった日はレップ更新にしない（比�
   assert.equal(found.find((r) => r.kind === 'reps-at-load'), undefined);
 });
 
-test('重量を上げてレップが落ちた日は推定 1RM でも更新にならない', () => {
+test('重量を上げてレップが落ちた日は、推定 1RM は動かないが重量更新は出る', () => {
   const found = findRecords(
     input({ exercise: bench, today: { entry: entry([[62.5, 5]]), bodyWeight: 0 }, history: past([[[60, 10]]]) }),
   );
-  assert.deepEqual(found, []);
+  // 推定 1RM は重量 × レップなので、レップを落とすと動かない
+  assert.equal(found.find((r) => r.kind === 'e1rm'), undefined);
+  // 持てなかった重さを持ったことは負荷の前進なので、そちらで拾う
+  const load = found.find((r) => r.kind === 'top-load');
+  assert.ok(load);
+  assert.equal(load.detail, '62.5kg');
+  assert.equal(load.previous, '60kg');
+  assert.equal(load.gain, '+2.5kg');
+});
+
+test('重量が変わらない日は重量更新を出さない', () => {
+  const found = findRecords(
+    input({ exercise: bench, today: { entry: entry([[60, 10]]), bodyWeight: 0 }, history: past([[[60, 8]]]) }),
+  );
+  assert.equal(found.find((r) => r.kind === 'top-load'), undefined);
+});
+
+test('アシストは補助を減らした日が重量更新（増えたようには書かない）', () => {
+  const found = findRecords(
+    input({
+      exercise: assist,
+      today: { entry: entry([[27.5, 6]]), bodyWeight: 70 },
+      history: past([[[30, 6]]], 70),
+    }),
+  );
+  const load = found.find((r) => r.kind === 'top-load');
+  assert.ok(load);
+  assert.equal(load.detail, '補助 27.5kg');
+  assert.equal(load.previous, '補助 30kg');
+  assert.equal(load.gain, '補助 −2.5kg');
+});
+
+test('同じ重量でセットの組み方が良くなった日を拾う（単一セットの最高は変わらない）', () => {
+  // これまで 30kg × 10 + 10 + 8（計 28）→ 今日 30kg × 10 + 10 + 10（計 30）
+  const today = { entry: entry([[30, 10], [30, 10], [30, 10]]), bodyWeight: 0 };
+  const history = past([[[30, 10], [30, 10], [30, 8]]]);
+  const found = findRecords(input({ exercise: bench, today, history }));
+
+  // 単一セットの最高レップも推定 1RM もセット数も動いていない
+  assert.equal(found.find((r) => r.kind === 'reps-at-load'), undefined);
+  assert.equal(found.find((r) => r.kind === 'e1rm'), undefined);
+  assert.equal(found.find((r) => r.kind === 'sets'), undefined);
+
+  const total = found.find((r) => r.kind === 'reps-at-load-total');
+  assert.ok(total, '同じ重量で 2 レップ多いのに何も祝われない');
+  assert.equal(total.detail, '30kg 計 30 レップ');
+  assert.equal(total.previous, '計 28 レップ');
+  assert.equal(total.gain, '+2 レップ');
+});
+
+test('総レップは日をまたいで足さない（通算ではなく 1 日の積み上げを比べる）', () => {
+  // 過去 2 日で 30kg を 20 レップずつ。今日 24 レップなら更新
+  const today = { entry: entry([[30, 12], [30, 12]]), bodyWeight: 0 };
+  const history = past([
+    [[30, 10], [30, 10]],
+    [[30, 10], [30, 10]],
+  ]);
+  const total = findRecords(input({ exercise: bench, today, history })).find(
+    (r) => r.kind === 'reps-at-load-total',
+  );
+  assert.ok(total);
+  assert.equal(total.previous, '計 20 レップ');
+});
+
+test('その重量を初めてやった日は総レップ更新にしない', () => {
+  const found = findRecords(
+    input({ exercise: bench, today: { entry: entry([[65, 5]]), bodyWeight: 0 }, history: past([[[60, 8]]]) }),
+  );
+  assert.equal(found.find((r) => r.kind === 'reps-at-load-total'), undefined);
+});
+
+test('増分はどの種類にも付く（引き算を人にさせない）', () => {
+  const found = findRecords(
+    input({
+      exercise: bench,
+      today: { entry: entry([[60, 9], [60, 9], [60, 9], [60, 9]]), bodyWeight: 0 },
+      history: past([[[60, 8], [60, 8], [60, 8]]]),
+      todaySessionVolume: 2160,
+      bestPastSessionVolume: 1440,
+    }),
+  );
+  for (const record of found) {
+    if (record.previous === null) continue;
+    assert.ok(record.gain, `${record.kind} に増分が無い`);
+    assert.ok(record.gain.includes('+') || record.gain.includes('−'), `${record.kind}: ${record.gain}`);
+  }
+  assert.equal(found.find((r) => r.kind === 'sets')?.gain, '+1 セット');
+  assert.equal(found.find((r) => r.kind === 'session-volume')?.gain, '+720kg');
 });
 
 test('レップ数で測る種目は単一セットの最高レップを拾う', () => {

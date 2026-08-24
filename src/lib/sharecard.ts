@@ -14,15 +14,34 @@
  * 読まないこのアプリでも端末ごとに字形が変わるうえ、Safari では汚染扱いで
  * `toBlob` が落ちることがある。canvas に直接描けば、依存も足さずどの端末でも同じ絵が出る。
  *
- * 版面は 1080×1350（4:5）。SNS でいちばん縦に大きく出る比で、正方形に切られても
- * 中央の数字が残るように、要素を中央の帯に寄せてある。
+ * ## 版面
+ *
+ * 幅は 1080 で固定、高さは中身で伸びる（下限 1350 = 4:5）。以前は 1080×1350 の
+ * 固定版面だったが、**やった種目とその重量・レップ**を載せるようになって、
+ * 日によって行数が変わるようになった。行数に合わせて字を詰めると、種目が多い日だけ
+ * 読めない 1 枚になる。字の大きさを保って紙のほうを伸ばすほうが、どの日も同じ密度で読める。
+ *
+ * 下限を 4:5 にしてあるのは、SNS でいちばん縦に大きく出る比だから。種目が少ない日は
+ * この比のままで、多い日だけ縦に伸びる。
+ *
+ * ## 測ってから描く
+ *
+ * 高さが中身で決まるので、描く前に高さが要る。同じ関数（`renderBody`）を
+ * **測るときと描くときで 2 回**通し、1 回目の戻り値で canvas の高さを決めてから
+ * 2 回目で描く。組み方を 2 箇所に書くと、測った高さと描いた中身がずれる。
  */
 
 import { dateParts } from './calendar.ts';
 import { MUSCLE_GROUPS, type IsoDate, type MuscleGroup } from './types.ts';
 
 const W = 1080;
-const H = 1350;
+/** 下限の高さ。中身が少ない日はこの 4:5 のままにする。 */
+const MIN_H = 1350;
+const PAD = 96;
+
+/** 載せ切る数の上限。これを超えたぶんは「ほか N …」に畳む。 */
+const MAX_ENTRIES = 12;
+const MAX_RECORDS = 6;
 
 /** 画面と同じ配色。地は暗い側で固定する——明るい地に赤 1 色だと SNS の中で沈む。 */
 const INK = {
@@ -37,6 +56,25 @@ const INK = {
 
 const SANS = '-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Helvetica Neue", Arial, sans-serif';
 
+/** その日にやった種目 1 つぶん。 */
+export type ShareCardEntry = {
+  name: string;
+  /** 「60kg × 10 · 10 · 8」。 */
+  sets: string;
+  /** その種目で記録が動いたか。動いた種目には印を付ける。 */
+  progressed: boolean;
+};
+
+/** 何がどう進んだか 1 つぶん。 */
+export type ShareCardRecord = {
+  title: string;
+  detail: string;
+  previous: string | null;
+  gain: string | null;
+  /** どの種目で出たか。セッション全体なら「この日ぜんぶ」。 */
+  where: string;
+};
+
 export type ShareCard = {
   date: string;
   /** 見出しの下に置く一言。 */
@@ -46,8 +84,10 @@ export type ShareCard = {
   volume: number;
   reps: number;
   groups: readonly MuscleGroup[];
-  /** 記録更新の見出し（最大 3 つまで置く）。 */
-  records: readonly string[];
+  /** やった種目と、その重量・レップ。 */
+  entries: readonly ShareCardEntry[];
+  /** 記録更新。 */
+  records: readonly ShareCardRecord[];
   weekStreak: number;
 };
 
@@ -137,6 +177,305 @@ function drawStat(ctx: CanvasRenderingContext2D, x: number, y: number, value: st
 }
 
 /**
+ * 幅に収まるように折り返す。呼ぶ前に ctx.font を決めておく。
+ *
+ * まず空白で割り、それでも収まらない塊だけ 1 文字ずつ送る。日本語には空白が
+ * 無いので後者だけでも足りるが、`60kg × 10 · 10` のような並びが数字の途中で
+ * 割れると読めなくなるので、切れ目があるならそちらを優先する。
+ */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+
+  const pushChars = (chunk: string) => {
+    for (const ch of chunk) {
+      if (line !== '' && ctx.measureText(line + ch).width > maxWidth) {
+        lines.push(line);
+        line = ch;
+      } else {
+        line += ch;
+      }
+    }
+  };
+
+  for (const token of text.split(/(\s+)/)) {
+    if (token === '') continue;
+    if (ctx.measureText(line + token).width <= maxWidth) {
+      line += token;
+      continue;
+    }
+    if (line !== '') {
+      lines.push(line.trimEnd());
+      line = '';
+    }
+    pushChars(token.trimStart());
+  }
+  if (line.trim() !== '') lines.push(line.trimEnd());
+  return lines.length === 0 ? [''] : lines;
+}
+
+/**
+ * 幅に収まらない分を削って末尾に … を置く。呼ぶ前に ctx.font を決めておく。
+ *
+ * 折り返せない場所（種目名・出どころ）に使う。長い名前をそのまま描くと版面の
+ * 外へ出て切れるが、切れた字と削った字は見え方が違う——末尾に … があれば、
+ * 続きがあることが分かる。
+ */
+function clip(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  const chars = [...text];
+  while (chars.length > 1) {
+    chars.pop();
+    if (ctx.measureText(`${chars.join('')}…`).width <= maxWidth) break;
+  }
+  return `${chars.join('')}…`;
+}
+
+/** 節の見出し。細い横線と小さい字だけで、面は作らない。 */
+function sectionHead(ctx: CanvasRenderingContext2D, y: number, text: string, draw: boolean): number {
+  if (draw) {
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = INK.faint;
+    ctx.font = `600 28px ${SANS}`;
+    ctx.fillText(text, PAD, y);
+    const w = ctx.measureText(text).width;
+    ctx.strokeStyle = INK.line;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD + w + 24, y - 10);
+    ctx.lineTo(W - PAD, y - 10);
+    ctx.stroke();
+    ctx.restore();
+  }
+  return y + 54;
+}
+
+/**
+ * 中身を組む。`draw` が false のときは何も描かずに高さだけ返す。
+ *
+ * 測る回と描く回で同じ道を通すためにこの形にしてある。組み方を 2 つ持つと、
+ * 高さだけ合っていて中身がはみ出す 1 枚が出る。
+ *
+ * @returns 最後に置いたものの下端
+ */
+function renderBody(ctx: CanvasRenderingContext2D, card: ShareCard, draw: boolean): number {
+  const usable = W - PAD * 2;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  if (draw) {
+    // 上端の赤い筋。面を赤で塗らずに、1 本だけ通して信号として置く
+    ctx.fillStyle = INK.accent;
+    ctx.fillRect(0, 0, W, 6);
+
+    // ── 名乗り
+    drawMark(ctx, PAD, 118, 54, INK.accent);
+    drawWordmark(ctx, PAD + 78, 165, 40);
+
+    // ── 日付
+    ctx.fillStyle = INK.dim;
+    ctx.font = `500 32px ${SANS}`;
+    ctx.textAlign = 'right';
+    ctx.fillText(card.date, W - PAD, 162);
+    ctx.textAlign = 'left';
+
+    ctx.strokeStyle = INK.line;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD, 220);
+    ctx.lineTo(W - PAD, 220);
+    ctx.stroke();
+  }
+
+  /*
+   * 一言。この 1 枚の主題なので、いちばん大きい文字にする。
+   * 版面に収まらないときだけ字を詰め、それでも余るときだけ折り返す。
+   */
+  let praiseSize = 62;
+  ctx.font = `600 ${praiseSize}px ${SANS}`;
+  while (ctx.measureText(card.praise).width > usable && praiseSize > 42) {
+    praiseSize -= 2;
+    ctx.font = `600 ${praiseSize}px ${SANS}`;
+  }
+  const praiseLines = wrapText(ctx, card.praise, usable);
+  let y = 330;
+  if (draw) {
+    ctx.fillStyle = INK.fg;
+    for (const line of praiseLines) {
+      ctx.fillText(line, PAD, y);
+      y += praiseSize * 1.28;
+    }
+    y -= praiseSize * 1.28;
+  } else {
+    y += (praiseLines.length - 1) * praiseSize * 1.28;
+  }
+
+  // ── 数字。左揃えで積む。横に 3 つ並べると桁数で行が揺れる
+  y += 170;
+  drawStatIf(ctx, PAD, y, String(card.sets), 'セット', draw);
+  drawStatIf(ctx, PAD + 380, y, String(card.exercises), '種目', draw);
+  y += 150;
+  if (card.volume > 0) {
+    drawStatIf(ctx, PAD, y, Math.round(card.volume).toLocaleString('ja-JP'), 'kg', draw);
+  } else {
+    drawStatIf(ctx, PAD, y, String(card.reps), 'レップ', draw);
+  }
+
+  // ── 部位。色の点ではなく漢字で示す（画面のカレンダーと同じ）
+  y += 106;
+  if (card.groups.length > 0) {
+    if (draw) {
+      ctx.fillStyle = INK.dim;
+      ctx.font = `500 34px ${SANS}`;
+      ctx.fillText(card.groups.map((g) => MUSCLE_GROUPS[g].label).join(' · '), PAD, y);
+    }
+    y += 36;
+  }
+
+  /*
+   * ── やったこと。種目名とその日の重量・レップ。
+   *
+   * この 1 枚を「何をやったか」が伝わるものにしているのは、数字だけの版面が
+   * その日の中身を何も語らないため。セット行は幅で折り返す（重量が動いた日は長くなる）。
+   */
+  const shownEntries = card.entries.slice(0, MAX_ENTRIES);
+  if (shownEntries.length > 0) {
+    y += 70;
+    y = sectionHead(ctx, y, 'やったこと', draw);
+    for (const entry of shownEntries) {
+      if (draw) {
+        /*
+         * 記録が動いた種目には赤い印を立てる。
+         *
+         * 印の有無で名前の位置は動かさない。印のぶんだけ字下げすると、動いた種目と
+         * 動かなかった種目で行頭が揃わず、並びが階段になる。
+         */
+        if (entry.progressed) {
+          ctx.fillStyle = INK.accent;
+          ctx.fillRect(PAD, y - 30, 5, 38);
+        }
+        ctx.fillStyle = INK.fg;
+        ctx.font = `600 40px ${SANS}`;
+        ctx.fillText(clip(ctx, entry.name, usable - 22), PAD + 22, y);
+      }
+      ctx.font = `500 34px ${SANS}`;
+      const lines = wrapText(ctx, entry.sets, usable - 22);
+      y += 46;
+      if (draw) ctx.fillStyle = INK.dim;
+      for (const line of lines) {
+        if (draw) ctx.fillText(line, PAD + 22, y);
+        y += 42;
+      }
+      y += 16;
+    }
+    const rest = card.entries.length - shownEntries.length;
+    if (rest > 0) {
+      if (draw) {
+        ctx.fillStyle = INK.faint;
+        ctx.font = `500 30px ${SANS}`;
+        ctx.fillText(`ほか ${rest} 種目`, PAD, y);
+      }
+      y += 44;
+    }
+    y -= 16;
+  }
+
+  /*
+   * ── 進んだこと。何が、どこまで、どれだけ動いたか。
+   *
+   * 見出しだけでは「更新した」しか伝わらない。前の記録と増分まで置いて、
+   * 1 枚で進歩の大きさが読めるようにする。
+   */
+  const shownRecords = card.records.slice(0, MAX_RECORDS);
+  if (shownRecords.length > 0) {
+    y += 70;
+    y = sectionHead(ctx, y, '進んだこと', draw);
+    for (const record of shownRecords) {
+      if (draw) {
+        // 縦棒は「これまで」の行まで通す。見出しだけに添えると 1 件が 2 つに割れて見える
+        ctx.fillStyle = INK.accent;
+        ctx.fillRect(PAD, y - 28, 4, record.previous ? 132 : 92);
+
+        ctx.fillStyle = INK.accent;
+        ctx.font = `700 26px ${SANS}`;
+        ctx.fillText(record.title, PAD + 26, y);
+        const titleWidth = ctx.measureText(record.title).width;
+        ctx.fillStyle = INK.dim;
+        ctx.font = `500 26px ${SANS}`;
+        const whereAt = PAD + 26 + titleWidth + 20;
+        ctx.fillText(clip(ctx, record.where, W - PAD - whereAt), whereAt, y);
+
+        /*
+         * 到達した数字と増分は同じ行に置く。増分は右端に寄せるので、数字が長い日は
+         * 到達した側を削る（増分が消えると「どれだけ進んだか」が読めなくなる）。
+         */
+        ctx.font = `600 40px ${SANS}`;
+        const gainWidth = record.gain ? ctx.measureText(record.gain).width + 32 : 0;
+        ctx.fillStyle = INK.fg;
+        ctx.font = `600 42px ${SANS}`;
+        ctx.fillText(clip(ctx, record.detail, usable - 26 - gainWidth), PAD + 26, y + 52);
+
+        if (record.gain) {
+          ctx.textAlign = 'right';
+          ctx.fillStyle = INK.accent;
+          ctx.font = `600 40px ${SANS}`;
+          ctx.fillText(record.gain, W - PAD, y + 52);
+          ctx.textAlign = 'left';
+        }
+        if (record.previous) {
+          ctx.fillStyle = INK.faint;
+          ctx.font = `500 28px ${SANS}`;
+          ctx.fillText(`これまで ${record.previous}`, PAD + 26, y + 96);
+        }
+      }
+      y += record.previous ? 138 : 104;
+    }
+    const rest = card.records.length - shownRecords.length;
+    if (rest > 0) {
+      if (draw) {
+        ctx.fillStyle = INK.faint;
+        ctx.font = `500 30px ${SANS}`;
+        ctx.fillText(`ほか ${rest} つ更新`, PAD, y);
+      }
+      y += 44;
+    }
+    y -= 34;
+  }
+
+  return y;
+}
+
+function drawStatIf(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  value: string,
+  unit: string,
+  draw: boolean,
+): void {
+  if (draw) drawStat(ctx, x, y, value, unit);
+}
+
+/** 足元。連続週だけ添える。高さが決まってから下端に置く。 */
+function drawFoot(ctx: CanvasRenderingContext2D, card: ShareCard, height: number): void {
+  ctx.strokeStyle = INK.line;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(PAD, height - 168);
+  ctx.lineTo(W - PAD, height - 168);
+  ctx.stroke();
+
+  ctx.fillStyle = INK.faint;
+  ctx.font = `500 30px ${SANS}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(card.weekStreak >= 2 ? `${card.weekStreak} 週連続` : '', PAD, height - 104);
+  ctx.textAlign = 'right';
+  ctx.fillText('OVERLOAD', W - PAD, height - 104);
+  ctx.textAlign = 'left';
+}
+
+/**
  * 1 枚を描く。返すのは描き終えた canvas。
  *
  * 端末の解像度に依らず同じ絵にしたいので、devicePixelRatio は掛けない。
@@ -145,94 +484,20 @@ function drawStat(ctx: CanvasRenderingContext2D, x: number, y: number, value: st
 export function drawShareCard(card: ShareCard): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = W;
-  canvas.height = H;
+  canvas.height = MIN_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
 
+  // 1 回目は測るだけ。足元のぶんを足して高さを決める
+  const contentBottom = renderBody(ctx, card, false);
+  const height = Math.max(MIN_H, Math.round(contentBottom + 236));
+  // 高さを変えると中身が消える。地から描き直す
+  canvas.height = height;
+
   ctx.fillStyle = INK.bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // 上端の赤い筋。面を赤で塗らずに、1 本だけ通して信号として置く
-  ctx.fillStyle = INK.accent;
-  ctx.fillRect(0, 0, W, 6);
-
-  const pad = 96;
-
-  // ── 名乗り
-  drawMark(ctx, pad, 118, 54, INK.accent);
-  drawWordmark(ctx, pad + 78, 165, 40);
-
-  // ── 日付
-  ctx.fillStyle = INK.dim;
-  ctx.font = `500 32px ${SANS}`;
-  ctx.textAlign = 'right';
-  ctx.fillText(card.date, W - pad, 162);
-  ctx.textAlign = 'left';
-
-  ctx.strokeStyle = INK.line;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pad, 220);
-  ctx.lineTo(W - pad, 220);
-  ctx.stroke();
-
-  /*
-   * 一言。この 1 枚の主題なので、いちばん大きい文字にする。
-   *
-   * 版面に収まらないときだけ字を詰める。折り返すと 2 行目の位置に合わせて
-   * 下の数字まで動かすことになり、日によって版面が変わる。実測では一番長い
-   * 言い回しでも 1 行に収まるので、これは端末の字形が違ったときの保険。
-   */
-  ctx.fillStyle = INK.fg;
-  const usable = W - pad * 2;
-  let praiseSize = 62;
-  ctx.font = `600 ${praiseSize}px ${SANS}`;
-  while (ctx.measureText(card.praise).width > usable && praiseSize > 34) {
-    praiseSize -= 2;
-    ctx.font = `600 ${praiseSize}px ${SANS}`;
-  }
-  ctx.fillText(card.praise, pad, 330);
-
-  // ── 数字。左揃えで 3 つ縦に積む。横に並べると桁数で行が揺れる
-  let y = 500;
-  drawStat(ctx, pad, y, String(card.sets), 'セット');
-  drawStat(ctx, pad + 380, y, String(card.exercises), '種目');
-  y += 150;
-  if (card.volume > 0) {
-    drawStat(ctx, pad, y, Math.round(card.volume).toLocaleString('ja-JP'), 'kg');
-  } else {
-    drawStat(ctx, pad, y, String(card.reps), 'レップ');
-  }
-
-  // ── 部位。色の点ではなく漢字 1 文字で示す（画面のカレンダーと同じ）
-  y += 110;
-  ctx.fillStyle = INK.dim;
-  ctx.font = `500 34px ${SANS}`;
-  ctx.fillText(card.groups.map((g) => MUSCLE_GROUPS[g].label).join(' · '), pad, y);
-
-  // ── 記録更新。あった日だけ、赤い縦棒を添えて並べる
-  y += 84;
-  for (const line of card.records.slice(0, 3)) {
-    ctx.fillStyle = INK.accent;
-    ctx.fillRect(pad, y - 34, 4, 44);
-    ctx.fillStyle = INK.fg;
-    ctx.font = `600 38px ${SANS}`;
-    ctx.fillText(line, pad + 26, y);
-    y += 68;
-  }
-
-  // ── 足元。連続週だけ添える
-  ctx.strokeStyle = INK.line;
-  ctx.beginPath();
-  ctx.moveTo(pad, H - 168);
-  ctx.lineTo(W - pad, H - 168);
-  ctx.stroke();
-
-  ctx.fillStyle = INK.faint;
-  ctx.font = `500 30px ${SANS}`;
-  ctx.fillText(card.weekStreak >= 2 ? `${card.weekStreak} 週連続` : '', pad, H - 104);
-  ctx.textAlign = 'right';
-  ctx.fillText('OVERLOAD', W - pad, H - 104);
+  ctx.fillRect(0, 0, W, height);
+  renderBody(ctx, card, true);
+  drawFoot(ctx, card, height);
 
   return canvas;
 }

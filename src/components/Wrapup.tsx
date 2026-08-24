@@ -22,6 +22,8 @@ import { Mark } from './Mark.tsx';
 
 /** 数え上がりにかける時間。長いと待たされ、短いと数えたことが分からない。 */
 const COUNT_MS = 900;
+/** 種目に属さない記録（1 日の総量）の出どころ。画面と 1 枚で同じ語を使う。 */
+const WHOLE_DAY = 'この日ぜんぶ';
 const RAYS = 14;
 
 function reducedMotion(): boolean {
@@ -115,7 +117,18 @@ export function Wrapup({
       volume: summary.volume,
       reps: summary.reps,
       groups: summary.groups,
-      records: summary.records.map((r) => r.achievement.title),
+      entries: summary.entries.map((e) => ({
+        name: e.exerciseName,
+        sets: e.sets,
+        progressed: e.records.length > 0,
+      })),
+      records: summary.records.map((r) => ({
+        title: r.achievement.title,
+        detail: r.achievement.detail,
+        previous: r.achievement.previous,
+        gain: r.achievement.gain,
+        where: r.exerciseName ?? WHOLE_DAY,
+      })),
       weekStreak: summary.weekStreak,
     });
     const result = await shareCard(canvas, shareFileName(summary.date), `${cardDateLabel(summary.date)} · ${summary.praise}`);
@@ -165,16 +178,50 @@ export function Wrapup({
             <p className="wrap-groups">{summary.groups.map((g) => MUSCLE_GROUPS[g].label).join(' · ')}</p>
           ) : null}
 
+          {/*
+            やったこと。種目とその日の重量・レップ。
+
+            数字（セット・種目・総量）だけでは、その日に何をやったのかが残らない。
+            重量とレップの並びをそのまま置けば、あとから開いたときに他の画面へ
+            行かなくても中身を思い出せる。記録が動いた種目には赤い印を付ける。
+          */}
+          {summary.entries.length > 0 ? (
+            <section className="wrap-section">
+              <h3 className="wrap-section-head">やったこと</h3>
+              <ul className="wrap-entries">
+                {summary.entries.map((e) => (
+                  <li key={e.exerciseName} className={e.records.length > 0 ? 'is-progressed' : ''}>
+                    <span className="wrap-entry-name">{e.exerciseName}</span>
+                    <span className="wrap-entry-sets">{e.sets}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {/*
+            進んだこと。何が、どこまで、どれだけ動いたか。
+
+            見出しだけだと「更新した」しか伝わらない。到達した数字・前の記録・
+            増分の 3 つを置いて、進歩の大きさがその場で読めるようにする。
+          */}
           {summary.records.length > 0 ? (
-            <ul className="wrap-records">
-              {summary.records.map((r, i) => (
-                <li key={`${r.achievement.kind}-${r.exerciseName ?? ''}-${i}`}>
-                  <span className="wrap-record-title">{r.achievement.title}</span>
-                  <span className="wrap-record-detail">{r.achievement.detail}</span>
-                  <span className="wrap-record-where">{r.exerciseName ?? 'この日ぜんぶ'}</span>
-                </li>
-              ))}
-            </ul>
+            <section className="wrap-section">
+              <h3 className="wrap-section-head">進んだこと</h3>
+              <ul className="wrap-records">
+                {summary.records.map((r, i) => (
+                  <li key={`${r.achievement.kind}-${r.exerciseName ?? ''}-${i}`}>
+                    <span className="wrap-record-title">{r.achievement.title}</span>
+                    <span className="wrap-record-where">{r.exerciseName ?? WHOLE_DAY}</span>
+                    <span className="wrap-record-detail">{r.achievement.detail}</span>
+                    {r.achievement.gain ? <span className="wrap-record-gain">{r.achievement.gain}</span> : null}
+                    {r.achievement.previous ? (
+                      <span className="wrap-record-prev">これまで {r.achievement.previous}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
 
           {/*

@@ -51,15 +51,77 @@ test('wrapUp: ✓ の付いていない種目は数に入れない', () => {
   assert.equal(w.sets, 1);
 });
 
-test('wrapUp: 記録更新は種目ごとに一番強いものを 1 つだけ拾う', () => {
+test('wrapUp: 記録更新は種目ごとに全部拾う。同じ種類が重複はしない', () => {
   const past = session('2026-08-19', [{ id: bench.id, sets: [[60, 8], [60, 8], [60, 8]] }]);
-  // 3 セットとも重量を上げている。セットごとに拾うと 3 つ並んでしまう
+  // 3 セットとも重量を上げている。セットごとに拾うと同じ種類が 3 つ並んでしまう
   const today = session('2026-08-21', [{ id: bench.id, sets: [[62.5, 8], [62.5, 8], [62.5, 8]] }]);
   const w = wrapUp(today, exercises, [past, today]);
   const perExercise = w.records.filter((r) => r.exerciseName !== null);
-  assert.equal(perExercise.length, 1);
-  assert.equal(perExercise[0]?.exerciseName, bench.name);
-  assert.equal(perExercise[0]?.achievement.kind, 'e1rm');
+
+  assert.ok(perExercise.every((r) => r.exerciseName === bench.name));
+  // 到達点・重量・種目の総量が動いている。強い順に並ぶ
+  assert.deepEqual(
+    perExercise.map((r) => r.achievement.kind),
+    ['e1rm', 'top-load', 'exercise-volume'],
+  );
+  // 種類は 1 つずつ（3 セットぶん並ばない）
+  assert.equal(new Set(perExercise.map((r) => r.achievement.kind)).size, perExercise.length);
+  // 「動いたもの」の数は種目 1 つ + その日ぜんぶ の 2 つ
+  assert.equal(w.progressed, 2);
+});
+
+test('wrapUp: やった種目の明細を出す（重量とレップがそのまま読める）', () => {
+  const today = session('2026-08-21', [
+    { id: bench.id, sets: [[60, 10], [60, 10], [65, 8]] },
+    { id: squat.id, sets: [[80, 5]] },
+  ]);
+  const w = wrapUp(today, exercises, [today]);
+  assert.equal(w.entries.length, 2);
+  assert.equal(w.entries[0]?.exerciseName, bench.name);
+  // 同じ重量が続くところはまとめ、変わったところで区切る
+  assert.equal(w.entries[0]?.sets, '60kg × 10 · 10  /  65kg × 8');
+  assert.equal(w.entries[0]?.setCount, 3);
+  assert.equal(w.entries[0]?.reps, 28);
+  assert.equal(w.entries[0]?.volume, 60 * 10 + 60 * 10 + 65 * 8);
+  assert.equal(w.entries[1]?.sets, '80kg × 5');
+});
+
+test('wrapUp: ✓ の無い種目は明細に出さない', () => {
+  const today = session('2026-08-21', [{ id: bench.id, sets: [[60, 8]] }]);
+  today.entries.push({
+    exerciseId: squat.id,
+    sets: [{ weight: 80, reps: 5, done: false, note: '' }],
+    note: '',
+  });
+  const w = wrapUp(today, exercises, [today]);
+  assert.deepEqual(w.entries.map((e) => e.exerciseName), [bench.name]);
+});
+
+test('wrapUp: 種目の明細に、その種目で動いた更新がぶら下がる', () => {
+  const past = session('2026-08-19', [
+    { id: bench.id, sets: [[60, 8]] },
+    { id: squat.id, sets: [[80, 5]] },
+  ]);
+  // ベンチだけ伸ばし、スクワットは前回と同じ
+  const today = session('2026-08-21', [
+    { id: bench.id, sets: [[60, 10]] },
+    { id: squat.id, sets: [[80, 5]] },
+  ]);
+  const w = wrapUp(today, exercises, [past, today]);
+  const benchEntry = w.entries.find((e) => e.exerciseName === bench.name);
+  const squatEntry = w.entries.find((e) => e.exerciseName === squat.name);
+  assert.ok(benchEntry && benchEntry.records.length > 0);
+  assert.ok(squatEntry && squatEntry.records.length === 0);
+});
+
+test('wrapUp: 同じ重さでレップを積み増した日もまとめに出る', () => {
+  // 冒頭の例。単一セットの最高も推定 1RM も動いていないが、前進している
+  const past = session('2026-08-19', [{ id: bench.id, sets: [[30, 10], [30, 10], [30, 8]] }]);
+  const today = session('2026-08-21', [{ id: bench.id, sets: [[30, 10], [30, 10], [30, 10]] }]);
+  const w = wrapUp(today, exercises, [past, today]);
+  const kinds = w.records.map((r) => r.achievement.kind);
+  assert.ok(kinds.includes('reps-at-load-total'), '同じ重さで 2 レップ多いのに何も出ない');
+  assert.ok(w.progressed >= 1);
 });
 
 test('wrapUp: 1 日の総量の更新は種目に属さず 1 回だけ出る', () => {
@@ -115,10 +177,10 @@ test('wrapUp: 一言は強い順。更新があればそれを言う', () => {
   const withRecord = session('2026-08-21', [{ id: bench.id, sets: [[62.5, 8]] }]);
   assert.equal(wrapUp(withRecord, exercises, [past, withRecord]).praise, '記録が 2 つ動いた日。');
 
-  // 総量が前回に届かない伸び方なら、動くのは種目の更新 1 つだけ
+  // 総量が前回に届かない伸び方なら、動いたのは種目 1 つぶん
   const heavier = session('2026-08-21', [{ id: bench.id, sets: [[70, 5]] }]);
   const w = wrapUp(heavier, exercises, [past, heavier]);
-  assert.equal(w.records.length, 1);
+  assert.equal(w.progressed, 1);
   assert.equal(w.praise, '今日、記録が動いた。');
 });
 
@@ -128,6 +190,7 @@ test('wrapUp: 更新も伸びも無い日は、続いていることを言う（
   const same = session('2026-08-21', [{ id: bench.id, sets: [[60, 8]] }]);
   const w = wrapUp(same, exercises, [past, same]);
   assert.equal(w.records.length, 0);
+  assert.equal(w.progressed, 0);
   assert.equal(w.praise, '今週 2 回目。');
 });
 
