@@ -11,10 +11,15 @@
  * 記録の間隔が空いた期間を詰めて描くと、線の傾きが実際より急に見える。予想は
  * その傾きを延ばしたものなので、詰めた軸の上に置くと予想まで嘘になる。
  *
- * ## 実測と予想を色で分ける
+ * ## 実測と予想は、色ではなく線で分ける
  *
- * 実測は赤の実線、予想は無彩色の破線と帯。赤は「実際に起きたこと」の合図に取ってあるので、
- * まだ起きていないものには渡さない。破線と帯は、線が 1 本の約束ではないことを形で言う。
+ * どちらも赤。実測が実線で、予想が**点線**と薄い帯。
+ *
+ * 以前は予想を無彩色にしていた（赤は「実際に起きたこと」の合図なので、まだ起きていない
+ * ものには渡さない、という理屈）。だが実際に並べると、予想だけ灰色に沈んで**同じ推移の
+ * 続きに見えない**——別の何かが横に置いてあるように読める。予想は同じ 1 本の推移の
+ * 先の話なので、色は続けて、**点線という切れ方で「まだ無い」と言う**ほうが素直だった。
+ * 点線・帯・今日の縦線の 3 つが揃っていれば、赤のままでも実測と取り違えようがない。
  */
 
 import { daysBetween } from '../lib/calendar.ts';
@@ -116,9 +121,16 @@ export function TrendChart({ points, today, forecast, label, tick, atBest = fals
         />
       ))}
 
-      {/* 今日の位置。ここから右は起きていないことだと形で分かる */}
+      {/*
+        今日の位置と、落ち着き先。
+        縦線から右は起きていない。横線は線が近づいていく先で、
+        壁ではないので細く薄く置く（越えることはある）。
+      */}
       {forecast ? (
         <>
+          {forecast.limit !== null && forecast.limit > min && forecast.limit < max ? (
+            <line className="settle" x1={PAD_LEFT} x2={WIDTH - PAD_RIGHT} y1={y(forecast.limit)} y2={y(forecast.limit)} />
+          ) : null}
           <line className="divider" x1={x(today)} x2={x(today)} y1={PAD_TOP} y2={floor} />
           <circle className="horizon" cx={x(forecast.date)} cy={y(forecast.value)} r="2.6" />
         </>
@@ -134,6 +146,8 @@ type NoteProps = {
   today: IsoDate;
   unit: string;
   fmt: (n: number) => string;
+  /** 落ち着き先が何を根拠にしているか（「BMI 20」「体重比 1.5×」）。 */
+  settleName?: string | undefined;
 };
 
 /**
@@ -142,18 +156,21 @@ type NoteProps = {
  * **数字だけを大きく置かない。** 予想は当てものではないので、値と同じ行に必ず幅を添える。
  * 出ないときは黙らず、あと何があれば出るのかだけ言う（「予想できません」は情報が無い）。
  */
-export function ForecastNote({ forecast, short, today, unit, fmt }: NoteProps) {
+export function ForecastNote({ forecast, short, today, unit, fmt, settleName }: NoteProps) {
   if (forecast === null) {
     return short === null ? null : <p className="forecast-note is-short">{short}</p>;
   }
-  const words = forecastWords(forecast, today, unit, fmt);
+  const words = forecastWords(forecast, today, unit, fmt, settleName);
   return (
-    <p className="forecast-note">
-      <span className="forecast-lead">{words.lead}</span>
-      <span className="forecast-when">{words.when}</span>
-      <strong className="forecast-value">{words.value}</strong>
-      <span className="forecast-margin">{words.margin}</span>
-      {words.change !== null ? <span className="forecast-change">{words.change}</span> : null}
-    </p>
+    <>
+      <p className="forecast-note">
+        <span className="forecast-lead">{words.lead}</span>
+        <span className="forecast-when">{words.when}</span>
+        <strong className="forecast-value">{words.value}</strong>
+        <span className="forecast-margin">{words.margin}</span>
+        {words.change !== null ? <span className="forecast-change">{words.change}</span> : null}
+      </p>
+      {words.settle !== null ? <p className="forecast-settle">{words.settle}</p> : null}
+    </>
   );
 }

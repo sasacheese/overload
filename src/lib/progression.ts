@@ -230,3 +230,25 @@ export function setLine(ex: Exercise, sets: readonly SetRecord[]): string {
   }
   return runs.map((run) => `${loadWord(ex, run.weight)} × ${run.reps.join(' · ')}`).join('  /  ');
 }
+
+/**
+ * 推定 1RM が現実的に伸びる速さの上限（1 日あたり）。直近の到達点に対する割合で持つ。
+ *
+ * 伸びは訓練歴とともに必ず鈍る。始めたばかりなら月に数 % 伸びるが、何年も続けた
+ * 人が同じ速さで伸び続けることはない。歴そのものは記録していないので、
+ * **その種目を何回やったか**で代わりに measure する（週 2〜3 回なら 12 回で約 1 か月）。
+ *
+ * | その種目の記録 | 月あたりの上限 |
+ * | --- | --- |
+ * | 〜12 回 | 3% |
+ * | 13〜40 回 | 1.5% |
+ * | 41 回〜 | 0.7% |
+ *
+ * どれもざっくりで、当てるための数字ではない。**予想の線が何か月も同じ勢いで
+ * 上がり続けないようにする**ためだけに置いてある。実測がこれを超えても記録は記録で、
+ * 効くのは先を引くときの傾きだけ。
+ */
+export function maxGainPerDay(best: number, sessions: number): number {
+  const perMonth = sessions <= 12 ? 0.03 : sessions <= 40 ? 0.015 : 0.007;
+  return (best * perMonth) / 30;
+}

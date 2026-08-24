@@ -20,12 +20,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { relativeLabel } from '../lib/calendar.ts';
 import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
 import { tapFeedback } from '../lib/haptics.ts';
-import { guideFor } from '../lib/presets.ts';
+import { bodyweightCap, guideFor } from '../lib/presets.ts';
 import {
   compareToPrev,
   format,
   formatEstimate,
   loadOf,
+  maxGainPerDay,
   metrics,
   sessionsSinceBest,
   trendLabel,
@@ -70,11 +71,12 @@ const HISTORY_ROWS = 5;
 /**
  * 推移の予想を何日先まで出すか。
  *
- * 週 2〜3 回の種目なら 30 日で 10 回前後。それだけ先が見えれば「この刻みで上げ続けたら
- * どのへんか」は分かるし、それ以上先は当たらない。記録の期間が短ければ、
- * forecast 側でさらに短く切られる。
+ * 速さの上限（訓練歴で鈍る）と、体重比から出した落ち着き先で線が寝るので、
+ * 3 か月先まで出す。直線で伸ばしていたころは 30 日で止めていた——それ以上先は
+ * 「毎月同じだけ上がり続ける」という、起こらないことの絵になっていたため。
+ * 記録の期間が短ければ forecast 側でさらに短く切られる。
  */
-const TREND_HORIZON = 30;
+const TREND_HORIZON = 90;
 
 /** 中身のあるメモの行番号。開いた状態の初期値に使う。 */
 function notedRows(sets: readonly SetRecord[]): Set<number> {
@@ -221,9 +223,20 @@ export function ExerciseCard({
    * 30 日で 0.5 レップ（1 レップの半分）を境にする。
    */
   const flatPer30 = byLoad ? Math.max(0.5, (series.at(-1)?.best ?? 0) * 0.01) : 0.5;
+  /*
+   * 落ち着き先。体重比の上限（`presets.ts`）にそのときの体重を掛けて出す。
+   *
+   * 体重比を持たない種目（自分で足した種目・自重種目）と、体重が未記録の日は無し。
+   * 重さで測れていない推移（レップで数えている種目）にも掛けない——レップに
+   * 体重比の上限は意味を持たない。無ければ速さの上限だけが効く。
+   */
+  const capRatio = bodyweightCap(exercise.id);
+  const trendLimit = byLoad && capRatio !== null && bodyWeight > 0 ? capRatio * bodyWeight : null;
+  /** 伸びの上限。その種目を何回やったかで鈍らせる（訓練歴の代わり）。 */
+  const trendMaxPerDay = maxGainPerDay(series.at(-1)?.best ?? 0, series.length);
   const trend = useMemo(
-    () => forecast(trendPoints, today, { days: TREND_HORIZON, flatPer30 }),
-    [trendPoints, today, flatPer30],
+    () => forecast(trendPoints, today, { days: TREND_HORIZON, flatPer30, limit: trendLimit, maxPerDay: trendMaxPerDay }),
+    [trendPoints, today, flatPer30, trendLimit, trendMaxPerDay],
   );
   const trendShort = useMemo(() => shortfall(trendPoints), [trendPoints]);
   const group = MUSCLE_GROUPS[exercise.group];
@@ -582,6 +595,7 @@ export function ExerciseCard({
                   today={today}
                   unit={byLoad ? 'kg' : 'レップ'}
                   fmt={formatEstimate}
+                  settleName={capRatio === null ? undefined : `体重比 ${capRatio}×`}
                 />
               </Disclosure>
             ) : null}
