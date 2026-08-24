@@ -102,7 +102,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
   const [picking, setPicking] = useState(false);
   const [rest, setRest] = useState(readRest);
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => readFolded(date));
-  const [celebration, setCelebration] = useState<{ achievement: Achievement; exerciseName: string } | null>(null);
+  const [celebration, setCelebration] = useState<{ achievements: Achievement[]; exerciseName: string } | null>(null);
   /** 締めの画面。fresh は「いま押して締めた」——あとから見直したときは光を出さない。 */
   const [wrap, setWrap] = useState<{ fresh: boolean } | null>(null);
 
@@ -185,7 +185,8 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
    * ✓ を付けた直後に記録の更新を探す。
    *
    * 更新した瞬間に出したいので、保存された state を待たず、渡された entry で判定する。
-   * 当たった中で一番強いもの 1 つだけを出し、同じ種類はこのセッションで繰り返さない。
+   * 当たったもののうち**まだ出していない種類を全部**渡し、祝福の側で一番強いものを
+   * 主役に、残りを添えて出す。同じ種類はこのセッションで繰り返さない。
    */
   const celebrate = (exercise: Exercise, entry: SessionEntry) => {
     const shown = readShown();
@@ -206,12 +207,12 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     });
 
     const key = (kind: RecordKind) => `${date}:${exercise.id}:${kind}`;
-    const fresh = records.find((r) => !shown.has(key(r.kind)));
+    const fresh = records.filter((r) => !shown.has(key(r.kind)));
 
     /*
      * 出さなかったぶんも「出した」ことにする。
      *
-     * 表示するのは一番強い 1 つだけだが、当たった種類を全部覚えておかないと、
+     * 出さなかったぶん（上限で溢れたもの）も含め、当たった種類を全部覚えておかないと、
      * ✓ を外して入れ直すたびに次の順位の記録が出てくる（実際にそうなっていた）。
      * 1 セットに対して褒めるのは 1 回、を保つ。
      *
@@ -225,10 +226,10 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
       // 覚えられなければ同じ祝福がもう一度出るだけ
     }
 
-    if (!fresh) return;
+    if (fresh.length === 0) return;
     // 目で見る前に指へ返す。祝福の絵が出るより先に「動いた」ことが分かる
     recordFeedback();
-    setCelebration({ achievement: fresh, exerciseName: exercise.name });
+    setCelebration({ achievements: fresh, exerciseName: exercise.name });
   };
 
   const onSetCompleted = (exercise: Exercise, entry: SessionEntry, index: number) => {
@@ -465,7 +466,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
 
       {celebration ? (
         <Celebration
-          achievement={celebration.achievement}
+          achievements={celebration.achievements}
           exerciseName={celebration.exerciseName}
           onClose={() => setCelebration(null)}
         />

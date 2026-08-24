@@ -200,3 +200,33 @@ export function trendLabel(ex: Exercise, byLoad: boolean): string {
 export function formatEstimate(n: number): string {
   return String(Math.round(n * 10) / 10);
 }
+
+/**
+ * 入力した数字の意味を言葉にする。
+ *
+ * 「30kg」だけでは、持ち上げた重さなのか、マシンが肩代わりした重さなのか、
+ * 自重に足したぶんなのかが分からない。数字を人に見せる場所（祝福・締め・一枚）は
+ * 必ずこれを通す。
+ */
+export function loadWord(ex: Exercise, weight: number): string {
+  if (ex.loadMode === 'assist') return `補助 ${format(weight)}kg`;
+  if (ex.loadMode === 'bodyweight') return weight === 0 ? '自重' : `加重 ${format(weight)}kg`;
+  return `${format(weight)}kg`;
+}
+
+/**
+ * その日のセットの並びを 1 行にする。「60kg × 10 · 10 · 8」。
+ *
+ * 同じ重量が続くところはまとめる。セットごとに重量を書くと、3 セット同じ重さの
+ * 日でも同じ数字が 3 回並んで、どこで重量が動いたのかが読み取れない。
+ * 重量が変わったところだけ区切りが入るので、行の形がその日の組み立てになる。
+ */
+export function setLine(ex: Exercise, sets: readonly SetRecord[]): string {
+  const runs: { weight: number; reps: number[] }[] = [];
+  for (const set of sets) {
+    const last = runs.at(-1);
+    if (last && last.weight === set.weight) last.reps.push(set.reps);
+    else runs.push({ weight: set.weight, reps: [set.reps] });
+  }
+  return runs.map((run) => `${loadWord(ex, run.weight)} × ${run.reps.join(' · ')}`).join('  /  ');
+}
