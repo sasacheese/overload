@@ -100,16 +100,16 @@ test('forecast: 横ばいは向きを付けない', () => {
   assert.equal(forecast(flat, today, options)!.direction, 'flat');
 });
 
-test('forecast: 観測した期間より先へは伸ばさない', () => {
+test('forecast: 観測した期間の 2 倍より先へは伸ばさない', () => {
   // 5 点 × 5 日 = 20 日ぶんしか見ていない
   const f = forecast(line(5, 5, 70, -0.2), today, { ...options, days: 90 })!;
-  assert.equal(f.days, 20);
-  assert.equal(f.date, shiftDays(today, 20));
+  assert.equal(f.days, 40);
+  assert.equal(f.date, shiftDays(today, 40));
 });
 
 test('forecast: 途切れた記録から先は予想しない', () => {
-  const stale = line(6, 7, 70, -0.3).map((p) => ({ ...p, date: shiftDays(p.date, -40) as IsoDate }));
-  // 35 日ぶんの記録で、最後の記録が 40 日前。使い切っているので出さない
+  const stale = line(6, 7, 70, -0.3).map((p) => ({ ...p, date: shiftDays(p.date, -70) as IsoDate }));
+  // 35 日ぶんの記録で、最後の記録が 70 日前。伸ばせる長さを使い切っているので出さない
   assert.equal(forecast(stale, today, options), null);
 });
 
@@ -155,4 +155,69 @@ test('forecast: 重みが全部同じなら素の最小二乗と一致する', (
   const slope =
     x.reduce((a, v, i) => a + (v - mx) * (y[i]! - my), 0) / x.reduce((a, v) => a + (v - mx) ** 2, 0);
   assert.ok(Math.abs(f.perDay - slope) < 1e-9);
+});
+
+test('forecast: 落ち着き先があると、そこへ近づくほど線が寝る', () => {
+  const points = line(10, 7, 72, -0.5); // 今日 67.5、1 日あたり −0.5/7
+  const straight = forecast(points, today, { ...options, days: 90 })!;
+  const bent = forecast(points, today, { ...options, days: 90, limit: 64 })!;
+
+  // 始まりは同じ（継ぎ目に折れが出ない）
+  assert.ok(Math.abs(bent.now - straight.now) < 1e-9);
+  // 先へ行くほど直線より上（落ちきらない）で、落ち着き先は越えない
+  assert.ok(bent.value > straight.value);
+  assert.ok(bent.value > 64);
+  assert.equal(bent.limit, 64);
+  // 曲線は単調に落ちる
+  const mids = bent.band.map((b) => b.mid);
+  for (let i = 1; i < mids.length; i++) assert.ok(mids[i]! < mids[i - 1]!);
+});
+
+test('forecast: 落ち着き先の傾きは、遠いほど直線に近い', () => {
+  const points = line(10, 7, 72, -0.5);
+  const near = forecast(points, today, { ...options, days: 60, limit: 66 })!;
+  const far = forecast(points, today, { ...options, days: 60, limit: 50 })!;
+  const straight = forecast(points, today, { ...options, days: 60 })!;
+  // 落ち着き先が遠いほど、まだ寝ていない
+  assert.ok(near.value > far.value);
+  assert.ok(far.value > straight.value);
+});
+
+test('forecast: 越えている・逆を向いている落ち着き先は効かない', () => {
+  const falling = line(10, 7, 72, -0.5); // 今日 67.5
+  const straight = forecast(falling, today, { ...options, days: 60 })!;
+  // すでに下回っている下限は効かない
+  assert.deepEqual(forecast(falling, today, { ...options, days: 60, limit: 60 })!.limit, 60);
+  assert.equal(forecast(falling, today, { ...options, days: 60, limit: 70 })!.limit, null);
+  assert.equal(forecast(falling, today, { ...options, days: 60, limit: 70 })!.value, straight.value);
+});
+
+test('forecast: 速さの上限を超えていたら、その速さで引く', () => {
+  const fast = line(10, 7, 80, -1.4); // 1 日あたり −0.2
+  const raw = forecast(fast, today, { ...options, days: 60 })!;
+  assert.ok(Math.abs(raw.perDay - -0.2) < 1e-9);
+  assert.equal(raw.capped, false);
+
+  const capped = forecast(fast, today, { ...options, days: 60, maxPerDay: 0.1 })!;
+  assert.ok(Math.abs(capped.perDay - -0.1) < 1e-9);
+  assert.equal(capped.capped, true);
+  // 今日の値は実測のまま。緩めるのは先の話だけ
+  assert.ok(Math.abs(capped.now - raw.now) < 1e-9);
+  assert.ok(capped.value > raw.value);
+});
+
+test('forecast: 上限に届いていない速さはそのまま', () => {
+  const slow = forecast(line(10, 7, 80, -0.35), today, { ...options, days: 60, maxPerDay: 0.5 })!;
+  assert.equal(slow.capped, false);
+  assert.ok(Math.abs(slow.perDay - -0.05) < 1e-9);
+});
+
+test('forecastWords: 落ち着き先が効いているときだけ 1 行増える', () => {
+  const fmt = (n: number) => String(Math.round(n * 10) / 10);
+  const bent = forecast(line(10, 7, 72, -0.5), today, { ...options, days: 90, limit: 64 })!;
+  assert.equal(forecastWords(bent, today, 'kg', fmt, 'BMI 20').settle, '落ち着き先の目安 64 kg · BMI 20');
+  assert.equal(forecastWords(bent, today, 'kg', fmt).settle, '落ち着き先の目安 64 kg');
+
+  const straight = forecast(line(10, 7, 72, -0.5), today, { ...options, days: 90 })!;
+  assert.equal(forecastWords(straight, today, 'kg', fmt, 'BMI 20').settle, null);
 });

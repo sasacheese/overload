@@ -1,7 +1,7 @@
 {
   "name": "overload",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "漸進性過負荷を毎回の入力欄そのものに埋め込んだ、オフラインで動く筋トレ記録 PWA",
   "type": "module",
   "scripts": {

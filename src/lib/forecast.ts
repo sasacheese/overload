@@ -7,8 +7,24 @@
  * 予想はその決めごとを崩さない。**出しているのは過去の記録をそのまま延ばした線**で、
  * 届くべき線ではない。下を向いた線もそのまま出すし、外したことを責める表示は持たない。
  *
- * 見た目でもそこを分けてある。実測は赤の実線、予想は無彩色の破線と帯。
- * 赤は「実際に起きたこと」の合図に取ってあるので、まだ起きていないものには渡さない。
+ * 見た目でも実測と分けてある。実測は赤の実線、予想は**赤の点線**と薄い帯。
+ * 同じものの続きなので色は変えず、線の切れ方だけで「まだ起きていない」と言う。
+ *
+ * ## 直線では伸ばさない
+ *
+ * 傾きをそのまま伸ばすと、体重はいつか 0 に届き、種目の重量はいくらでも上がる。
+ * どちらも起こらない。伸びは**必ず鈍る**ので、そこを式に入れてある。
+ *
+ * 効かせる場所は 2 つ。
+ *
+ * - **速さの上限**（`maxPerDay`）。観測した傾きがこれを超えていたら、予想はこの速さで引く。
+ *   3 週間だけ絶好調だったペースを 3 か月続く前提にしない
+ * - **落ち着き先**（`limit`）。そこへ近づくほど緩む曲線にする。式は
+ *   `v(t) = limit − (limit − v0)·e^(−kt)`。`k` は今日の傾きから決めるので、
+ *   **線は実測の傾きちょうどで始まり、先へ行くほど寝る**（継ぎ目に折れが出ない）
+ *
+ * どちらも呼ぶ側が渡す。体重の落ち着き先は身長から（`profile.ts`）、種目の上限は
+ * 体重比から（`presets.ts` の `bodyweightCap`）出している。渡さなければ直線のまま。
  *
  * ## 決めごと
  *
@@ -16,10 +32,12 @@
  *   来れば線の向きは変わるべきで、3 か月前の点が今の傾きを決めてはいけない
  * - **点で言い切らない。** 予想には必ず幅（`margin`）を付ける。1 つの数字だけ出すと
  *   当たる約束に見えるが、実際は記録のばらつきぶんだけ外れる
- * - **見た期間より先へは伸ばさない。** 3 週間の記録から半年先を出しても意味が無いので、
- *   外挿できる長さは観測した期間までにする
+ * - **帯は落ち着き先で止めない。** 目安であって壁ではないので、帯がそこを越えることはある。
+ *   越えられないと言い切れるものを、このアプリは持っていない
+ * - **見た期間の 2 倍より先へは伸ばさない。** 上限つきの線になったので直線のときよりは
+ *   伸ばせるが、3 週間の記録から 1 年先を出せるようにはならない
  * - **途切れた記録から先は予想しない。** 最後の記録が古いほど外挿の距離が伸びるので、
- *   観測期間ぶんを使い切ったところで止まる
+ *   伸ばせる長さを使い切ったところで止まる
  * - **足りないときは出さない。** 何が足りないかは言う（`shortfall`）
  *
  * 予想はここと画面（TrendChart）にしか出てこない。締め・祝福・共有画像には
@@ -36,6 +54,8 @@ export type TrendPoint = { date: IsoDate; value: number };
 export const MIN_POINTS = 4;
 /** 予想を出すのに要る観測期間（日）。1 週間の記録から先を言わない。 */
 export const MIN_SPAN = 14;
+/** 観測期間の何倍まで伸ばしてよいか。上限つきの線なので、直線のときより伸ばせる。 */
+const REACH_RATIO = 2;
 /** これより短い先は予想しない。数日先は予想ではなく次回の話。 */
 const MIN_HORIZON = 7;
 /** 直近の重みが 2 倍になる日数。6 週前の点は今日の点の半分の重さで効く。 */
@@ -67,6 +87,10 @@ export type Forecast = {
   band: readonly Band[];
   /** 元にした点の数。 */
   basis: number;
+  /** 効いている落ち着き先。無ければ null（線は直線のまま）。 */
+  limit: number | null;
+  /** 観測した傾きが速さの上限に引っかかったか。線は実測より緩やかになっている。 */
+  capped: boolean;
 };
 
 export type Options = {
@@ -76,6 +100,20 @@ export type Options = {
   flatPer30: number;
   /** 直近の重みの半減期（日）。既定は 6 週。 */
   halfLife?: number;
+  /**
+   * 落ち着き先の目安。線はここへ近づくほど緩む。
+   *
+   * 進む向きの先に無いとき（すでに越えている・逆を向いている）は効かない。
+   * 渡さなければ直線のまま伸びる。
+   */
+  limit?: number | null;
+  /**
+   * 1 日あたりの変化量の上限（絶対値）。
+   *
+   * 観測した傾きがこれを超えていたら、予想はこの速さで引く。ひと月だけ出た
+   * 速さを、そのまま続く前提にしないため。渡さなければ観測した傾きのまま。
+   */
+  maxPerDay?: number | null;
 };
 
 /** 加重最小二乗の結果。予測区間に要るものを全部持つ。 */
@@ -160,10 +198,30 @@ export function shortfallLabel(short: Shortfall): string {
     : `記録の幅が ${MIN_SPAN} 日ぶんになると予想が出る（あと ${short.more} 日）`;
 }
 
+/**
+ * 落ち着き先へ近づくほど緩む線。`v(t) = limit − (limit − v0)·e^(−kt)`。
+ *
+ * `k` は今日の傾きから決める（`k = slope / (limit − v0)`）ので、
+ * **t=0 の傾きは実測とちょうど同じ**になる。実測の終わりと予想の始まりに
+ * 折れが出ないのはこのため。t が伸びるほど指数で寝て、limit に漸近する。
+ *
+ * 落ち着き先が進む向きの先に無ければ（越えている・逆を向いている）曲げない。
+ * 越えた先にどこで落ち着くのかは、このアプリには言えない。
+ */
+function curve(v0: number, slope: number, limit: number | null): (t: number) => number {
+  const gap = limit === null ? 0 : limit - v0;
+  // 向きが合っていて、まだ届いていないときだけ曲げる
+  if (limit === null || gap === 0 || Math.sign(gap) !== Math.sign(slope)) {
+    return (t) => v0 + slope * t;
+  }
+  const k = slope / gap;
+  return (t) => limit - gap * Math.exp(-k * t);
+}
+
 export function forecast(
   points: readonly TrendPoint[],
   today: IsoDate,
-  { days, flatPer30, halfLife = HALF_LIFE }: Options,
+  { days, flatPer30, halfLife = HALF_LIFE, limit = null, maxPerDay = null }: Options,
 ): Forecast | null {
   const sorted = ascending(points);
   if (shortfall(sorted) !== null) return null;
@@ -173,31 +231,41 @@ export function forecast(
   const span = daysBetween(first.date, last.date);
 
   /*
-   * 外挿してよい長さ。観測した期間ぶんまでで、最後の記録から今日までに
+   * 外挿してよい長さ。観測した期間の 2 倍までで、最後の記録から今日までに
    * 使ったぶんは差し引く。しばらく記録が無い種目で、勝手に先を語らないため。
    */
-  const reach = span - Math.max(0, daysBetween(last.date, today));
+  const reach = span * REACH_RATIO - Math.max(0, daysBetween(last.date, today));
   const horizon = Math.min(days, reach);
   if (horizon < MIN_HORIZON) return null;
 
   const f = fit(sorted, today, halfLife);
   if (f === null) return null;
 
+  /*
+   * 速さの上限。観測した傾きがこれを超えていたら、予想はこの速さで引く。
+   * 実測をなかったことにするのではなく、**その速さが続く前提を置かない**だけ。
+   */
+  const raw = f.slope;
+  const slope = maxPerDay === null ? raw : Math.max(-maxPerDay, Math.min(maxPerDay, raw));
+
   const x0 = daysBetween(first.date, today);
+  const now = f.intercept + raw * x0;
+  const at = curve(now, slope, limit);
+
   const steps = Math.min(BAND_STEPS, horizon);
   const band: Band[] = [];
   for (let i = 0; i <= steps; i++) {
     const day = Math.round((horizon * i) / steps);
-    const x = x0 + day;
-    const mid = f.intercept + f.slope * x;
-    const m = marginAt(f, x);
+    const mid = at(day);
+    // 幅は当てはめの不確かさそのものなので、曲げた線の周りにそのまま置く
+    const m = marginAt(f, x0 + day);
     band.push({ date: shiftDays(today, day), mid, lo: mid - m, hi: mid + m });
   }
 
   const end = band.at(-1)!;
-  const per30 = f.slope * 30;
+  const per30 = slope * 30;
   return {
-    perDay: f.slope,
+    perDay: slope,
     per30,
     direction: Math.abs(per30) < flatPer30 ? 'flat' : per30 > 0 ? 'up' : 'down',
     date: end.date,
@@ -205,9 +273,11 @@ export function forecast(
     value: end.mid,
     margin: end.hi - end.mid,
     change: end.mid - last.value,
-    now: band[0]!.mid,
+    now,
     band,
     basis: sorted.length,
+    limit: limit !== null && Math.sign(limit - now) === Math.sign(slope) && slope !== 0 ? limit : null,
+    capped: slope !== raw,
   };
 }
 
@@ -215,7 +285,7 @@ export function forecast(
 export type ForecastWords = {
   /** 「この調子なら」。横ばいのときだけ言い方を変える。 */
   lead: string;
-  /** 「30日後」 */
+  /** 「90日後」 */
   when: string;
   /** 「68.2 kg」 */
   value: string;
@@ -223,6 +293,8 @@ export type ForecastWords = {
   change: string | null;
   /** 「幅 ±0.6 kg」 */
   margin: string;
+  /** 「落ち着き先の目安 60.6 kg · BMI 20」。落ち着き先が効いていなければ null。 */
+  settle: string | null;
 };
 
 /**
@@ -236,13 +308,20 @@ export function forecastWords(
   today: IsoDate,
   unit: string,
   fmt: (n: number) => string,
+  /** 落ち着き先が何なのか（「BMI 20」「体重比 1.5×」）。 */
+  settleName?: string,
 ): ForecastWords {
   const change = fmt(Math.abs(f.change));
+  const settle =
+    f.limit === null
+      ? null
+      : `落ち着き先の目安 ${fmt(f.limit)} ${unit}${settleName === undefined ? '' : ` · ${settleName}`}`;
   return {
     lead: f.direction === 'flat' ? '横ばいが続けば' : 'この調子なら',
     when: relativeLabel(f.date, today),
     value: `${fmt(f.value)} ${unit}`,
     change: Number(change) === 0 ? null : `直近から ${f.change > 0 ? '+' : '−'}${change} ${unit}`,
     margin: `幅 ±${fmt(f.margin)} ${unit}`,
+    settle,
   };
 }

@@ -15,6 +15,7 @@
 import { useMemo, useState } from 'react';
 import { dateLabel, dayKind, shiftDays } from '../lib/calendar.ts';
 import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
+import { maxWeightChangePerDay, settleName, settleWeight, storedHeight } from '../lib/profile.ts';
 import { format } from '../lib/progression.ts';
 import type { IsoDate } from '../lib/types.ts';
 import { useSession, useStore } from '../store.tsx';
@@ -36,10 +37,13 @@ const LIST_ROWS = 14;
 /**
  * 何日先まで予想するか。
  *
- * 体重は 1 か月あれば向きが出るし、それ以上先は当たらない。見ている期間が短ければ
- * forecast 側でさらに短く切られる（観測した期間より先へは伸ばさない）。
+ * 以前は 30 日だった。直線で伸ばしていたので、それ以上先は当たらないというより
+ * **意味を持たなかった**（放っておけば 0 に届く線なので、先を出すほど嘘になる）。
+ * いまは速さの上限と落ち着き先で線が寝るので、3 か月先まで出す——「どのへんで
+ * 落ち着くのか」は、線が寝きるところまで見えて初めて読める。
+ * 見ている期間が短ければ forecast 側でさらに短く切られる。
  */
-const HORIZON = 30;
+const HORIZON = 90;
 
 /** 30 日で 0.3kg 未満の動きは横ばいとして扱う。日々のぶれと区別が付かない。 */
 const FLAT_PER_30 = 0.3;
@@ -48,6 +52,11 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
   const { sessions, saveSession } = useStore();
   const session = useSession(today);
   const [days, setDays] = useState<number | null>(RANGES[0]!.days);
+  /*
+   * 身長。落ち着き先を出すのに要る。設定で変えられるが、ここでは読むだけなので
+   * マウント時の値でよい（変えたら設定から戻ってきた時点で読み直される）。
+   */
+  const [height] = useState(() => storedHeight());
 
   /** 体重が入っている日だけ、古い順に。 */
   const all = useMemo(
@@ -70,10 +79,27 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
    * 目の前の点と線がずれて見える（切り替えたのに何も変わらないのも同じくらい困る）。
    */
   const series = useMemo(() => points.map((p) => ({ date: p.date, value: p.weight })), [points]);
-  const trend = useMemo(
-    () => forecast(series, today, { days: HORIZON, flatPer30: FLAT_PER_30 }),
-    [series, today],
-  );
+
+  /*
+   * 予想は 2 度通す。
+   *
+   * 落ち着き先も速さの上限も「どちらへ向かっているか」で変わる（減るなら BMI 20 と
+   * 週 1%、増えるなら BMI 25 と週 0.5%）。向きは線を引いてみないと分からないので、
+   * 1 度目で向きだけ取り、2 度目でその向きの上限を渡して引き直す。
+   * 純関数なので 2 度呼んでも同じ答えになる。
+   */
+  const trend = useMemo(() => {
+    const probe = forecast(series, today, { days: HORIZON, flatPer30: FLAT_PER_30 });
+    if (probe === null) return null;
+    const falling = probe.perDay < 0;
+    const current = probe.now;
+    return forecast(series, today, {
+      days: HORIZON,
+      flatPer30: FLAT_PER_30,
+      limit: settleWeight(height, current, falling),
+      maxPerDay: maxWeightChangePerDay(current, falling),
+    });
+  }, [series, today, height]);
   const short = useMemo(() => shortfall(series), [series]);
 
   const rows = useMemo(() => [...all].reverse().slice(0, LIST_ROWS), [all]);
@@ -147,6 +173,7 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
                 today={today}
                 unit="kg"
                 fmt={(n) => format(Math.round(n * 10) / 10)}
+                settleName={trend === null ? undefined : settleName(trend.perDay < 0)}
               />
             </div>
           )}

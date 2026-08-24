@@ -775,3 +775,81 @@ export function presetExercises(): Exercise[] {
  * まだ一度もやっていない種目の並べ替えにこれを使う。
  */
 export const PRESET_ORDER: readonly string[] = PRESETS.map((p) => p.slug);
+
+/**
+ * 推定 1RM の落ち着き先を、**体重の何倍か**で持つ。予想の線をここへ漸近させる。
+ *
+ * ## なぜ体重比か
+ *
+ * 扱える重量は体格に比例する。70kg の人と 90kg の人で同じ上限を置いても意味が無いので、
+ * 体重比で持って、そのときの体重を掛けて使う（アシスト種目の実効負荷と同じ考え方）。
+ *
+ * ## どういう数字か
+ *
+ * **鍛え続けた人が届くあたり**を置いてある。到達点でも目標でもなく、
+ * 「そこへ近づくほど伸びは鈍る」という形の目安として使う。数字はざっくりで構わない
+ * ——予想を折れ線ごと寝かせるためのもので、**越えたら効かなくなる**（そのときは実測の
+ * 傾きがそのまま線になる）。低く見積もりすぎても、線が早く寝るだけで記録は何も変わらない。
+ *
+ * ダンベル種目は**片手の重量**（欄に入れるのがその数字なので）。マシンは機種で
+ * 重量の意味が変わるため、バーベル種目より当てにならない——それでも無いよりはましな幅で置く。
+ *
+ * ## 持たない種目
+ *
+ * - **自重種目**（`loadMode: 'bodyweight'`）。測っているのがレップか加重したぶんなので、
+ *   体重比の上限が意味を持たない
+ * - **自分で足した種目**。何の種目か分からないものに上限を置かない
+ *
+ * どちらも落ち着き先なしで予想する（速さの上限だけが効く）。
+ */
+const BODYWEIGHT_CAPS: Readonly<Record<string, number>> = {
+  // 胸
+  'bench-press': 1.5,
+  'incline-press': 1.25,
+  'smith-incline-bench-press': 1.4,
+  'dumbbell-press': 0.6,
+  'incline-dumbbell-press': 0.5,
+  'dumbbell-fly': 0.3,
+  'pec-fly': 0.9,
+  'cable-crossover': 0.35,
+  'chest-press': 1.2,
+  'dumbbell-pullover': 0.45,
+  // 背中
+  deadlift: 2.5,
+  'lat-pulldown': 1.1,
+  // アシストは実効負荷が「体重 − 補助」なので、補助 0 が上限。レップぶんだけ上に出る
+  'assist-chinning': 1.35,
+  'barbell-row': 1.3,
+  'seated-row': 1.2,
+  'one-hand-row': 0.5,
+  'dumbbell-row': 0.55,
+  // 肩
+  'shoulder-press': 1.0,
+  'dumbbell-shoulder-press': 0.4,
+  'smith-shoulder-press': 0.95,
+  'arnold-press': 0.35,
+  'side-raise': 0.2,
+  'front-raise': 0.2,
+  'rear-raise': 0.2,
+  'rear-deltoid': 0.5,
+  'cable-face-pull': 0.5,
+  // 腕
+  'barbell-curl': 0.75,
+  'arm-curl': 0.3,
+  'lying-extension': 0.55,
+  'cable-pushdown': 0.7,
+  // 脚
+  squat: 2.0,
+  'hack-squat': 2.2,
+  'smith-squat': 2.1,
+  'leg-press': 3.5,
+  'leg-extension': 1.1,
+  'leg-curl': 0.9,
+  'romanian-deadlift': 1.8,
+  'calf-raise': 2.0,
+};
+
+/** その種目の推定 1RM の落ち着き先（体重の何倍か）。持たない種目は null。 */
+export function bodyweightCap(id: string): number | null {
+  return BODYWEIGHT_CAPS[id] ?? null;
+}

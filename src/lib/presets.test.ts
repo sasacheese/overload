@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { PRESET_ORDER, guideFor, presetExercises } from './presets.ts';
-import { MUSCLES, MUSCLE_GROUP_KEYS, LOAD_MODE_KEYS } from './types.ts';
+import { PRESET_ORDER, bodyweightCap, guideFor, presetExercises } from './presets.ts';
+import { MUSCLES, MUSCLE_GROUP_KEYS, LOAD_MODE_KEYS, exerciseId } from './types.ts';
 
 /*
  * 手書きのデータ 40 件ぶんの整合性を機械で見る。
@@ -80,5 +80,25 @@ test('アシストマシンの種目が定義されていて、負荷のかけ�
       guideFor(e.id)!.cues.some((c) => c.includes('補助')),
       `${e.id}: 補助の向きの説明が無い`,
     );
+  }
+});
+
+test('体重比の上限: 実在する種目にしか付いていない', () => {
+  const ids = new Set(presets.map((e) => e.id));
+  for (const slug of PRESET_ORDER) {
+    const cap = bodyweightCap(slug);
+    if (cap === null) continue;
+    assert.ok(ids.has(exerciseId(slug)), `${slug} が種目にない`);
+    assert.ok(cap > 0 && cap < 6, `${slug} の体重比 ${cap} が現実的でない`);
+  }
+  // 綴り違いで一生効かない項目が残らないように、逆向きにも見る
+  assert.equal(bodyweightCap('bench-press'), 1.5);
+  assert.equal(bodyweightCap('custom-なにか'), null);
+});
+
+test('体重比の上限: 自重種目には付けない', () => {
+  // 測っているのがレップか加重したぶんなので、体重比の上限が意味を持たない
+  for (const e of presets.filter((p) => p.loadMode === 'bodyweight')) {
+    assert.equal(bodyweightCap(e.id), null, `${e.id} に体重比が付いている`);
   }
 });

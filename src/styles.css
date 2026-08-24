@@ -2793,8 +2793,9 @@ button {
 /* ── 折れ線（実測と予想） ───────────────────────── */
 
 /*
- * 実測は赤の実線、予想は無彩色の破線と帯。赤は「実際に起きたこと」の合図に
- * 取ってあるので、まだ起きていないものには渡さない。
+ * 実測も予想も赤。実測が実線で、予想が点線と薄い帯。
+ * 無彩色にすると予想だけ沈んで、同じ推移の続きに見えなくなる。
+ * 色は続けて、線の切れ方と帯で「まだ起きていない」と言う。
  */
 
 /*
@@ -2853,18 +2854,23 @@ button {
 
 /*
  * 予想の帯。ぶれの幅そのものなので、線より先に目に入ってはいけない。
- * 面としてかろうじて見える濃さで止めてある。
+ * 実測の塗りと同じ赤を、それより薄く敷く。
  */
 .trend-chart .band {
-  fill: var(--fg-dim);
-  opacity: 0.1;
+  fill: var(--accent);
+  opacity: 0.08;
 }
 
+/*
+ * 予想の線。破線ではなく**点線**にしてある。
+ * 破線は「線が続いている」ようにも読めるが、点が並んでいるだけの列は
+ * どう見ても実線の代わりではないので、目安であることが形で伝わる。
+ */
 .trend-chart .projection {
   fill: none;
-  stroke: var(--fg-dim);
-  stroke-width: 1.5;
-  stroke-dasharray: 4 3;
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-dasharray: 0.5 4;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
@@ -2877,10 +2883,22 @@ button {
   vector-effect: non-scaling-stroke;
 }
 
+/*
+ * 落ち着き先。線が近づいていく先を 1 本引く。
+ * 越えられない壁ではないので、格子より少し濃い程度に留める。
+ */
+.trend-chart .settle {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 1 5;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+
 /* 予想の着地点。中を抜いて、実測の点と別のものだと分かるようにする */
 .trend-chart .horizon {
   fill: var(--bg);
-  stroke: var(--fg-dim);
+  stroke: var(--accent);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
@@ -2929,6 +2947,17 @@ button {
 
 /* 出せない理由。数を出すのは、あとどれだけで出るのか分かるようにするため */
 .forecast-note.is-short {
+  color: var(--faint);
+}
+
+/*
+ * 落ち着き先の 1 行。線がどこへ近づいていくのかと、その根拠。
+ * 予想の値より下の段に置く——読む順は「いつ・いくつ」が先で、
+ * 「その先どこで止まるか」は添え物。
+ */
+.forecast-settle {
+  margin: 0.2rem 0 0;
+  font-size: var(--fs-xs);
   color: var(--faint);
 }
 

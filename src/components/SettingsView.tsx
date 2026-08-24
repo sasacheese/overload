@@ -19,6 +19,16 @@ import {
   storedKey,
   vaultId,
 } from '../lib/vault.ts';
+import {
+  DEFAULT_HEIGHT_CM,
+  HEAVY_BMI,
+  LEAN_BMI,
+  isHeight,
+  storeHeight,
+  storedHeight,
+  weightAtBmi,
+} from '../lib/profile.ts';
+import { format } from '../lib/progression.ts';
 import { securityRules } from '../lib/remote.ts';
 import { offlineError, offlineReady, updateReady, applyUpdate, subscribeUpdate } from '../lib/updates.ts';
 import { useStore } from '../store.tsx';
@@ -136,6 +146,10 @@ function KeylessKeyPanel({
 
 export function SettingsView() {
   const { exercises, sessions, persistent, durable, restore, wipe } = useStore();
+  /* 身長。文字列で持つのは、打っている途中の空欄を潰さないため（数値欄と同じ扱い）。 */
+  const [height, setHeight] = useState(() => String(storedHeight()));
+  /** 下の説明に出す身長。打っている途中の値が範囲内なら、そのまま帯に反映する。 */
+  const shownHeight = isHeight(Number(height)) ? Number(height) : DEFAULT_HEIGHT_CM;
   const sync = useSync();
   const key = storedKey();
   const [showKey, setShowKey] = useState(false);
@@ -289,6 +303,34 @@ export function SettingsView() {
             新しい版がある · 再読み込みして適用
           </button>
         ) : null}
+      </section>
+
+      <section className="panel">
+        <h2>体</h2>
+        <label className="field">
+          <span>身長（cm）</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            min={120}
+            max={230}
+            value={height}
+            onChange={(e) => setHeight(e.target.value)}
+            onBlur={() => {
+              // 空欄や範囲外は既定に戻す。壊れた値で予想の線が引かれないように
+              storeHeight(Number(height));
+              setHeight(String(storedHeight()));
+            }}
+          />
+        </label>
+        <p className="footnote">
+          体重の予想が「どのへんで落ち着くか」を出すのに使う。現実的な帯として BMI{' '}
+          {LEAN_BMI}〜{HEAVY_BMI} を置いているので、{format(shownHeight)}cm なら{' '}
+          {format(Math.round(weightAtBmi(shownHeight, LEAN_BMI) * 10) / 10)}〜
+          {format(Math.round(weightAtBmi(shownHeight, HEAVY_BMI) * 10) / 10)}
+          kg のあいだで落ち着く前提で線を引く。種目の予想でも、体重比の上限を実際の重さに直すのに使う。
+          この端末だけに残る値で、記録には入らないし同期もしない。
+        </p>
       </section>
 
       <section className="panel">
@@ -524,7 +566,7 @@ export function SettingsView() {
       </section>
 
       {message ? <p className="hint">{message}</p> : null}
-      <p className="footnote">OVERLOAD v1.3.0</p>
+      <p className="footnote">OVERLOAD v1.4.0</p>
     </>
   );
 }
