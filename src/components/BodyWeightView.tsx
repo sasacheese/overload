@@ -5,15 +5,21 @@
  * ここでも今日の値を入れられるようにしてあり、ジムに行かない日はこのタブだけで済む。
  *
  * 目標体重は持たない。今日の画面から目標を外したのと同じ理由で、達していない状態が
- * 毎日表示されると続かない。出すのは実測と、その差分だけ。
+ * 毎日表示されると続かない。出すのは実測と、その差分と、記録をそのまま延ばした予想だけ。
+ *
+ * 予想は目標ではない。届くべき線ではなく、いまの記録の延長線を破線で置いてあるだけで、
+ * 外しても何も起きない（`lib/forecast.ts`）。元にするのは**いま見ている期間**なので、
+ * 上の 1か月 / 3か月 / 全期間 を切り替えると予想も切り替わる。
  */
 
 import { useMemo, useState } from 'react';
-import { dateLabel, dayKind, daysBetween, shiftDays } from '../lib/calendar.ts';
+import { dateLabel, dayKind, shiftDays } from '../lib/calendar.ts';
+import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
 import { format } from '../lib/progression.ts';
 import type { IsoDate } from '../lib/types.ts';
 import { useSession, useStore } from '../store.tsx';
 import { TopBar } from './TopBar.tsx';
+import { ForecastNote, TrendChart } from './TrendChart.tsx';
 import { dayClass } from './Weekday.tsx';
 
 type Range = { label: string; days: number | null };
@@ -26,6 +32,17 @@ const RANGES: readonly Range[] = [
 
 /** 一覧に出す行数。これ以上は折れ線で見るほうが早い。 */
 const LIST_ROWS = 14;
+
+/**
+ * 何日先まで予想するか。
+ *
+ * 体重は 1 か月あれば向きが出るし、それ以上先は当たらない。見ている期間が短ければ
+ * forecast 側でさらに短く切られる（観測した期間より先へは伸ばさない）。
+ */
+const HORIZON = 30;
+
+/** 30 日で 0.3kg 未満の動きは横ばいとして扱う。日々のぶれと区別が付かない。 */
+const FLAT_PER_30 = 0.3;
 
 export function BodyWeightView({ today }: { today: IsoDate }) {
   const { sessions, saveSession } = useStore();
@@ -47,6 +64,17 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
   const newest = all.at(-1);
   const oldestInRange = points[0];
   const changeInRange = newest && oldestInRange ? newest.weight - oldestInRange.weight : null;
+
+  /*
+   * 予想の元は「いま見ている期間」。全期間の傾きで 1か月 の窓に線を引くと、
+   * 目の前の点と線がずれて見える（切り替えたのに何も変わらないのも同じくらい困る）。
+   */
+  const series = useMemo(() => points.map((p) => ({ date: p.date, value: p.weight })), [points]);
+  const trend = useMemo(
+    () => forecast(series, today, { days: HORIZON, flatPer30: FLAT_PER_30 }),
+    [series, today],
+  );
+  const short = useMemo(() => shortfall(series), [series]);
 
   const rows = useMemo(() => [...all].reverse().slice(0, LIST_ROWS), [all]);
   /** 今日より前の直近の記録。上部の帯に「前回」として出す。 */
@@ -101,7 +129,27 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
             ))}
           </div>
 
-          <WeightChart points={points} today={today} />
+          {/* 折れ線と予想の 1 行は 1 つの塊。広い画面の列の隙間で引き離さない */}
+          {series.length < 2 ? (
+            <p className="empty">2 日ぶん記録すると折れ線が出る。</p>
+          ) : (
+            <div className="trend-block">
+              <TrendChart
+                points={series}
+                today={today}
+                forecast={trend}
+                label="体重の推移"
+                tick={(n) => format(Math.round(n * 10) / 10)}
+              />
+              <ForecastNote
+                forecast={trend}
+                short={short === null ? null : shortfallLabel(short)}
+                today={today}
+                unit="kg"
+                fmt={(n) => format(Math.round(n * 10) / 10)}
+              />
+            </div>
+          )}
 
           </div>
 
@@ -127,58 +175,5 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
         </>
       )}
     </>
-  );
-}
-
-type Point = { date: IsoDate; weight: number };
-
-/**
- * 折れ線。
- *
- * 縦軸は 0 から始めない。体重の変化幅は全体の数 % なので、0 起点にすると線が
- * 平らになって何も読み取れない。実測の範囲に上下 0.4kg の余白を足した窓で描く。
- * 横軸は日付の実距離で置く（記録の間隔が空いた期間が詰まって見えないように）。
- */
-function WeightChart({ points, today }: { points: readonly Point[]; today: IsoDate }) {
-  if (points.length < 2) {
-    return <p className="empty">2 日ぶん記録すると折れ線が出る。</p>;
-  }
-
-  const width = 320;
-  const height = 132;
-  const padLeft = 30;
-  const padBottom = 16;
-  const padTop = 8;
-
-  const first = points[0]!;
-  const span = Math.max(1, daysBetween(first.date, today));
-  const weights = points.map((p) => p.weight);
-  const min = Math.min(...weights) - 0.4;
-  const max = Math.max(...weights) + 0.4;
-  const range = max - min;
-
-  const x = (p: Point) => padLeft + (daysBetween(first.date, p.date) / span) * (width - padLeft - 4);
-  const y = (w: number) => padTop + (1 - (w - min) / range) * (height - padTop - padBottom);
-
-  const line = points.map((p) => `${x(p).toFixed(1)},${y(p.weight).toFixed(1)}`).join(' ');
-  const area = `${padLeft},${height - padBottom} ${line} ${x(points.at(-1)!).toFixed(1)},${height - padBottom}`;
-  const ticks = [max, (max + min) / 2, min];
-
-  return (
-    <svg className="weight-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="体重の推移">
-      {ticks.map((t) => (
-        <g key={t}>
-          <line className="grid" x1={padLeft} x2={width - 4} y1={y(t)} y2={y(t)} />
-          <text className="axis" x={0} y={y(t) + 3}>
-            {format(Math.round(t * 10) / 10)}
-          </text>
-        </g>
-      ))}
-      <polygon className="area" points={area} />
-      <polyline className="curve" points={line} />
-      {points.map((p) => (
-        <circle key={p.date} className="point" cx={x(p)} cy={y(p.weight)} r={points.length > 40 ? 1 : 1.8} />
-      ))}
-    </svg>
   );
 }

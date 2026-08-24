@@ -11,10 +11,14 @@
  *  2. 未入力のセット行の下に前回の同セットを薄く出す。遡らせない
  *  3. ✓ を付けると前回との差だけが出る。伸びたときだけ色が付く
  *  4. 機材の設定とコツを常に上に出す。毎回思い出す手間を消す
+ *
+ * 「推移」の節には、記録をそのまま延ばした予想を破線で添えてある。これも目標ではない
+ * ——届くべき線ではなく、いまの傾きの行き先を置いてあるだけで、外しても何も起きない。
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { relativeLabel } from '../lib/calendar.ts';
+import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
 import { tapFeedback } from '../lib/haptics.ts';
 import { guideFor } from '../lib/presets.ts';
 import {
@@ -41,8 +45,8 @@ import { useStore } from '../store.tsx';
 import { BodyMap } from './BodyMap.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { Icon, type IconName } from './Icon.tsx';
-import { Sparkline } from './Sparkline.tsx';
 import { Stepper } from './Stepper.tsx';
+import { ForecastNote, TrendChart } from './TrendChart.tsx';
 
 type Props = {
   exercise: Exercise;
@@ -62,6 +66,15 @@ type Props = {
 
 /** 履歴に出す過去セッション数。これ以上並べても遡って読まない。 */
 const HISTORY_ROWS = 5;
+
+/**
+ * 推移の予想を何日先まで出すか。
+ *
+ * 週 2〜3 回の種目なら 30 日で 10 回前後。それだけ先が見えれば「この刻みで上げ続けたら
+ * どのへんか」は分かるし、それ以上先は当たらない。記録の期間が短ければ、
+ * forecast 側でさらに短く切られる。
+ */
+const TREND_HORIZON = 30;
 
 /** 中身のあるメモの行番号。開いた状態の初期値に使う。 */
 function notedRows(sets: readonly SetRecord[]): Set<number> {
@@ -187,6 +200,7 @@ export function ExerciseCard({
   const past = useMemo(() => history.filter((h) => h.date < date).slice(0, HISTORY_ROWS), [history, date]);
   const series = useMemo(() => bestSeries(exercise, history), [exercise, history]);
   const bestsNewestFirst = useMemo(() => [...series].reverse().map((s) => s.best), [series]);
+  const trendPoints = useMemo(() => series.map((s) => ({ date: s.date, value: s.best })), [series]);
 
   const todayMetrics = metrics(exercise, performance);
   /*
@@ -200,6 +214,18 @@ export function ExerciseCard({
   const historyByLoad = history[0] ? metrics(exercise, history[0]).byLoad : exercise.loadMode !== 'bodyweight';
   const byLoad = todayMetrics.setCount > 0 ? todayMetrics.byLoad : historyByLoad;
   const stale = sessionsSinceBest(bestsNewestFirst);
+  /*
+   * 「横ばい」の線引きは種目ごとに違う。60kg の種目で 30 日 0.5kg は横ばいだが、
+   * 20kg の種目では 2.5% の前進なので横ばいとは言えない。直近の 1% を境にして、
+   * 数字が小さい種目にだけ絶対値の下限を当てる。レップで測っている種目は
+   * 30 日で 0.5 レップ（1 レップの半分）を境にする。
+   */
+  const flatPer30 = byLoad ? Math.max(0.5, (series.at(-1)?.best ?? 0) * 0.01) : 0.5;
+  const trend = useMemo(
+    () => forecast(trendPoints, today, { days: TREND_HORIZON, flatPer30 }),
+    [trendPoints, today, flatPer30],
+  );
+  const trendShort = useMemo(() => shortfall(trendPoints), [trendPoints]);
   const group = MUSCLE_GROUPS[exercise.group];
   const guide = guideFor(exercise.id);
   const isAssist = exercise.loadMode === 'assist';
@@ -541,7 +567,22 @@ export function ExerciseCard({
                     {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} レップ`}
                   </strong>
                 </div>
-                <Sparkline values={series.map((s) => s.best)} highlightLast={stale === 0 ? 'best' : 'normal'} />
+                <TrendChart
+                  points={trendPoints}
+                  today={today}
+                  forecast={trend}
+                  label={trendLabel(exercise, byLoad)}
+                  tick={formatEstimate}
+                  atBest={stale === 0}
+                  compact
+                />
+                <ForecastNote
+                  forecast={trend}
+                  short={trendShort === null ? null : shortfallLabel(trendShort)}
+                  today={today}
+                  unit={byLoad ? 'kg' : 'レップ'}
+                  fmt={formatEstimate}
+                />
               </Disclosure>
             ) : null}
 

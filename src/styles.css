@@ -1398,23 +1398,6 @@ button {
   font-size: 0.9375rem;
 }
 
-.sparkline {
-  width: 100%;
-  height: 2.5rem;
-  /* 罫線の色だと薄すぎて線の向きが読めない。本文より一段落とした濃さにする */
-  color: var(--fg-dim);
-  display: block;
-  margin-top: 0.25rem;
-}
-
-.spark-dot {
-  fill: var(--fg-dim);
-}
-
-.spark-best {
-  fill: var(--accent);
-}
-
 /* やり方・効く筋肉 */
 .guide {
   display: flex;
@@ -2807,22 +2790,44 @@ button {
   }
 }
 
-/* ── 体重 ────────────────────────────────────────── */
+/* ── 折れ線（実測と予想） ───────────────────────── */
 
-.weight-chart {
+/*
+ * 実測は赤の実線、予想は無彩色の破線と帯。赤は「実際に起きたこと」の合図に
+ * 取ってあるので、まだ起きていないものには渡さない。
+ */
+
+/*
+ * 背は幅から決める。
+ *
+ * 高さを固定すると、viewBox の比（およそ 2.4:1）に対して枠が横長すぎたときに
+ * SVG は高さに合わせて縮み、**下に空きを残したまま**平たい線になる。その空きの
+ * ぶんだけ、下に置いた予想の 1 行が線から離れて別のものに見えていた。
+ * 比で持てば枠と中身が常に一致するので、どの幅でも空きが出ない。
+ * 上限だけは置く（広い画面で列いっぱいに伸びると、折れ線が主役になりすぎる）。
+ */
+.trend-chart {
   width: 100%;
-  height: 11rem;
+  height: auto;
+  aspect-ratio: 320 / 132;
+  max-height: 15rem;
   display: block;
   overflow: visible;
 }
 
-.weight-chart .grid {
+/* 種目カードの中。カードという枠の中では、この背では場所を取りすぎる */
+.trend-chart.is-compact {
+  max-height: 9rem;
+  margin-top: 0.25rem;
+}
+
+.trend-chart .grid {
   stroke: var(--line);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
-.weight-chart .curve {
+.trend-chart .curve {
   fill: none;
   stroke: var(--accent);
   stroke-width: 1.75;
@@ -2831,18 +2836,103 @@ button {
   vector-effect: non-scaling-stroke;
 }
 
-.weight-chart .area {
+.trend-chart .area {
   fill: var(--accent-soft);
 }
 
-.weight-chart .point {
+.trend-chart .point {
   fill: var(--accent);
 }
 
-.weight-chart .axis {
+/* 直近が自己ベストの日だけ、最後の点を大きくする */
+.trend-chart .point.is-best {
+  fill: var(--accent);
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+
+/*
+ * 予想の帯。ぶれの幅そのものなので、線より先に目に入ってはいけない。
+ * 面としてかろうじて見える濃さで止めてある。
+ */
+.trend-chart .band {
+  fill: var(--fg-dim);
+  opacity: 0.1;
+}
+
+.trend-chart .projection {
+  fill: none;
+  stroke: var(--fg-dim);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* 今日の位置。ここから右は起きていない */
+.trend-chart .divider {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* 予想の着地点。中を抜いて、実測の点と別のものだと分かるようにする */
+.trend-chart .horizon {
+  fill: var(--bg);
+  stroke: var(--fg-dim);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.trend-chart .axis {
   font-size: 0.5625rem;
   fill: var(--muted);
 }
+
+/* 折れ線と、その下の 1 行。広い画面でも 1 つの塊として置く */
+.trend-block {
+  min-width: 0;
+}
+
+/*
+ * 折れ線の下の 1 行。予想の値と、その幅。
+ *
+ * 値だけを大きく置かない——当たる約束に見えるため。幅は値のすぐ隣に置いて、
+ * 数字を読んだ流れでそのまま目に入るようにしてある。
+ */
+.forecast-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.4rem;
+  margin: 0.5rem 0 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.forecast-note .forecast-when {
+  color: var(--fg-dim);
+}
+
+.forecast-note .forecast-value {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  /* 予想は赤で塗らない。本文の濃さで、事実の隣に並ぶだけにする */
+  color: var(--fg);
+}
+
+.forecast-note .forecast-change {
+  /* 幅と差はどちらも補足。差のほうを一段落として、値 → 幅 → 差の順に読ませる */
+  color: var(--faint);
+}
+
+/* 出せない理由。数を出すのは、あとどれだけで出るのか分かるようにするため */
+.forecast-note.is-short {
+  color: var(--faint);
+}
+
+/* ── 体重 ────────────────────────────────────────── */
 
 .weight-list {
   list-style: none;
@@ -3538,12 +3628,4 @@ button {
     min-width: 0;
   }
 
-  /*
-   * 折れ線を縦に伸ばす。viewBox の比（およそ 2.4:1）に対して枠が横長すぎると、
-   * SVG は高さに合わせて縮み、左右に余白を残したまま平たい線になる。
-   * 枠の高さを比のぶんまで上げると、列の幅いっぱいを使って起伏が読める。
-   */
-  .weight-chart {
-    height: 15rem;
-  }
 }
