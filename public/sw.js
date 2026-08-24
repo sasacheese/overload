@@ -17,10 +17,35 @@ const CACHE = `overload-${VERSION}`;
 const FILES = Array.isArray(PRECACHE) ? PRECACHE : [];
 const SHELL = `${BASE}index.html`;
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll([...new Set([...FILES, SHELL, BASE])])),
+/**
+ * プリキャッシュは必ずネットワークから取る。
+ *
+ * `cache.addAll` はブラウザの HTTP キャッシュを使う。GitHub Pages は
+ * `max-age=600` を返すので、直前に開いていると**古い index.html** がそのまま
+ * 保存される。その index.html が指すハッシュ付きファイルは新しいデプロイで
+ * 消えているので、更新を適用した瞬間から本体を読めなくなる（白い画面）。
+ *
+ * 版ごとに変わる問い合わせを付けて取り、cache には問い合わせ無しの URL で
+ * 収める。`cache: 'reload'` だけに頼らないのは、これが効かない実装でも
+ * URL が違えば HTTP キャッシュに当たらないため。
+ *
+ * 1 つでも取れなければ install を失敗させる（addAll と同じ振る舞い）。
+ * 中途半端に揃ったキャッシュを有効にすると、同じ白い画面が別の形で出る。
+ */
+async function precache(cache) {
+  const urls = [...new Set([...FILES, SHELL, BASE])];
+  await Promise.all(
+    urls.map(async (url) => {
+      const fresh = `${url}${url.includes('?') ? '&' : '?'}v=${VERSION}`;
+      const response = await fetch(fresh, { cache: 'reload' });
+      if (!response.ok) throw new Error(`${url} を取得できない (${response.status})`);
+      await cache.put(url, response);
+    }),
   );
+}
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE).then(precache));
 });
 
 self.addEventListener('activate', (event) => {
