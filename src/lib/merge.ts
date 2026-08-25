@@ -23,7 +23,7 @@
  */
 
 import type { ExerciseId, Session, SessionEntry } from './types.ts';
-import { doneSets } from './types.ts';
+import { doneSets, startedAt } from './types.ts';
 
 /** まとめたときに動く量。取り消せない操作なので、押す前に数で見せる。 */
 export type MergeImpact = {
@@ -56,7 +56,10 @@ export function mergeImpact(
 /** 2 つの行を 1 つにする。セットは後ろに継ぎ、メモは両方残す。 */
 function joinEntries(into: SessionEntry, from: SessionEntry): SessionEntry {
   const notes = [into.note.trim(), from.note.trim()].filter((n) => n !== '');
+  // 先に始めた方の時刻を残す。まとめたのは 1 つの種目なので、実施順も先の側が正しい
+  const stamps = [startedAt(into), startedAt(from)].filter((t) => t > 0);
   return {
+    startedAt: stamps.length === 0 ? 0 : Math.min(...stamps),
     exerciseId: into.exerciseId,
     sets: [...into.sets, ...from.sets],
     note: notes.join('\n'),

@@ -128,6 +128,14 @@
   --tap: 1.875rem;
   /* 画面の左右余白。スティッキーな帯を画面幅に伸ばすときにも使う */
   --gutter: 1.25rem;
+  /*
+   * 種目カードどうしの間。
+   *
+   * 面の gap（1.5rem）は、性質の違う塊（要点・メモ・種目の列）を切り離すための値で、
+   * 同じ形の札が縦に並ぶところには広すぎる。全部畳んだときにその日にやったことが
+   * 1 画面に収まるかどうかは、ほぼこの値で決まる。
+   */
+  --card-gap: 0.5rem;
 
   /*
    * 画面に貼り付いているもの（追加ボタン・休憩タイマー）が占める高さ。
@@ -279,12 +287,24 @@ button {
  */
 .shell,
 .session-aside,
-.session-main,
 .cal-main,
 .cal-aside,
 .weight-main,
 .weight-aside {
   display: contents;
+}
+
+/*
+ * 種目の列。ここだけ間を詰める。
+ *
+ * ほかの束ねものと違って display: contents にしない。カードの間隔を面の gap から
+ * 切り離すために、実体のある入れものが要る。
+ */
+.session-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+  min-width: 0;
 }
 
 .pager {
@@ -797,6 +817,42 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* 余った幅は名前が取る。実施順の印と山形は字の分だけで右端に残る */
+  flex: 1;
+  min-width: 0;
+}
+
+/*
+ * その日の何種目目か。
+ *
+ * 同じ部位なら 1 種目目がいちばん重いものを扱えて、2 種目目 3 種目目と落ちていく。
+ * 数字だけを見ても「伸びなかった」のか「もう疲れていた」のかが分からないので、
+ * 記録のすぐ隣に順番を置く。
+ */
+.order-chip {
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 0.0625rem 0.4375rem;
+  white-space: nowrap;
+  flex: none;
+}
+
+/* 1 種目目だけ起こす。いちばん強い数字が出る枠だと、読む前に形で分かる */
+.order-chip.is-first {
+  color: var(--fg-dim);
+  border-color: var(--line-strong);
+}
+
+/* 過去の記録では日付の下に置く。左端を縦に追うと、日付と実施順が並んで読める */
+.past-order {
+  grid-column: 1;
+  justify-self: start;
 }
 
 /*
@@ -825,12 +881,25 @@ button {
 
 /* 閉じているあいだは、上下の余白も畳む。閉じたのに嵩が残ると畳んだ甲斐がない */
 .card.is-folded {
-  padding: 0.875rem 1.125rem;
-  gap: 0.375rem;
+  padding: 0.75rem 1.125rem;
+  gap: 0.3125rem;
+}
+
+/*
+ * 閉じた札の高さを決めているのは、字ではなく右端の「外す」ボタン（2.25rem）だった。
+ * 畳んだ札は 1 行として並べたいので、閉じているあいだは的を詰める。開けば元に戻る
+ * ——外すかどうかを決めるのは中身を見てからなので、狭いのは閉じているあいだだけでいい。
+ */
+.card.is-folded .card-head > .icon-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 1rem;
 }
 
 /* 閉じたカードに残す 1 行。その日の記録だけを出す */
 .card-folded {
+  /* p の既定の上下余白（1em）が残っていて、閉じた札 1 枚につき 24px 嵩んでいた */
+  margin: 0;
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
@@ -851,6 +920,20 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * 見出しは畳む操作。指のある画面では押した瞬間に畳まれるので合図は要らないが、
+ * カーソルのある画面では、どこが押せるのかを触る前に返す。
+ */
+@media (hover: hover) {
+  .card-fold:hover .card-name {
+    color: var(--fg);
+  }
+
+  .card-fold:hover .card-chevron {
+    color: var(--fg-dim);
+  }
 }
 
 /* 前回の記録。カードの見出しの下に 1 行だけ置く */
@@ -2054,10 +2137,12 @@ button {
  * 面全体（.view）ではなくここで持つのは、浮くものが何も無いタブ（種目・記録・体重）
  * で底に空白が残らないようにするため。
  */
+/* 種目の列とは性質が違うので、詰めた間隔（--card-gap）からは離して置く */
 .session-foot {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  margin-top: 1rem;
   padding-bottom: var(--float-clear);
 }
 
@@ -3574,7 +3659,6 @@ button {
     column-gap: 2rem;
   }
 
-  .session-main,
   .session-aside {
     display: flex;
     flex-direction: column;
