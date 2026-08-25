@@ -49,7 +49,7 @@ const HORIZON = 90;
 const FLAT_PER_30 = 0.3;
 
 export function BodyWeightView({ today }: { today: IsoDate }) {
-  const { sessions, saveSession } = useStore();
+  const { sessions, setBodyWeight } = useStore();
   const session = useSession(today);
   const [days, setDays] = useState<number | null>(RANGES[0]!.days);
   /*
@@ -112,7 +112,7 @@ export function BodyWeightView({ today }: { today: IsoDate }) {
         today={today}
         todayWeight={session.bodyWeight}
         latest={latestBefore}
-        onChange={(v) => saveSession({ ...session, bodyWeight: v })}
+        onChange={(v) => setBodyWeight(session, v)}
       />
 
       {all.length === 0 ? (

@@ -135,6 +135,17 @@ export type SessionEntry = {
   exerciseId: ExerciseId;
   sets: SetRecord[];
   note: string;
+  /**
+   * 最初の ✓ を押した時刻（epoch ms）。省略と 0 は「分からない」。
+   *
+   * その日の何種目目に実施したかを出すために持つ。行の並び（種目を足した順）では
+   * 足りない——ジムでは先にまとめて選んでから順に回ることがあるので、
+   * 並びが実施順とずれる。実際に体を動かした時点を残せるのは ✓ を押した瞬間だけ。
+   *
+   * 省略できるようにしてあるのは、この仕掛けより前の記録を書き換えないため。
+   * 保存されたものは読み込みで必ず埋まる（`migrate.ts`）。
+   */
+  startedAt?: number;
 };
 
 export type Session = {
@@ -149,6 +160,15 @@ export type Session = {
    */
   bodyWeight: number;
   /**
+   * 体重を入れた時刻（epoch ms）。省略と 0 は「分からない」。
+   *
+   * 同期の突き合わせで、体重だけを別の時刻で採るために要る。体重は 1 日の中で
+   * 記録とは独立に付く（朝に体重だけ入れて、夜にトレーニングを記録する）ので、
+   * 日ごと丸ごと新しい方を採ると、あとから記録を触った端末の未記録（0）が
+   * 先に入れた体重を消す。詳しくは `lib/sync.ts`。
+   */
+  bodyWeightAt?: number;
+  /**
    * その日を「終えた」と押した時刻（epoch ms）。0 は押していない。
    *
    * 記録そのものには一切効かない——集計も祝福もこの値を見ない。効くのは画面だけで、
@@ -161,7 +181,12 @@ export type Session = {
 };
 
 export function emptySession(date: IsoDate): Session {
-  return { date, entries: [], note: '', bodyWeight: 0, finishedAt: 0, updatedAt: 0 };
+  return { date, entries: [], note: '', bodyWeight: 0, bodyWeightAt: 0, finishedAt: 0, updatedAt: 0 };
+}
+
+/** 最初の ✓ を押した時刻。持たない記録は 0。 */
+export function startedAt(entry: SessionEntry): number {
+  return entry.startedAt ?? 0;
 }
 
 /** 実施済みのセットだけ。集計はすべてこれを通す。 */

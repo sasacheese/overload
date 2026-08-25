@@ -7,10 +7,16 @@ import { exerciseId, isoDate, type Session } from './types.ts';
 const session: Session = {
   date: isoDate('2026-08-18'),
   entries: [
-    { exerciseId: exerciseId('bench-press'), sets: [{ weight: 60, reps: 10, done: true, note: '' }], note: '肩の位置よかった' },
+    {
+      exerciseId: exerciseId('bench-press'),
+      sets: [{ weight: 60, reps: 10, done: true, note: '' }],
+      note: '肩の位置よかった',
+      startedAt: 1_755_000_000_000,
+    },
   ],
   note: '睡眠 7 時間',
-  bodyWeight: 0,
+  bodyWeight: 69.8,
+  bodyWeightAt: 1_755_000_000_000,
   finishedAt: 0,
   updatedAt: 1_755_000_000_000,
 };
