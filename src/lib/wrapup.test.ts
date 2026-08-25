@@ -175,13 +175,13 @@ test('wrapUp: 一言は強い順。更新があればそれを言う', () => {
   // 重量を上げると、その種目の到達点と 1 日の総量の 2 つが動く
   const past = session('2026-08-19', [{ id: bench.id, sets: [[60, 8]] }]);
   const withRecord = session('2026-08-21', [{ id: bench.id, sets: [[62.5, 8]] }]);
-  assert.equal(wrapUp(withRecord, exercises, [past, withRecord]).praise, '記録が 2 つ動いた日。');
+  assert.equal(wrapUp(withRecord, exercises, [past, withRecord]).praise, '2種目の記録を更新しました');
 
   // 総量が前回に届かない伸び方なら、動いたのは種目 1 つぶん
   const heavier = session('2026-08-21', [{ id: bench.id, sets: [[70, 5]] }]);
   const w = wrapUp(heavier, exercises, [past, heavier]);
   assert.equal(w.progressed, 1);
-  assert.equal(w.praise, '今日、記録が動いた。');
+  assert.equal(w.praise, 'お疲れ様でした');
 });
 
 test('wrapUp: 更新も伸びも無い日は、続いていることを言う（責めない）', () => {
