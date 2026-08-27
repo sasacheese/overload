@@ -16,6 +16,7 @@ import {
   weekStreak,
   type YearMonth,
 } from '../lib/calendar.ts';
+import { lifetimeTotals, recordTimeline, volumeParts } from '../lib/milestones.ts';
 import { bodyWeightOn, countedSets, sessionGroups, sessionVolume, sortedSessions } from '../lib/query.ts';
 import { MUSCLE_GROUPS, type IsoDate, type MuscleGroup } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
@@ -53,6 +54,19 @@ export function CalendarView({ today, onPickDate }: Props) {
 
   const recent = useMemo(() => sortedSessions(sessions).slice(0, 8), [sessions]);
 
+  /*
+   * 通算の積み上げ。絶対に減らない数字で、休んでも下がらない
+   * （週単位の連続記録と同じ性質を、数字の側で持つ）。
+   */
+  const lifetime = useMemo(() => lifetimeTotals(sessions, exercises), [sessions, exercises]);
+  const lifted = volumeParts(lifetime.volume);
+
+  /*
+   * 更新の年表。記録が動いた日だけが並ぶ——動かなかった日は行ごと無い
+   * （足りない側の欄を作らない）。全期間を舐めるので開いたときに 1 回だけ計算する。
+   */
+  const timeline = useMemo(() => recordTimeline(sessions, exercises), [sessions, exercises]);
+
   return (
     <>
       {/* 広い画面では左にカレンダー、右に最近の記録。狭い画面では contents で素通り */}
@@ -87,6 +101,13 @@ export function CalendarView({ today, onPickDate }: Props) {
           <span className="unit">週連続</span>
         </span>
       </div>
+
+      {/* 月の数字の下に、全期間の積み上げを 1 行。月をめくっても変わらない基準線 */}
+      {lifetime.days > 0 ? (
+        <p className="lifetime">
+          これまでに <strong>{lifetime.days}</strong> 日 · <strong>{lifted.value}</strong> {lifted.unit} 積み上げた
+        </p>
+      ) : null}
 
       <div className="calendar">
         <div className="cal-row cal-head">
@@ -155,6 +176,43 @@ export function CalendarView({ today, onPickDate }: Props) {
           })}
         </ul>
       )}
+
+      {timeline.length > 0 ? (
+        <>
+          <h2 className="section-title with-icon">
+            <Icon name="rise" />
+            更新の年表
+          </h2>
+          {/*
+            記録が動いた日だけの一覧。祝福と同じ判定（records.ts）を過去に流し直して
+            いるので、当時祝われたものとここに並ぶものが食い違わない。
+          */}
+          <ul className="timeline">
+            {timeline.slice(0, 6).map((day) => (
+              <li key={day.date}>
+                <button type="button" className="timeline-day" onClick={() => onPickDate(day.date)}>
+                  <span className="timeline-date">
+                    {dateLabel(day.date)}
+                    <span className="timeline-count">{day.records.length}</span>
+                  </span>
+                  {day.records.slice(0, 3).map((r, i) => (
+                    <span className="timeline-record" key={`${r.exerciseName ?? 'day'}-${r.achievement.kind}-${i}`}>
+                      <span className="timeline-what">
+                        {r.exerciseName !== null ? `${r.exerciseName} · ` : ''}
+                        {r.achievement.title} {r.achievement.detail}
+                      </span>
+                      {r.achievement.gain !== null ? <span className="timeline-gain">{r.achievement.gain}</span> : null}
+                    </span>
+                  ))}
+                  {day.records.length > 3 ? (
+                    <span className="timeline-more">ほか {day.records.length - 3} 件</span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
     </div>
     </>
   );
