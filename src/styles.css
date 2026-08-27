@@ -222,6 +222,35 @@ body {
   overscroll-behavior: none;
   /* 二度叩きの拡大を止める。面ごとの縦スクロールは .page 側で許可する */
   touch-action: manipulation;
+
+  /*
+   * 長押しで文字が選ばれないようにする。
+   *
+   * ✓ は 1 秒近く押しつづける操作なので、iOS ではその指に**文字選択**が乗って
+   * くる——虫めがねが出て、行の数字が青く反転し、コピーの吹き出しが立つ。
+   * ボタン自身は非選択にしてあったが、選択は近くの選べる文字（同じ行の
+   * `75` `kg` `1` `回`）へ伸びるので、ボタン側だけでは防げない。
+   *
+   * 面ぜんぶを非選択にして、**文字を打つ欄と、写して使う値だけ**選べるように
+   * 戻す。記録を読む画面で文字を選ぶ用事は無いので、失うものは無い。
+   */
+  -webkit-user-select: none;
+  user-select: none;
+  /* 長押しの吹き出し（コピー・調べる）も出さない */
+  -webkit-touch-callout: none;
+}
+
+/*
+ * 選べるものだけ戻す。打つ欄と、写して使う値（復旧の鍵）。
+ * ここを戻し忘れると、入力欄でカーソルが置けなくなる。
+ */
+input,
+textarea,
+[contenteditable],
+.key-value {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 button,
@@ -256,9 +285,7 @@ button {
   background: none;
   border: none;
   padding: 0;
-  /* 連打したときに文字が選択されて反転するのを防ぐ */
-  user-select: none;
-  -webkit-user-select: none;
+  /* 押したときに端末が出す灰色の覆いを消す（自前の :active があるので要らない） */
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1367,11 +1394,6 @@ button {
  * scaleY で伸ばすと角の丸みが潰れて伸びるので、塗りは置いたまま clip-path で
  * 下から現していく。
  */
-.check {
-  /* 長押しで端末の文字選択やコールアウトに指を取られない */
-  -webkit-touch-callout: none;
-}
-
 .check::before {
   content: '';
   position: absolute;
@@ -2676,14 +2698,11 @@ button {
  * 高さを決め打ちして中身だけ差し替える。中身の切り替えは淡く重ねるだけにして、
  * 位置が動く要素を 1 つも作らない。
  *
- * さらに**貼り付く**（sticky）。凡例は種目の数だけ縦に伸びるので、下の方の行を
- * 押したときに説明が画面の外にある、という状態になりやすい。窓が上に残っていれば、
- * どこを押しても結果は同じ場所に出る。
+ * 貼り付けてはいない。凡例のほうが中でスクロールする箱になったので、窓も絵も
+ * そもそも画面から出ない——ここを sticky にすると、わずかに送っただけで窓が
+ * 上に貼り付き、その下にある**絵のほうが隠れる**（逆さまになる）。
  */
 .trends-readout {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   /* 中身が入れ替わっても動かない高さ。2 つの状態のうち高いほうに合わせてある */
   min-height: 8rem;
   display: flex;
@@ -2691,9 +2710,7 @@ button {
   justify-content: center;
   padding: 0.75rem 0.875rem;
   border-radius: var(--radius-sm);
-  /* 下を流れる凡例が透けないよう、地の色で塞ぐ */
   background: color-mix(in srgb, var(--surface-2) 92%, var(--bg));
-  backdrop-filter: blur(12px);
   /* 選ぶとその種目の色が左に入る。選んでいないあいだは無彩色 */
   border-left: 2px solid var(--line-strong);
   transition: border-color var(--t) var(--ease-out);
@@ -2927,12 +2944,37 @@ button {
   stroke-width: 2.6;
 }
 
+/*
+ * 凡例。**それ自体が中でスクロールする箱**にしてある。
+ *
+ * 種目の数だけ縦に伸びる一覧だったころは、下の方の行を押すために画面を送ると
+ * 絵が上へ抜けてしまい、「押したのに何が変わったのか見えない」状態になった。
+ * 高さを画面に収まる量で止めて中だけ動かせば、**絵も窓も一度も画面から出ない**。
+ *
+ * 高さは画面の 34%（上限 19rem）。これ以上取ると絵が押し出され、これ以下だと
+ * 一度に 3 行しか見えず、探すのにスクロールばかりすることになる。
+ */
 .compare-legend {
   list-style: none;
   margin: 0;
-  padding: 0;
+  /* 下の余白は、最後の行が薄れの帯に沈まないための逃げ */
+  padding: 0 0.25rem 0.75rem 0;
   display: flex;
   flex-direction: column;
+  max-height: min(34dvh, 19rem);
+  overflow-y: auto;
+  /* 端まで来たときに、後ろの面まで一緒に動かない */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /*
+   * 下端をわずかに薄くして「まだ続く」ことを言う。線や影で仕切ると、凡例が
+   * 独立した部品に見えて絵との関係が切れる。
+   *
+   * 薄れは 1rem だけ。深く取ると、最後まで送ったときに**選んだ行そのものが
+   * 沈んで**、押した結果が読めなくなる（上の padding-bottom と組で効かせる）。
+   */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1rem), transparent 100%);
+  scrollbar-width: thin;
 }
 
 /*
@@ -3512,7 +3554,9 @@ button {
   font-family: var(--mono);
   font-size: 0.6875rem;
   word-break: break-all;
+  /* 鍵は写して使うので、触れば丸ごと選べるようにしておく */
   user-select: all;
+  -webkit-user-select: all;
   background: var(--surface-2);
   padding: 0.4375rem 0.5rem;
   border-radius: var(--radius-sm);
@@ -5475,6 +5519,11 @@ button {
   /* 種目の面は 1 枚の絵として通しで使う。列に割ると折れ線が痩せる */
   .trends {
     max-width: 46rem;
+  }
+
+  /* 広い画面は縦に余裕があるので、凡例を高く取って一度に多く見せる */
+  .compare-legend {
+    max-height: min(46dvh, 28rem);
   }
 
   /* 広い画面では案内が折り返さないぶん、窓も低くて足りる */
