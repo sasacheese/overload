@@ -7,6 +7,7 @@ import {
   exerciseHistory,
   exerciseTotals,
   lastPerformed,
+  recordedExerciseIds,
   previousEntry,
   sessionGroups,
   sessionVolume,
@@ -166,4 +167,30 @@ test('exerciseTotals: ✓ の付いていないセットは通算に入れない
 
 test('exerciseTotals: 記録が無ければ全部 0', () => {
   assert.deepEqual(exerciseTotals(exerciseHistory([], bench.id)), { days: 0, sets: 0, reps: 0 });
+});
+
+test('recordedExerciseIds: ✓ の付いたセットがある種目だけを集める', () => {
+  const list = [session('2026-08-01', [[60, 8]]), session('2026-08-05', [[100, 5]], squat.id)];
+  const ids = recordedExerciseIds(list);
+  assert.equal(ids.has(bench.id), true);
+  assert.equal(ids.has(squat.id), true);
+  assert.equal(ids.size, 2);
+});
+
+test('recordedExerciseIds: 並べただけで ✓ の無い種目は入れない', () => {
+  // 入れてしまうと、「記録あり」で絞ったのに何も減らない
+  const planned: Session = {
+    date: isoDate('2026-08-01'),
+    entries: [
+      { exerciseId: bench.id, sets: [{ weight: 60, reps: 8, done: false, note: '' }], note: '' },
+      { exerciseId: squat.id, sets: [{ weight: 100, reps: 5, done: true, note: '' }], note: '' },
+    ],
+    note: '',
+    bodyWeight: 0,
+    finishedAt: 0,
+    updatedAt: 0,
+  };
+  const ids = recordedExerciseIds([planned]);
+  assert.equal(ids.has(bench.id), false);
+  assert.equal(ids.has(squat.id), true);
 });

@@ -111,6 +111,26 @@ export function exerciseHistory(sessions: readonly Session[], id: ExerciseId): E
 }
 
 /**
+ * ✓ の付いたセットが 1 度でもある種目の id。
+ *
+ * 種目の一覧を「記録あり / 記録なし」で絞るために使う。種目ごとに
+ * `exerciseHistory` を引くと種目の数だけ全期間を舐めることになるので、
+ * ここは 1 回の走査で集める。
+ *
+ * 数えるのは ✓ の付いたセットだけ。並べただけで一度もやっていない種目は
+ * 「記録あり」に入れない——入れると、絞ったのに何も減らない。
+ */
+export function recordedExerciseIds(sessions: readonly Session[]): Set<ExerciseId> {
+  const found = new Set<ExerciseId>();
+  for (const session of sessions) {
+    for (const entry of session.entries) {
+      if (doneSets(entry).length > 0) found.add(entry.exerciseId);
+    }
+  }
+  return found;
+}
+
+/**
  * 通算。**その種目をこれまでどれだけやったか**を 3 つの数で持つ。
  *
  * ここだけが「減らない数」で、記録の伸び（ベスト・推移）とは性格が違う。

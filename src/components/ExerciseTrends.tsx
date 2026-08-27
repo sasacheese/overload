@@ -109,7 +109,7 @@ export function ExerciseTrends({ today }: { today: IsoDate }) {
         </p>
       ) : null}
 
-      <div className="weight-range" role="group" aria-label="表示する期間">
+      <div className="segmented" role="group" aria-label="表示する期間">
         {RANGES.map((r) => (
           <button
             type="button"

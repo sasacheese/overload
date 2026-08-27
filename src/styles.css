@@ -4846,7 +4846,21 @@ button {
   color: var(--accent-text);
 }
 
-.weight-range {
+
+/* ── 横並びの選択（期間・絞り込み） ───────────────── */
+
+/*
+ * 面の中で「いま何を見ているか」を選ぶ帯。体重の期間・推移の期間・種目の
+ * 絞り込みで同じものを使う。
+ *
+ * 面そのものを切り替える札（.face-switch）とは別物。あちらは中身が丸ごと
+ * 入れ替わる操作なので浮いた札、こちらは同じ一覧の見え方を変えるだけなので
+ * 地に沈んだ帯にしてある。
+ *
+ * 選択肢は 3 つまでを想定した等幅。4 つ以上並べると 1 つあたりの的が
+ * 指の幅を割る。
+ */
+.segmented {
   display: flex;
   gap: 0.25rem;
   border: 1px solid var(--line);
@@ -4854,7 +4868,7 @@ button {
   overflow: hidden;
 }
 
-.weight-range button {
+.segmented button {
   flex: 1;
   padding: 0.5rem;
   font-size: var(--fs-sm);
@@ -4865,14 +4879,32 @@ button {
     color var(--t-fast) var(--ease-out);
 }
 
-.weight-range button:last-child {
+.segmented button:last-child {
   border-right: none;
 }
 
-.weight-range button.is-active {
+.segmented button.is-active {
   background: var(--surface-2);
   color: var(--fg);
   font-weight: 600;
+}
+
+/* 押しても何も出ない選択肢。消さずに沈めて、そこに何件あるかは読ませる */
+.segmented button:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+/* 件数。選ぶ前に「いくつあるか」が分かると、押すかどうかを決められる */
+.segmented .count {
+  margin-left: 0.3125rem;
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.segmented button.is-active .count {
+  color: var(--muted);
 }
 
 /* ── アイコンを置いた小さなボタン ───────────────── */
@@ -5363,7 +5395,7 @@ button {
   }
 
   /* 3 つの選択肢に 35rem は要らない */
-  .weight-range {
+  .segmented {
     max-width: 22rem;
   }
 
