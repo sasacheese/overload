@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { relativeLabel } from '../lib/calendar.ts';
 import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
+import { journeyOf } from '../lib/milestones.ts';
 import { tapFeedback } from '../lib/haptics.ts';
 import { bodyweightCap, guideFor } from '../lib/presets.ts';
 import {
@@ -213,6 +214,11 @@ export function ExerciseCard({
     [history, date, sessions, exercise.id],
   );
   const series = useMemo(() => bestSeries(exercise, history), [exercise, history]);
+  /*
+   * 初日から直近まで。これから担ぐ直前に「あの日の自分」と並べる。
+   * 目標ではなく過去の事実なので外れようがない。2 日ぶん無ければ出ない。
+   */
+  const journey = useMemo(() => journeyOf(exercise, history), [exercise, history]);
   const bestsNewestFirst = useMemo(() => [...series].reverse().map((s) => s.best), [series]);
   const trendPoints = useMemo(() => series.map((s) => ({ date: s.date, value: s.best })), [series]);
 
@@ -569,6 +575,19 @@ export function ExerciseCard({
                 open={openSections.has('history')}
                 onToggle={() => toggleSection('history')}
               >
+                {journey ? (
+                  <p className="journey">
+                    <span className="journey-then">
+                      初日 <span className="muted">{relativeLabel(journey.first.date, today)}</span> {journey.first.label}
+                    </span>
+                    <span className={`journey-arrow${journey.improved ? ' is-up' : ''}`} aria-hidden="true">
+                      →
+                    </span>
+                    <span className={`journey-now${journey.improved ? ' is-up' : ''}`}>
+                      {journey.latest.label}
+                    </span>
+                  </p>
+                ) : null}
                 <ul className="past-list">
                   {past.map((h) => (
                     <li key={h.date}>

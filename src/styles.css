@@ -592,6 +592,71 @@ button {
 }
 
 /*
+ * 種目が 1 つも並んでいない日。
+ *
+ * 説明の 1 行だけを左上に置いていたときは、面のほとんどが空白のまま残って、
+ * 「まだ始まっていない」ではなく「壊れている」に見えていた。空白を埋めるための
+ * 飾りを足すのではなく、**空であることを図として言う** 1 つ（プレートを挿していない
+ * バー）を中央に置き、その下に事実と、次にやることを 1 行ずつ。
+ *
+ * 上下の余白がそのまま「まだ何も無い」の見え方になるので、詰めない。
+ */
+.empty-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2.25rem 0 1rem;
+  text-align: center;
+}
+
+/*
+ * 字を載せない飾りなので、一番弱い色でよい（--faint は飾りと記号だけに使う）。
+ * 赤は「前進した」の合図に取ってあるので、まだ何もしていない面には渡さない。
+ */
+.empty-art {
+  width: min(12rem, 66%);
+  height: auto;
+  color: var(--faint);
+}
+
+/* スタンドと床は 1 段落とす。主役は空のバーのほうで、受けているものではない */
+.empty-art .rack {
+  opacity: 0.55;
+}
+
+/*
+ * 字は 3 段。状態（記録がない）→ 事実（前回いつ何を）→ 説明（どうすれば埋まるか）。
+ * 濃さも --fg / --fg-dim / --muted と 1 段ずつ落として、読む順を色でも示す。
+ */
+
+/*
+ * いま何なのかを言う 1 行。絵より上に置き、日付の見出しと同じ大きさにしてある
+ * ——この面でいちばん強いのは「何日を見ているか」と「そこに何があるか」の
+ * 2 つで、片方だけ大きいと、もう片方が見出しの添え物に見える。
+ */
+.empty-title {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  /* 絵とは間を空ける。詰めると絵の題名に見えて、状態を言う行として読まれない */
+  margin: 0 0 0.5rem;
+}
+
+.empty-last {
+  font-size: var(--fs-md);
+  color: var(--fg-dim);
+  margin: 0;
+}
+
+.empty-day .empty {
+  max-width: 21rem;
+  margin-top: 0.125rem;
+}
+
+
+/*
  * 補足。赤い縦線を 1 本だけ立てて、面は無彩色のまま置く。
  * 面ごと赤くすると、注意書きが記録より強くなる。
  */
@@ -1438,6 +1503,66 @@ button {
   }
 }
 
+/*
+ * 初日から直近まで。「あの日の自分」と今を 1 行で並べる。
+ *
+ * 目標ではなく過去の事実なので外れようがない。伸びていれば矢印と今の値に
+ * 赤（前進の色）が入り、落ちていれば無彩色の数字のまま出る——落ちた日を
+ * 責める表示は作らないが、隠しもしない（セットの差分と同じ扱い）。
+ */
+.journey {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.4375rem;
+  margin: 0;
+  font-size: var(--fs-md);
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.journey-then .muted {
+  font-size: var(--fs-xs);
+}
+
+.journey-arrow {
+  color: var(--faint);
+}
+
+.journey-arrow.is-up {
+  color: var(--accent-text);
+}
+
+.journey-now {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.journey-now.is-up {
+  color: var(--accent-text);
+}
+
+/* シートの「記録」の面。summary・折れ線・初日から・履歴を縦に積む */
+.ex-records {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ex-records .summary {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+}
+
+/*
+ * シートの履歴は日付をフルで出すので、カード用の列幅（5.75rem）では折れる。
+ * 日付の行とセットの行を縦に積む——シートは読む場所で、列を揃えて比べる
+ * 場所ではないので、折り返しに耐える積みのほうが崩れない。
+ */
+.ex-records .past-list li {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .past-list {
   list-style: none;
   margin: 0.5rem 0 0;
@@ -1762,6 +1887,88 @@ button {
   font-size: 0.6875rem;
 }
 
+/*
+ * 全期間の積み上げ。月の数字の下に置く 1 行で、月をめくっても変わらない。
+ *
+ * 絶対に減らない数字なので、休んだ月に月間の数字が細っても、この行は
+ * 積んだぶんだけ残っている。数字だけ本文の濃さで、言葉は控えめに。
+ */
+.lifetime {
+  margin: -0.5rem 0 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.lifetime strong {
+  color: var(--fg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * 更新の年表。記録が動いた日だけが並ぶ。
+ *
+ * 増分（+2.5kg）にだけ赤い字を使う——実際に起きた前進なので、信号としての
+ * 赤の使い方（前進した）に合っている。行そのものは無彩色のまま。
+ */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline-day {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  padding: 0.6875rem 0;
+}
+
+.timeline-date {
+  color: var(--muted);
+  font-size: 0.75rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4375rem;
+}
+
+/* その日に動いた数。開かずに量が分かる（開閉の節の件数と同じ役割） */
+.timeline-count {
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-record {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4375rem;
+  font-size: var(--fs-md);
+  min-width: 0;
+}
+
+.timeline-what {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-gain {
+  flex: none;
+  color: var(--accent-text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-more {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
 /* ── Claude に頼む ──────────────────────────────── */
 
 .ask {
@@ -1887,6 +2094,34 @@ button {
   font-weight: 600;
 }
 
+/*
+ * シートの面の切り替え（設定 / 記録）。
+ *
+ * 下線で現在地を示す。塗りのボタンにすると保存より強く見えるし、
+ * 赤の下線は下のタブバーの現在地と同じ言い方なので、覚えることが増えない。
+ */
+.sheet-tabs {
+  display: flex;
+  gap: 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-tab {
+  padding: 0.25rem 0.125rem 0.5rem;
+  font-size: var(--fs-base);
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  /* 下の境界線に重ねる。線が 2 本に見えないようにする */
+  margin-bottom: -1px;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.sheet-tab.is-active {
+  color: var(--fg);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
 .sheet-body {
   overflow-y: auto;
   display: flex;
@@ -1994,12 +2229,51 @@ button {
 
 .ex-item {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+  display: grid;
+  /* 左に名前と設定、右に推移の線。線の幅は固定で、名前側が縮む */
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
   text-align: left;
   border-top: 1px solid var(--line);
   padding: 0.6875rem 0;
+}
+
+.ex-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+/*
+ * 行の右に添える推移。上がっているか、止まっているか、落ちているかの形だけ。
+ *
+ * 線は無彩色。TrendChart の実線は赤だが、一覧では全行に付くので、ここまで
+ * 赤にすると信号としての赤が薄まる。赤が入るのは直近が自己ベストの行の終点だけ。
+ */
+.sparkline {
+  width: 4.5rem;
+  height: 1.625rem;
+  display: block;
+  overflow: visible;
+}
+
+.sparkline-curve {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sparkline-end {
+  fill: var(--muted);
+}
+
+.sparkline-end.is-best {
+  fill: var(--accent);
 }
 
 .ex-name {

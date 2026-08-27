@@ -18,7 +18,9 @@ import {
   lastPerformed,
   orderInDay,
   previousEntry,
+  sessionGroups,
   sessionVolume,
+  sortedSessions,
 } from '../lib/query.ts';
 
 import { recordFeedback } from '../lib/haptics.ts';
@@ -28,6 +30,7 @@ import { canFinish, wrapUp } from '../lib/wrapup.ts';
 import { useSession, useStore } from '../store.tsx';
 import { Celebration } from './Celebration.tsx';
 import { Wrapup } from './Wrapup.tsx';
+import { EmptyDay, type LastDay } from './EmptyDay.tsx';
 import { ExerciseCard } from './ExerciseCard.tsx';
 import { ExercisePicker } from './ExercisePicker.tsx';
 import { Icon } from './Icon.tsx';
@@ -239,6 +242,18 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
       .sort((a, b) => b.date.localeCompare(a.date))[0];
     return found ? { date: found.date, weight: found.bodyWeight } : null;
   }, [sessions, date]);
+  /**
+   * その日より前で、実際に ✓ が付いた直近の日。1 種目も並んでいない日にだけ出す。
+   *
+   * `hasRecord` ではなく ✓ の数で絞っている。メモだけ書いた日を「前回やった日」と
+   * 呼ぶと、開けたぶんの日数が実際にトレーニングを空けた日数と合わなくなる。
+   */
+  const previousDay = useMemo<LastDay | null>(() => {
+    if (session.entries.length > 0) return null;
+    const found = sortedSessions(sessions).find((s) => s.date < date && countedSets(s) > 0);
+    return found ? { date: found.date, groups: sessionGroups(found, exercises) } : null;
+  }, [sessions, exercises, date, session.entries.length]);
+
   const volume = sessionVolume(session, exercises, bodyWeight);
   const sets = countedSets(session);
   const parts = dateParts(date);
@@ -477,9 +492,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         );
       })}
 
-      {session.entries.length === 0 ? (
-        <p className="empty">種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して ✓ を押す。</p>
-      ) : null}
+      {session.entries.length === 0 ? <EmptyDay date={date} today={today} last={previousDay} /> : null}
 
       {/*
         面のいちばん下。浮いているもの（追加ボタン・休憩タイマー）は画面に貼り付いて
