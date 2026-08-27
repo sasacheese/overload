@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { presetExercises } from './presets.ts';
 import { isoDate, type Exercise, type Session } from './types.ts';
-import { canFinish, wrapUp } from './wrapup.ts';
+import { canFinish, GREETING, wrapUp } from './wrapup.ts';
 
 const exercises: Exercise[] = presetExercises();
 const bench = exercises.find((e) => e.id === 'bench-press')!;
@@ -181,7 +181,9 @@ test('wrapUp: 一言は強い順。更新があればそれを言う', () => {
   const heavier = session('2026-08-21', [{ id: bench.id, sets: [[70, 5]] }]);
   const w = wrapUp(heavier, exercises, [past, heavier]);
   assert.equal(w.progressed, 1);
-  assert.equal(w.praise, 'お疲れ様でした');
+  // 挨拶（GREETING）と同じ文を返すと、締めの画面に同じ一文が 2 行続く
+  assert.equal(w.praise, '1種目の記録を更新しました');
+  assert.notEqual(w.praise, GREETING);
 });
 
 test('wrapUp: 更新も伸びも無い日は、続いていることを言う（責めない）', () => {

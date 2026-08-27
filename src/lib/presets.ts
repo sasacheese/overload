@@ -243,7 +243,7 @@ const PRESETS: readonly Preset[] = [
       primary: ['lats'],
       secondary: ['midBack', 'biceps', 'rearDelt'],
       cues: [
-        '補助を下げるほど負荷が上がる。上限レップに届いたら補助を減らす',
+        '補助を下げるほど負荷が上がる。上限の回数に届いたら補助を減らす',
         '肘を体の後ろへ引き、胸をバーに近づける',
         '下で完全に脱力せず、肩を入れたまま止める',
       ],

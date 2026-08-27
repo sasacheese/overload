@@ -15,7 +15,7 @@ import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
 import { journeyOf, volumeParts } from '../lib/milestones.ts';
 import { bodyweightCap } from '../lib/presets.ts';
 import { formatEstimate, maxGainPerDay, metrics, setLine, trendLabel } from '../lib/progression.ts';
-import { bestSeries, bodyWeightOn, exerciseHistory } from '../lib/query.ts';
+import { bestSeries, bodyWeightOn, exerciseHistory, exerciseTotals } from '../lib/query.ts';
 import { doneSets, type Exercise } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
 import { ForecastNote, TrendChart } from './TrendChart.tsx';
@@ -34,6 +34,8 @@ export function ExerciseRecords({ exercise }: { exercise: Exercise }) {
   const series = useMemo(() => bestSeries(exercise, history), [exercise, history]);
   const trendPoints = useMemo(() => series.map((s) => ({ date: s.date, value: s.best })), [series]);
   const journey = useMemo(() => journeyOf(exercise, history), [exercise, history]);
+  /** 通算。やった日数・セット数・合計回数。伸び悩んだ時期にも必ず増えている側の数。 */
+  const totals = useMemo(() => exerciseTotals(history), [history]);
 
   /* 測り方は履歴で決める（カードと同じ理由。今日の ✓ の有無で見出しを化けさせない） */
   const byLoad = history[0] ? metrics(exercise, history[0]).byLoad : exercise.loadMode !== 'bodyweight';
@@ -62,19 +64,34 @@ export function ExerciseRecords({ exercise }: { exercise: Exercise }) {
   }
 
   const best = Math.max(...series.map((s) => s.best));
-  const unit = byLoad ? 'kg' : 'レップ';
+  const unit = byLoad ? 'kg' : '回';
   const atBest = (series.at(-1)?.best ?? 0) >= best;
   const shownHistory = history.slice(0, HISTORY_ROWS);
   const total = volumeParts(lifted);
 
   return (
     <div className="ex-records">
-      {/* 通算。どれも絶対に減らない側の数字（回数・ベスト・積み上げ） */}
+      {/*
+        通算。どれも絶対に減らない側の数字。
+        「何日やったか」だけでは、1 日にどれだけ積んだかが読めない。セット数と
+        合計回数を並べて、続けた量そのものを数として出す。
+      */}
       <div className="summary">
         <span>
-          <strong>{history.length}</strong>
+          <strong>{totals.days}</strong>
+          <span className="unit">日</span>
+        </span>
+        <span>
+          <strong>{totals.sets}</strong>
+          <span className="unit">セット</span>
+        </span>
+        <span>
+          <strong>{totals.reps.toLocaleString('ja-JP')}</strong>
           <span className="unit">回</span>
         </span>
+      </div>
+
+      <div className="summary">
         {/* 直近が自己ベストのときだけ赤が入る。赤 = いま前進の途中にある */}
         <span className={atBest ? 'hit' : ''}>
           <strong>{byLoad ? formatEstimate(best) : best}</strong>
@@ -93,7 +110,7 @@ export function ExerciseRecords({ exercise }: { exercise: Exercise }) {
           <div className="trend-head">
             <span className="muted">{trendLabel(exercise, byLoad)}</span>
             <strong>
-              {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} レップ`}
+              {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} 回`}
             </strong>
           </div>
           <TrendChart

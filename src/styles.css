@@ -1037,6 +1037,68 @@ button {
   gap: 0.4375rem;
   padding: 0.75rem 0;
   border-top: 1px solid var(--line);
+  /* 溜めの進みを行の下端に引くため（下の ::after） */
+  position: relative;
+  /* 溜まるほど行が色づく。7% までしか上げない——読む数字が乗っている面なので */
+  background: color-mix(in srgb, var(--accent) calc(var(--charge, 0) * 7%), transparent);
+}
+
+/*
+ * 溜めの進み。**押している指の外に出す唯一の合図。**
+ *
+ * ✓ は 44px しかなく、押している親指がその上を完全に覆う。ボタンの中だけで
+ * 溜まりを描いても当人には見えないので、行の下端いっぱいに線を引く。
+ * ボタン側（右）から左へ伸ばしているのは、力がボタンから行へ広がる向きに見せるため。
+ * 値は PowerCheck が --charge に毎フレーム書く。
+ */
+.set-item::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(var(--charge, 0));
+  transform-origin: 100% 50%;
+  opacity: var(--charge, 0);
+  pointer-events: none;
+}
+
+/*
+ * 弾けた瞬間、その線が**行いっぱいに開いて消える**。
+ *
+ * 破裂の輪と閃光はボタンの真上（＝押している指の下）で起きるので当人には見えない。
+ * 溜めのあいだ目で追っていたのはこの線なので、同じ線を解き放つ形にすると、
+ * 視線を移さずに「入った」が読める。値は PowerCheck が --release に流す。
+ */
+.set-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 calc(var(--release, 0) * 10px) var(--accent);
+  opacity: var(--release, 0);
+  /* 消えぎわに厚みが増して、線が「開いた」ように見せる */
+  transform: scaleY(calc(1 + (1 - var(--release, 0)) * 1.5));
+  pointer-events: none;
+}
+
+/*
+ * 溜まりきる手前で、その行の欄が赤く縁取られる。
+ * 「これから記録になる数字」が、指の外で先に色づく。
+ *
+ * `:focus-within` を外しているのは、この選択子のほうが打っている最中の枠
+ * （`.stepper:focus-within`）より強く、そのまま当てると**入力中の枠が消える**ため。
+ * 溜めているあいだに欄を打っていることは無いので、譲って困らない。
+ */
+.set-item:not(.is-done) .stepper:not(:focus-within) {
+  border-color: color-mix(in srgb, var(--accent) calc(var(--charge, 0) * 100%), var(--line));
 }
 
 .set-main {
@@ -2670,6 +2732,25 @@ button {
   gap: 0.4375rem;
 }
 
+/*
+ * 通算。設定の行（目安の回数・セット数）の下に、数字だけの行として置く。
+ *
+ * 一番弱い色を地にして、数だけを本文の濃さで立てている。行全体を読ませたいのでは
+ * なく、**数が積み上がっていること**が視界の端で分かればいいため。
+ */
+.ex-totals {
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.0625rem;
+}
+
+.ex-totals strong {
+  color: var(--fg-dim);
+  font-weight: 600;
+}
+
 .ex-item .muted {
   font-size: 0.6875rem;
   letter-spacing: 0.02em;
@@ -3018,6 +3099,7 @@ button {
   animation: fade-in 180ms ease-out;
   /* カードが起き上がる（rotateY）ときの奥行き。無いと回転がただの伸縮に見える */
   perspective: 900px;
+  padding: var(--gutter);
 }
 
 @keyframes fade-in {
@@ -3075,8 +3157,11 @@ button {
   box-shadow:
     inset 0 1px 0 var(--sheen),
     var(--shadow-3);
-  padding: 1.5rem 1.75rem;
+  padding: 1.5rem 1.5rem 1.625rem;
   min-width: 14rem;
+  /* 画面いっぱいまで育つと、引き当てた 1 枚ではなく画面そのものに見える */
+  max-width: 21rem;
+  width: 100%;
   text-align: center;
   /* 走る光をカードの縁で切る */
   overflow: hidden;
@@ -3182,9 +3267,22 @@ button {
 }
 
 .tier-legend .celebrate-title,
-.tier-legend .celebrate-gain,
 .tier-legend .celebrate-more-gain {
   color: var(--gold-text);
+}
+
+.tier-legend .celebrate-crest {
+  background: color-mix(in srgb, var(--gold) 15%, transparent);
+}
+
+.tier-legend .celebrate-gain,
+.tier-legend .celebrate-timer {
+  background: var(--gold);
+}
+
+/* 金の地に白抜きは沈む。金だけ文字を地の色に落として読めるようにする */
+.tier-legend .celebrate-gain {
+  color: #1a1206;
 }
 
 .tier-legend .celebrate-rays span {
@@ -3195,16 +3293,29 @@ button {
   background: var(--gold);
 }
 
+/*
+ * 記章。印と格の名前を横に並べて 1 つの塊にする。
+ * 縦に積むと、その 2 つが別々の情報として読まれて、主役の 1 行が下へ押し出される。
+ */
+.celebrate-crest {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.6875rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  margin-bottom: 0.4375rem;
+}
+
 .celebrate-icon {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 0.9375rem;
+  height: 0.9375rem;
   color: var(--accent);
-  margin-bottom: 0.375rem;
 }
 
 .celebrate-title {
-  font-size: var(--fs-sm);
-  letter-spacing: 0.09em;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.11em;
   color: var(--accent-text);
   font-weight: 700;
 }
@@ -3214,20 +3325,92 @@ button {
   color: var(--muted);
 }
 
-.celebrate-detail {
-  font-size: var(--fs-2xl);
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  margin-top: 0.125rem;
+/*
+ * 主役。**専門語を使わずに「何がすごいか」だけを言う 1 行。**
+ *
+ * ここが一番大きい。以前は数字（`推定 1RM 103.3kg`）が最大で、その語を知らないと
+ * 何を褒められたのか読み取れなかった。字の大きさの順が、読む順そのものになる。
+ */
+.celebrate-plain {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  margin-top: 0.4375rem;
+  /*
+   * 和文は語の途中でも折れるので、放っておくと「重さと回数を合わせ／た力が」の
+   * ように読みの切れ目と行の切れ目がずれる。文節で折らせ、行の長さも揃える。
+   * auto-phrase を解さない環境では balance だけが効く（従来どおりの折り返し）。
+   */
+  max-width: 17rem;
+  text-wrap: balance;
+  word-break: auto-phrase;
 }
 
-.celebrate-prev {
-  font-size: var(--fs-xs);
-  color: var(--muted);
+/* 主役の根拠になる数字。読めなくても上の 1 行で意味は通る位置づけ */
+.celebrate-detail {
+  font-size: var(--fs-base);
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.3125rem;
 }
 
 /*
- * どれだけ動いたか。到達した数字と前の記録の間に置く。
+ * どこから動いたか。前と今を**横に並べて**、間に矢印を置く。
+ *
+ * 到達した数字だけを置いても、それが上がった結果なのかは読み取れない。
+ * 並べれば、引き算をしなくても「動いた」ことが形で分かる。
+ */
+.celebrate-shift {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.6875rem;
+  margin-top: 0.875rem;
+  padding: 0.5625rem 0.875rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  width: 100%;
+}
+
+.shift-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.0625rem;
+}
+
+.shift-label {
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.shift-value {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 今日の側だけ本文の濃さにする。どちらが新しいかを色の差で先に伝える */
+.shift-side.is-now .shift-value {
+  color: var(--fg);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.shift-arrow {
+  color: var(--faint);
+  font-size: var(--fs-base);
+  /* ラベルのぶん下がった数字の行に矢印を合わせる */
+  transform: translateY(0.3125rem);
+}
+
+/*
+ * どれだけ動いたか。
  *
  * 数字が 2 つ出ていても、進んだ量はその場で引き算しないと出てこない。
  * 祝う場面で計算をさせないために、増分だけを 1 語で置く。
@@ -3235,26 +3418,51 @@ button {
 .celebrate-gain {
   font-size: var(--fs-md);
   font-weight: 700;
-  color: var(--accent-text);
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  padding: 0.125rem 0.5625rem;
   letter-spacing: 0.01em;
+  transform: translateY(0.25rem);
+}
+
+/* 比べる相手が居ない記録。空白にせず、それ自体を言う */
+.celebrate-first {
+  margin-top: 0.75rem;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+/*
+ * 用語の言い換え。推定 1RM のように、数字を読むのに前提知識が要るものにだけ出る。
+ * 毎回同じ文が出るが、覚えるまでは毎回要るものなので削らない。
+ */
+.celebrate-gloss {
+  margin-top: 0.625rem;
+  font-size: var(--fs-2xs);
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 17rem;
+  word-break: auto-phrase;
 }
 
 /*
  * 同じ ✓ で一緒に動いたもの。主役の下に細く並べる。
  *
- * 重量も上がって同じ重さでのレップも伸びた日に片方しか映らないと、何がどう
+ * 重量も上がって同じ重さでの回数も伸びた日に片方しか映らないと、何がどう
  * 動いたのかが分からない。ただし主役と同じ大きさで並べると 3 つとも読まれずに
- * 消えるので、行の高さを詰めて添え物にしてある。
+ * 消えるので、行の高さを詰めて添え物にしてある。ここも平たい言い方を先に置く。
  */
 .celebrate-more {
   list-style: none;
-  margin: 0.75rem 0 0;
-  padding: 0.6875rem 0 0;
+  margin: 0.875rem 0 0;
+  padding: 0.75rem 0 0;
   width: 100%;
   border-top: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 0.3125rem;
+  gap: 0.4375rem;
 }
 
 .celebrate-more li {
@@ -3262,17 +3470,17 @@ button {
   align-items: baseline;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: 0.25rem 0.4375rem;
   font-size: var(--fs-sm);
 }
 
-.celebrate-more-title {
-  color: var(--muted);
-  letter-spacing: 0.06em;
+.celebrate-more-plain {
+  color: var(--fg-dim);
 }
 
 .celebrate-more-detail {
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .celebrate-more-gain {
@@ -3280,12 +3488,40 @@ button {
   font-weight: 700;
 }
 
+/*
+ * 自分で消えるまでの残り。カードの下端を尽きていく線。
+ *
+ * 黙って消えると「読み切れなかった」だけが残る。あと何秒あるのかが見えれば、
+ * 読むか、触って閉じて次のセットへ行くかを選べる。
+ */
+.celebrate-timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: 0 50%;
+  /* 長さは Celebration が --close-ms で渡す（消える時刻と同じ 1 つの値） */
+  animation: celebrate-timer var(--close-ms, 6200ms) linear both;
+}
+
+@keyframes celebrate-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .celebrate,
   .celebrate-card,
   .celebrate-rays span,
   .celebrate-shine,
-  .celebrate-sparkles span {
+  .celebrate-sparkles span,
+  .celebrate-timer {
     animation: none;
   }
   .celebrate-rays,
@@ -3518,7 +3754,7 @@ button {
 }
 
 /*
- * 置き場所は 5 つとも明示する。
+ * 置き場所は 6 つとも明示する。
  *
  * 一部だけ行を指定して残りを自動配置に任せると、行を指定した要素が先に場所を
  * 取って、見出しが右の列へ押し出される（実際にそうなった）。
@@ -3544,8 +3780,18 @@ button {
   white-space: nowrap;
 }
 
-.wrap-record-detail {
+/* 専門語を使わない 1 行。数字より先に読ませたいので、見出しのすぐ下に置く */
+.wrap-record-plain {
   grid-row: 2;
+  grid-column: 1 / -1;
+  font-size: var(--fs-sm);
+  color: var(--fg-dim);
+  line-height: 1.55;
+  word-break: auto-phrase;
+}
+
+.wrap-record-detail {
+  grid-row: 3;
   grid-column: 1;
   font-size: var(--fs-lg);
   font-weight: 600;
@@ -3553,7 +3799,7 @@ button {
 }
 
 .wrap-record-gain {
-  grid-row: 2;
+  grid-row: 3;
   grid-column: 2;
   align-self: baseline;
   text-align: right;
@@ -3564,7 +3810,7 @@ button {
 }
 
 .wrap-record-prev {
-  grid-row: 3;
+  grid-row: 4;
   grid-column: 1 / -1;
   font-size: var(--fs-xs);
   color: var(--muted);

@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { mergeImpact } from '../lib/merge.ts';
-import { bestSeries, byRecentUse, exerciseHistory, lastPerformed } from '../lib/query.ts';
+import { bestSeries, byRecentUse, exerciseHistory, exerciseTotals, lastPerformed } from '../lib/query.ts';
 import {
   LOAD_MODES,
   LOAD_MODE_KEYS,
@@ -83,7 +83,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
     if (!draft) return;
     const name = draft.name.trim();
     if (name === '') return setMessage('種目名を入れる');
-    if (draft.repMin > draft.repMax) return setMessage('レップの目安の下限が上限を超えている');
+    if (draft.repMin > draft.repMax) return setMessage('回数の目安の下限が上限を超えている');
     if (draft.increment <= 0) return setMessage('重量の刻みは 0 より大きくする');
     upsertExercise({
       ...draft,
@@ -138,6 +138,23 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
     return map;
   }, [exercises, sessions]);
 
+  /*
+   * 通算。**これまでその種目をどれだけやったか。**
+   *
+   * 一覧に出しているのがこれまで設定（目安の回数とセット数）だけだったので、
+   * どの種目をどれだけ続けてきたのかが、開くまで分からなかった。通算は伸び悩んでも
+   * 必ず増える数なので、一覧を「やってきたものの棚」として読めるようにする。
+   * 1 度もやっていない種目には出さない（0 を並べても意味を持たない）。
+   */
+  const totals = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof exerciseTotals>>();
+    for (const e of exercises) {
+      const t = exerciseTotals(exerciseHistory(sessions, e.id));
+      if (t.sets > 0) map.set(e.id, t);
+    }
+    return map;
+  }, [exercises, sessions]);
+
   return (
     <>
       <header className="view-head">
@@ -158,6 +175,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
             <ul className="ex-list">
               {items.map((e) => {
                 const trend = trends.get(e.id);
+                const total = totals.get(e.id);
                 return (
                   <li key={e.id}>
                     <button type="button" className="ex-item" onClick={() => openDraft({ ...e, id: e.id })}>
@@ -167,8 +185,18 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                           {e.archived ? <span className="chip subtle">非表示</span> : null}
                         </span>
                         <span className="muted">
-                          {LOAD_MODES[e.loadMode].label} · {e.repMin}〜{e.repMax}レップ × {e.sets}セット
+                          {LOAD_MODES[e.loadMode].label} · {e.repMin}〜{e.repMax}回 × {e.sets}セット
                         </span>
+                        {/*
+                          通算。設定（上の行）と混ぜず、数字だけの行として下に置く。
+                          「目安」と「やった量」は別のものなので、同じ行に並べると読み違える。
+                        */}
+                        {total ? (
+                          <span className="ex-totals">
+                            通算 <strong>{total.days}</strong> 日 · <strong>{total.sets}</strong> セット ·{' '}
+                            <strong>{total.reps.toLocaleString('ja-JP')}</strong> 回
+                          </span>
+                        ) : null}
                       </span>
                       {/* 到達点の推移。形だけを見せる（数字は開いた先の記録の面にある） */}
                       {trend ? <Sparkline values={trend.values} atBest={trend.atBest} /> : null}
@@ -282,7 +310,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                 </label>
                 <div className="pair">
                   <label>
-                    <span>レップの目安 下限</span>
+                    <span>回数の目安 下限</span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -291,7 +319,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                     />
                   </label>
                   <label>
-                    <span>レップの目安 上限</span>
+                    <span>回数の目安 上限</span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -352,7 +380,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                         </select>
                       </label>
                       <p className="footnote">
-                        この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・レップの目安・
+                        この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・回数の目安・
                         コツ）は移らないので、残したいものはまとめ先の側で直す。
                       </p>
                       <div className="btn-row">

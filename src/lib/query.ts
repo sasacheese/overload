@@ -110,6 +110,37 @@ export function exerciseHistory(sessions: readonly Session[], id: ExerciseId): E
     );
 }
 
+/**
+ * 通算。**その種目をこれまでどれだけやったか**を 3 つの数で持つ。
+ *
+ * ここだけが「減らない数」で、記録の伸び（ベスト・推移）とは性格が違う。
+ * ベストは伸び悩めば何か月も動かないが、通算はやった日には必ず増える。
+ * 続けたこと自体を数として見せるために、ベストと並べて置く。
+ *
+ * 数えるのは ✓ の付いたセットだけ（`doneSets`）。入力欄に数字が入っているだけの
+ * 行はまだやっていないので、通算に混ぜると「並べただけ」で数が増えてしまう。
+ */
+export type ExerciseTotals = {
+  /** やった日数。 */
+  days: number;
+  /** ✓ の付いたセットの数。 */
+  sets: number;
+  /** その合計レップ数。 */
+  reps: number;
+};
+
+export function exerciseTotals(history: ExerciseHistory): ExerciseTotals {
+  let sets = 0;
+  let reps = 0;
+  for (const h of history) {
+    for (const set of doneSets(h.entry)) {
+      sets += 1;
+      reps += set.reps;
+    }
+  }
+  return { days: history.length, sets, reps };
+}
+
 /** 指定日より前の直近の記録。今日の入力欄の初期値の元になる。 */
 export function previousEntry(
   sessions: readonly Session[],

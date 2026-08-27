@@ -6,6 +6,19 @@
  * 引いていく）——やり切ったセットを押し切って刻む、を操作そのものにしてある。
  * 溜めの長さは 1 秒未満なので、記録のたびの負担にはならない。
  *
+ * ## 演出は、押している指の外へ出す
+ *
+ * ボタンは 44px しかないので、**押している指がその上を完全に覆う**。ボタンの中だけで
+ * 溜まりや破裂を描いても、当人には何も見えない（実際にそうなっていた）。そこで
+ * 溜まり具合を**セット行そのもの**に持たせている——行の下端を走る線が右（ボタン側）
+ * から左へ伸び、行がわずかに色づく。指が乗っているのは行の右端だけなので、
+ * 残りは全部見える。弾けた瞬間は、その線が行いっぱいに開いて消える（`--release`）
+ * ——溜めていた線がそのまま解き放たれる形にしてあり、見ていた場所から目を移さずに
+ * 「入った」が分かる。
+ *
+ * 行への受け渡しはカスタムプロパティ（`--charge` と `--release`）だけで行う。
+ * クラスを足すと、✓ が入った瞬間の再描画で React が className ごと書き戻して消える。
+ *
  *  - スクロールに指を取られたら（pointercancel）静かに力が抜けるだけ
  *  - ✓ を外す側は溜めない。取り消しは記録ではないので、タップで静かに外れる
  *  - キーボード（Enter/Space）は溜めずに入る。長押しは指のための操作で、
@@ -34,6 +47,9 @@ const HOLD_MS = 800;
 
 /** 途中で離したときに、力が抜けきるまで。 */
 const DRAIN_MS = 180;
+
+/** 弾けた線が行いっぱいに開いて消えるまで。 */
+const RELEASE_MS = 460;
 
 /** 溜まり具合の節目。越えるたびに指へ小さく返し、力が積み上がっていることを伝える。 */
 const TICKS = [0.3, 0.6, 0.85] as const;
@@ -83,9 +99,19 @@ type Props = {
 
 export function PowerCheck({ done, label, onToggle }: Props) {
   const btn = useRef<HTMLButtonElement | null>(null);
+  /**
+   * 溜まり具合を映すセット行。指の外に出せる面はここしかない。
+   *
+   * ボタンから毎回たぐらず自分で持つ。外れるときの片付けは useEffect の戻りで
+   * 走るが、その時点で React は ref を外し終えていて `btn.current` は null——
+   * たぐる作りにすると、**片付けたい場面でだけ行が見つからない**ことになる。
+   */
+  const row = useRef<HTMLElement | null>(null);
   const [charging, setCharging] = useState(false);
   const [burst, setBurst] = useState<BurstTier | null>(null);
   const raf = useRef(0);
+  /** 解き放った線の減衰。溜めとは別に持つ——溜め側を止めても線は走り切らせる */
+  const releaseRaf = useRef(0);
   const startAt = useRef(0);
   const ticked = useRef(0);
   /** いまの溜まり具合。途中で離したとき、ここから力が抜けていく。 */
@@ -100,10 +126,46 @@ export function PowerCheck({ done, label, onToggle }: Props) {
 
   const setCharge = (v: number) => {
     charge.current = v;
-    btn.current?.style.setProperty('--charge', String(v));
+    // 0 は書かずに消す。見た目は同じだが、行に溜めの跡が残らない
+    const write = (el: HTMLElement | null) => {
+      if (el === null) return;
+      if (v <= 0) el.style.removeProperty('--charge');
+      else el.style.setProperty('--charge', String(v));
+    };
+    write(btn.current);
+    // 行にも同じ値を渡す。ボタンの上は指で埋まっているので、見えるのはこちら
+    write(row.current);
   };
 
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  /**
+   * 弾けた合図を行に流す。溜めの線が行いっぱいに開いて消える。
+   *
+   * 破裂の輪と閃光はボタンの真上——押している指の下——で起きるので、当人には
+   * ほとんど見えない。指の外に出るのはこの線だけなので、破裂と同じ拍で走らせる。
+   */
+  const release = () => {
+    const el = row.current;
+    if (el === null) return;
+    const t0 = performance.now();
+    const fade = () => {
+      const q = Math.min(1, (performance.now() - t0) / RELEASE_MS);
+      el.style.setProperty('--release', String(1 - q));
+      if (q < 1) releaseRaf.current = requestAnimationFrame(fade);
+      else el.style.removeProperty('--release');
+    };
+    releaseRaf.current = requestAnimationFrame(fade);
+  };
+
+  useEffect(() => {
+    row.current = btn.current?.closest<HTMLElement>('.set-item') ?? null;
+    return () => {
+      cancelAnimationFrame(raf.current);
+      cancelAnimationFrame(releaseRaf.current);
+      // 溜めかけ・弾けかけのまま外れたら、行に残した塗りも一緒に持っていく
+      row.current?.style.removeProperty('--charge');
+      row.current?.style.removeProperty('--release');
+    };
+  }, []);
 
   useEffect(() => {
     if (burst === null) return;
@@ -160,6 +222,7 @@ export function PowerCheck({ done, label, onToggle }: Props) {
       cancelAnimationFrame(raf.current);
       setCharging(false);
       setCharge(0);
+      release();
       setBurst(onToggle() ?? 'plain');
       smashFeedback();
     };

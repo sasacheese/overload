@@ -132,7 +132,7 @@ function Disclosure({
 function setsLabel(ex: Exercise, sets: readonly SetRecord[]): string {
   if (sets.length === 0) return '記録なし';
   const reps = sets.map((s) => s.reps).join('・');
-  if (ex.loadMode === 'bodyweight' && sets.every((s) => s.weight === 0)) return `${reps} レップ`;
+  if (ex.loadMode === 'bodyweight' && sets.every((s) => s.weight === 0)) return `${reps} 回`;
   /*
    * 数字の意味を必ず言う。アシストは「補助」、自重に足したぶんは「加重」。
    * 裸の kg にすると、あとで読み返したときに持ち上げた重量と区別が付かない。
@@ -231,7 +231,7 @@ export function ExerciseCard({
    *
    * 今日の記録から決めると、まだ ✓ を 1 つも付けていない朝のあいだは常に
    * 「測れていない」になり、推移の見出しが「最高レップ」に化けて、そこに推定 1RM の
-   * 数字がレップとして出る（`直近 200.66666 レップ`）。推移が見ているのは履歴なので、
+   * 数字が回数として出る（`直近 200.66666 回`）。推移が見ているのは履歴なので、
    * 測り方も履歴から決める。履歴も無ければ種目の設定に従う。
    */
   const historyByLoad = history[0] ? metrics(exercise, history[0]).byLoad : exercise.loadMode !== 'bodyweight';
@@ -455,7 +455,7 @@ export function ExerciseCard({
                       value={set.reps}
                       step={1}
                       min={0}
-                      label={`${i + 1}セット目のレップ`}
+                      label={`${i + 1}セット目の回数`}
                       suffix="回"
                       dial
                       onNext={focusNextField}
@@ -627,7 +627,7 @@ export function ExerciseCard({
                 <div className="trend-head">
                   <span className="muted">直近</span>
                   <strong>
-                    {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} レップ`}
+                    {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} 回`}
                   </strong>
                 </div>
                 <TrendChart
@@ -643,7 +643,7 @@ export function ExerciseCard({
                   forecast={trend}
                   short={trendShort === null ? null : shortfallLabel(trendShort)}
                   today={today}
-                  unit={byLoad ? 'kg' : 'レップ'}
+                  unit={byLoad ? 'kg' : '回'}
                   fmt={formatEstimate}
                   settleName={capRatio === null ? undefined : `体重比 ${capRatio}×`}
                 />

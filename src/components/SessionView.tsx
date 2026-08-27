@@ -412,10 +412,23 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     }
   };
 
+  /**
+   * まとめを開く。開くと同時に、その日の種目を全部畳む。
+   *
+   * まとめを読むのは「その日の入力が済んだ」合図なので、閉じたときに開いたままの
+   * 入力欄がずらりと残っていると、まだ途中のように見える。畳めば 1 種目 1 行の
+   * 一覧になり、まとめで読んだ内容とそのまま突き合わせられる。
+   * 開き直すのは見出しを押すだけで済む（畳みは覚えるので、日を送っても保つ）。
+   */
+  const openWrap = (fresh: boolean) => {
+    applyFold(() => new Set(session.entries.map((e) => e.exerciseId as string)));
+    setWrap({ fresh });
+  };
+
   /** 今日を締める。押した時刻を残して、まとめを出す。 */
   const finishDay = () => {
     saveSession({ ...session, finishedAt: Date.now() });
-    setWrap({ fresh: true });
+    openWrap(true);
     // 締めたら休憩の残り時間は用が済んでいる。数え続ける意味がない
     dismissRest();
   };
@@ -553,14 +566,14 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
               今日を終える
             </button>
           ) : (
-            <button type="button" className="quiet-action finish-again" onClick={() => setWrap({ fresh: false })}>
+            <button type="button" className="quiet-action finish-again" onClick={() => openWrap(false)}>
               この日のまとめを見る
             </button>
           )
         ) : null}
 
         {finished ? (
-          <button type="button" className="quiet-action finish-again" onClick={() => setWrap({ fresh: false })}>
+          <button type="button" className="quiet-action finish-again" onClick={() => openWrap(false)}>
             この日は終えた · まとめをもう一度見る
           </button>
         ) : null}
