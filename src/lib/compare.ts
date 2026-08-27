@@ -49,6 +49,8 @@ export type CompareSeries = {
   latest: number;
   /** 初日からの伸び（0.12 なら +12%）。 */
   growth: number;
+  /** この期間にやった日数。選んだときの明細に出す。 */
+  days: number;
 };
 
 /**
@@ -70,13 +72,25 @@ function byLoadOf(ex: Exercise, history: ExerciseHistory): boolean {
  * **初日の到達点が 0 の種目**（0 を基準にすると指数が出せない。加重なしの自重種目で
  * レップも 0 の日など）。除いた数は呼ぶ側が数えられるよう、判定をここに閉じている。
  */
-export function compareSeries(sessions: readonly Session[], exercises: readonly Exercise[]): CompareSeries[] {
+export function compareSeries(
+  sessions: readonly Session[],
+  exercises: readonly Exercise[],
+  /**
+   * これより前の記録を切り落とす。null なら全期間。
+   *
+   * 切ったら**基準もその期間の初日に移す**。全期間の初日を 100 のまま
+   * 1 か月の窓を見ると、窓の中では 1 本も動いていない日でも線が高い位置から
+   * 始まって、その期間に何が起きたのかが読めない。
+   */
+  since: IsoDate | null = null,
+): CompareSeries[] {
   // sortedSessions のメモ化に乗せるため、種目ごとに同じ配列を渡す
   const sorted = sortedSessions(sessions);
   const out: CompareSeries[] = [];
 
   for (const ex of exercises) {
-    const history = exerciseHistory(sorted, ex.id);
+    const full = exerciseHistory(sorted, ex.id);
+    const history = since === null ? full : full.filter((h) => h.date >= since);
     if (history.length < MIN_DAYS) continue;
 
     // exerciseHistory は新しい順。線は古い順に引く
@@ -96,6 +110,7 @@ export function compareSeries(sessions: readonly Session[], exercises: readonly 
       first,
       latest,
       growth: latest / first - 1,
+      days: points.length,
     });
   }
 
@@ -103,10 +118,15 @@ export function compareSeries(sessions: readonly Session[], exercises: readonly 
 }
 
 /** 線に足りなかった種目の数。「まだ出ていない」ことを画面で言うために数える。 */
-export function tooShortCount(sessions: readonly Session[], exercises: readonly Exercise[]): number {
+export function tooShortCount(
+  sessions: readonly Session[],
+  exercises: readonly Exercise[],
+  since: IsoDate | null = null,
+): number {
   const sorted = sortedSessions(sessions);
   return exercises.filter((ex) => {
-    const n = exerciseHistory(sorted, ex.id).length;
+    const full = exerciseHistory(sorted, ex.id);
+    const n = since === null ? full.length : full.filter((h) => h.date >= since).length;
     return n > 0 && n < MIN_DAYS;
   }).length;
 }

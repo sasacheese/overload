@@ -2259,202 +2259,473 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── 画面ごと割れる（Shatter） ─────────────────── */
+/* ── 画面ごと砕け散る（Smash） ─────────────────── */
 
 /*
  * 溜め切った ✓ が弾けたときに、画面全体へ出ていく破裂。
  *
- * ボタンの中の破裂は指と行の幅に閉じ込められていて、1 秒近く溜めたことに
- * 見合う手応えにならなかった。ここは**面ではなく一瞬の光**なので、
- * 赤を面で塗らないという方針（冒頭の 2）とは衝突しない——1 秒で消える。
+ * ガラスにヒビが走る絵ではなく、**拳で殴られたレンガが粉々に爆散する**絵。
+ * 割れ目が伸びていく静かな壊れ方は時間で見せるものだが、こちらは
+ * **最初の 1 拍が最大**で、あとは飛び散った粉が薄れていくだけ。
  *
- * 中心（--ox / --oy）は押したボタンの位置。Shatter が弾けた瞬間に測って渡す。
+ * 面ではなく一瞬の光と粉なので、赤を面で塗らないという方針（冒頭の 2）とは
+ * 衝突しない——1 秒で消える。
+ *
+ * 中心（--ox / --oy）は押したボタンの位置。Smash が弾けた瞬間に測って渡す。
  */
-.shatter {
+.smash {
   position: fixed;
   inset: 0;
   z-index: 38;
-  /* 触れない。割れているあいだも下のボタンは押せる */
+  /* 触れない。砕けているあいだも下のボタンは押せる */
   pointer-events: none;
   overflow: hidden;
 }
 
-/* 最初の 1 フレームを飛ばす白。ここで「何かが起きた」を確定させる */
-.shatter-flash {
+/* 中心に置くものの共通の座り。左上を中心へ運んでから自分の半分を戻す */
+.smash-core,
+.smash-flare,
+.smash-ring,
+.smash-dust,
+.smash-chunk,
+.smash-grit {
   position: absolute;
   left: var(--ox);
   top: var(--oy);
-  width: 60vmax;
-  height: 60vmax;
-  margin: -30vmax 0 0 -30vmax;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff 0%, color-mix(in srgb, var(--accent) 75%, transparent) 32%, transparent 68%);
-  animation: shatter-flash 300ms var(--ease-out) both;
 }
 
-@keyframes shatter-flash {
+/*
+ * 当たった瞬間の芯。白から橙へ落ちる小さな球で、いちばん短い。
+ * これが無いと、粉塵だけが唐突に湧いたように見える。
+ */
+.smash-core {
+  width: 22vmax;
+  height: 22vmax;
+  margin: -11vmax 0 0 -11vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, #ffe6b8 22%, color-mix(in srgb, var(--accent) 85%, #fff) 46%, transparent 72%);
+  animation: smash-core 260ms cubic-bezier(0.1, 0.8, 0.2, 1) both;
+}
+
+@keyframes smash-core {
   0% {
-    opacity: 0.9;
-    transform: scale(0.15);
+    opacity: 1;
+    transform: scale(0.1);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
   }
   100% {
     opacity: 0;
-    transform: scale(1.15);
+    transform: scale(1.25);
   }
 }
 
-/* 画面の対角を越えて抜ける輪 */
-.shatter-wave {
-  position: absolute;
-  left: var(--ox);
-  top: var(--oy);
+/*
+ * 十字に伸びる閃光。殴った一撃を「点」ではなく「衝突」に見せる。
+ * 細く長い十字は、粉塵の丸さと形で対比になる。
+ */
+.smash-flare {
+  width: 150vmax;
+  height: 150vmax;
+  margin: -75vmax 0 0 -75vmax;
+  background:
+    linear-gradient(to right, transparent 42%, #fff 50%, transparent 58%),
+    linear-gradient(to bottom, transparent 46%, #fff 50%, transparent 54%);
+  /* 中心だけ濃く、外へ行くほど消える */
+  mask-image: radial-gradient(circle, #000 0%, transparent 48%);
+  animation: smash-flare 300ms var(--ease-out) both;
+}
+
+@keyframes smash-flare {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.05) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1) rotate(12deg);
+  }
+}
+
+/* 画面の対角を越えて抜ける輪。粉の壁が広がる縁 */
+.smash-ring {
   width: 20vmax;
   height: 20vmax;
   margin: -10vmax 0 0 -10vmax;
   border-radius: 50%;
-  border: 2px solid var(--accent);
-  animation: shatter-wave 700ms var(--ease-out) both;
+  border: 3px solid color-mix(in srgb, var(--accent) 70%, #fff);
+  animation: smash-ring 620ms cubic-bezier(0.15, 0.75, 0.25, 1) both;
 }
 
-@keyframes shatter-wave {
+@keyframes smash-ring {
   0% {
-    opacity: 0.85;
+    opacity: 0.9;
     transform: scale(0.1);
   }
   100% {
     opacity: 0;
-    transform: scale(9);
+    transform: scale(8);
   }
 }
 
 /*
- * 亀裂。中心から画面の外まで走る線。
+ * 粉塵。「粉々」を担う本体。
  *
- * 幅 0 から伸ばすのではなく、伸びきった線を scaleX で伸ばして「割れ目が走る」
- * 動きにしている。長さは画面の対角より長い 120vmax で、どの向きでも端まで届く。
+ * ふちのない柔らかい塊を何個か、別々の向きへ膨らませる。1 個の大きな円で
+ * 済ませると煙幕になってしまい、砕けた粉には見えない。
  */
-.shatter-crack {
-  position: absolute;
-  left: var(--ox);
-  top: var(--oy);
-  width: 120vmax;
-  height: var(--w, 2px);
-  background: linear-gradient(to right, #fff 0%, var(--accent) 12%, color-mix(in srgb, var(--accent) 35%, transparent) 55%, transparent 100%);
-  transform-origin: 0 50%;
-  rotate: var(--a);
-  animation: shatter-crack 620ms var(--ease-out) var(--d, 0ms) both;
+.smash-dust {
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 55%, #fff) 0%, color-mix(in srgb, var(--accent) 30%, transparent) 45%, transparent 70%);
+  filter: blur(6px);
+  animation: smash-dust 1100ms cubic-bezier(0.1, 0.7, 0.2, 1) var(--delay, 0ms) both;
 }
 
-@keyframes shatter-crack {
+@keyframes smash-dust {
   0% {
-    opacity: 1;
-    transform: scaleX(0);
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(0) scale(0.2);
   }
-  35% {
-    opacity: 1;
+  18% {
+    opacity: 0.75;
   }
   100% {
     opacity: 0;
-    transform: scaleX(1);
+    transform: rotate(var(--a)) translateX(var(--d)) scale(1.5);
   }
 }
 
-/* 割れた面。亀裂の間を外へ飛んでいく */
-.shatter-chunk {
-  position: absolute;
-  left: var(--ox);
-  top: var(--oy);
-  background: var(--accent);
+/*
+ * 瓦礫。**飛びながら落ちる。**
+ *
+ * 放射方向の飛距離（translateX）と、画面に対する落下（translateY）を
+ * 別々に持たせてある。translateY を rotate より先に置いてあるのがその仕掛けで、
+ * 向きに関わらず必ず真下へ落ちる。中間フレームで落ちを抑えて放物線にする。
+ */
+.smash-chunk {
+  background: color-mix(in srgb, var(--accent) 78%, #2a1410);
   /* 角を落として、四角い紙ではなく割れた欠片に見せる */
-  clip-path: polygon(0 18%, 55% 0, 100% 42%, 72% 100%, 12% 82%);
-  animation: shatter-chunk 900ms cubic-bezier(0.1, 0.7, 0.3, 1) var(--d, 0ms) both;
+  clip-path: polygon(0 22%, 48% 0, 100% 34%, 84% 100%, 22% 88%);
+  animation: smash-chunk 1000ms cubic-bezier(0.12, 0.62, 0.3, 1) var(--delay, 0ms) both;
 }
 
 /* 何枚かを濃淡違いにする。全部同じ赤だと 1 枚の紙吹雪に見える */
-.shatter-chunk:nth-child(3n) {
-  background: color-mix(in srgb, var(--accent) 55%, var(--fg));
+.smash-chunk:nth-child(3n) {
+  background: color-mix(in srgb, var(--accent) 45%, var(--fg));
 }
 
-.shatter-chunk:nth-child(4n) {
-  background: color-mix(in srgb, var(--accent) 70%, #fff);
+.smash-chunk:nth-child(5n) {
+  background: color-mix(in srgb, var(--accent) 60%, #fff);
 }
 
-@keyframes shatter-chunk {
+@keyframes smash-chunk {
   0% {
     opacity: 1;
-    transform: rotate(var(--a)) translateX(2vmax) rotate(0deg) scale(0.4);
+    transform: translate(-50%, -50%) translateY(0) rotate(var(--a)) translateX(1vmax) rotate(0deg);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(calc(var(--fall) * 0.18)) rotate(var(--a)) translateX(calc(var(--d) * 0.72))
+      rotate(calc(var(--spin) * 0.6));
   }
   100% {
     opacity: 0;
-    transform: rotate(var(--a)) translateX(var(--dist)) rotate(var(--spin)) scale(1);
+    transform: translate(-50%, -50%) translateY(var(--fall)) rotate(var(--a)) translateX(var(--d)) rotate(var(--spin));
   }
 }
 
-/* 記録更新の最上位だけ金で割れる。祝福のカードと同じ格の色 */
-.shatter-legend .shatter-flash {
-  background: radial-gradient(circle, #fff 0%, color-mix(in srgb, var(--gold) 80%, transparent) 32%, transparent 68%);
+/* 細礫。瓦礫より先に、遠くまで抜ける */
+.smash-grit {
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 65%, #fff);
+  animation: smash-grit 760ms cubic-bezier(0.08, 0.7, 0.25, 1) var(--delay, 0ms) both;
 }
 
-.shatter-legend .shatter-wave {
-  border-color: var(--gold);
+@keyframes smash-grit {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(0) rotate(var(--a)) translateX(1vmax);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(var(--fall)) rotate(var(--a)) translateX(var(--d));
+  }
 }
 
-.shatter-legend .shatter-crack {
-  background: linear-gradient(to right, #fff 0%, var(--gold) 12%, color-mix(in srgb, var(--gold) 35%, transparent) 55%, transparent 100%);
+/* 記録更新の最上位だけ金で砕ける。祝福のカードと同じ格の色 */
+.smash-legend .smash-core {
+  background: radial-gradient(circle, #fff 0%, #fff0c4 24%, color-mix(in srgb, var(--gold) 88%, #fff) 48%, transparent 72%);
 }
 
-.shatter-legend .shatter-chunk {
-  background: var(--gold);
+.smash-legend .smash-ring {
+  border-color: color-mix(in srgb, var(--gold) 75%, #fff);
 }
 
-.shatter-legend .shatter-chunk:nth-child(3n) {
-  background: color-mix(in srgb, var(--gold) 60%, var(--fg));
+.smash-legend .smash-dust {
+  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 55%, #fff) 0%, color-mix(in srgb, var(--gold) 30%, transparent) 45%, transparent 70%);
+}
+
+.smash-legend .smash-chunk {
+  background: color-mix(in srgb, var(--gold) 80%, #2a1c04);
+}
+
+.smash-legend .smash-chunk:nth-child(3n) {
+  background: color-mix(in srgb, var(--gold) 50%, var(--fg));
+}
+
+.smash-legend .smash-grit {
+  background: color-mix(in srgb, var(--gold) 70%, #fff);
 }
 
 /*
- * 画面のぶれ。割れた瞬間だけ、面ごと小さく揺らす。
+ * 画面のぶれ。砕けた瞬間だけ、面ごと短く強く揺らす。
  *
- * 揺れる幅は 3px 台。これ以上動かすと、読んでいる数字が滲んで酔う。
- * 揺らすのは面（.app）で、割れの絵そのもの（position: fixed）は揺らさない
- * ——両方揺れると、割れ目と画面が別々に動いて像が二重になる。
+ * 揺れる幅は 4px 台。これ以上動かすと、読んでいる数字が滲んで酔う。
+ * 揺らすのは面（.app）で、砕けの絵そのもの（position: fixed）は揺らさない
+ * ——両方揺れると、粉と画面が別々に動いて像が二重になる。
  */
 .is-quaking .app {
-  animation: quake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  animation: quake 460ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
 @keyframes quake {
-  0%,
-  100% {
+  0% {
     transform: translate(0, 0);
   }
-  10% {
-    transform: translate(-3px, 2px) rotate(-0.25deg);
+  8% {
+    transform: translate(-5px, 3px) rotate(-0.35deg);
   }
-  25% {
-    transform: translate(4px, -3px) rotate(0.3deg);
+  20% {
+    transform: translate(5px, -4px) rotate(0.4deg);
   }
-  40% {
-    transform: translate(-3px, -2px) rotate(-0.2deg);
+  33% {
+    transform: translate(-4px, -3px) rotate(-0.28deg);
   }
-  55% {
-    transform: translate(2px, 3px) rotate(0.15deg);
+  47% {
+    transform: translate(3px, 4px) rotate(0.2deg);
   }
-  70% {
-    transform: translate(-2px, 1px) rotate(-0.1deg);
+  61% {
+    transform: translate(-3px, 2px) rotate(-0.14deg);
   }
-  85% {
-    transform: translate(1px, -1px);
+  75% {
+    transform: translate(2px, -2px);
+  }
+  88% {
+    transform: translate(-1px, 1px);
+  }
+  100% {
+    transform: translate(0, 0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   /* 出す側でも止めているが、ここでも塞いでおく */
-  .shatter {
+  .smash {
     display: none;
   }
   .is-quaking .app {
     animation: none;
   }
+}
+
+/* ── 推移タブ：種目 / 体重 の面の切り替え ────────── */
+
+/*
+ * 下のタブバー（面そのものの切り替え）と役割が違うので、見た目も変える。
+ * あちらは帯に沈んだアイコン、こちらは地の上に浮く 2 枚の札。
+ */
+.face-switch {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.face-switch button {
+  padding: 0.4375rem 1.125rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-md);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  transition:
+    background var(--t) var(--ease-out),
+    color var(--t) var(--ease-out);
+}
+
+.face-switch button.is-active {
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+
+/* ── 推移タブ：種目の面 ─────────────────────────── */
+
+.trends {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+/*
+ * 見出しの一文。**数字の羅列ではなく、読める文で今の状態を言う。**
+ *
+ * 面を開いた瞬間に受け取るのはこの 1 行だけでいい。折れ線は読み解くのに
+ * 時間がかかるものなので、その手前に「何が起きているか」を言葉で置く。
+ */
+.trends-lede {
+  margin: 0;
+  font-size: var(--fs-xl);
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  word-break: auto-phrase;
+}
+
+.trends-lede strong {
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  /* 数と字のベースラインを合わせる。数字だけ大きいと行が浮く */
+  margin-right: 0.125rem;
+}
+
+.trends-sub {
+  margin: -0.375rem 0 0;
+  font-size: var(--fs-md);
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4375rem;
+}
+
+.trends-sub strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.trends-lead-gain {
+  color: var(--accent-text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trends-note {
+  margin: 0;
+}
+
+/*
+ * 選んだ種目の明細。
+ *
+ * 左の 2px だけをその種目の色にしてある——面ごと色で塗ると、絵の中の
+ * 「選んだ 1 本だけが色を持つ」という決めごとが崩れる。
+ */
+.trends-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.875rem 0 0.875rem 0.875rem;
+  border-left: 2px solid var(--series, var(--accent));
+  background: var(--surface-2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  animation: unfold var(--t-slow) var(--ease);
+}
+
+.trends-focus-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trends-focus-group {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.trends-focus-name {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/*
+ * 初日 → 今日。目標ではなく過去の事実なので、外れようがない。
+ * 日付を数字の上に添えて、「いつの自分と比べているか」を出す。
+ */
+.trends-journey {
+  display: flex;
+  align-items: center;
+  gap: 0.6875rem;
+  flex-wrap: wrap;
+}
+
+.trends-then,
+.trends-now {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+.trends-when {
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+}
+
+.trends-value {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 今日の側だけ本文の濃さにする。どちらが新しいかを色の差で先に伝える */
+.trends-now .trends-value {
+  color: var(--fg);
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.trends-arrow {
+  color: var(--faint);
+  transform: translateY(0.3125rem);
+}
+
+.trends-gain {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(0.25rem);
+}
+
+/* 伸びた側にだけ赤を渡す。落ちた側と横ばいは無彩色のまま */
+.trends-gain.is-up {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  padding: 0.125rem 0.5rem;
+}
+
+.trends-totals {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.trends-totals strong {
+  color: var(--fg-dim);
+  font-weight: 600;
 }
 
 /* ── 種目を重ねた推移（初日 = 100 の指数） ────────── */
@@ -2491,6 +2762,12 @@ button {
   fill: var(--faint);
   font-size: 9px;
   font-variant-numeric: tabular-nums;
+}
+
+/* いつからいつまでの絵なのか。両端だけ置けば読める */
+.compare-axis {
+  fill: var(--faint);
+  font-size: 9px;
 }
 
 .compare-series {
@@ -5069,13 +5346,27 @@ button {
     gap: 0.75rem;
   }
 
-  /* ── 体重：左に折れ線、右に一覧 ─────────────────── */
-
-  .view-weight {
+  /*
+   * 推移（体重の面）：左に折れ線、右に一覧。
+   *
+   * 面の切り替え（.face-switch）は列に分けず、上に 1 本置いたままにする。
+   * 左右どちらの列にも属さない操作なので、列の中に入れると片側に寄って見える。
+   */
+  .view-trends {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 17rem;
     align-items: start;
     column-gap: 2rem;
+  }
+
+  .face-switch,
+  .trends {
+    grid-column: 1 / -1;
+  }
+
+  /* 種目の面は 1 枚の絵として通しで使う。列に割ると折れ線が痩せる */
+  .trends {
+    max-width: 46rem;
   }
 
   .weight-main,

@@ -16,13 +16,11 @@ import {
   weekStreak,
   type YearMonth,
 } from '../lib/calendar.ts';
-import { compareSeries, tooShortCount } from '../lib/compare.ts';
 import { lifetimeTotals, volumeParts } from '../lib/milestones.ts';
 import { bodyWeightOn, countedSets, sessionGroups, sessionVolume, sortedSessions } from '../lib/query.ts';
 import { MUSCLE_GROUPS, type IsoDate, type MuscleGroup } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
 import { AskClaudeButton } from './AskClaudeButton.tsx';
-import { CompareChart } from './CompareChart.tsx';
 import { Icon } from './Icon.tsx';
 import { dayClass } from './Weekday.tsx';
 
@@ -62,15 +60,6 @@ export function CalendarView({ today, onPickDate }: Props) {
    */
   const lifetime = useMemo(() => lifetimeTotals(sessions, exercises), [sessions, exercises]);
   const lifted = volumeParts(lifetime.volume);
-
-  /*
-   * 種目どうしを重ねた推移。全期間を舐めるので、開いたときに 1 回だけ計算する。
-   *
-   * 縦軸は実測ではなく初日を 100 とした指数（lib/compare.ts）。桁の違う種目を
-   * 同じ軸に置くための唯一の手で、見たいのが前進の量である以上、意味も合っている。
-   */
-  const compare = useMemo(() => compareSeries(sessions, exercises), [sessions, exercises]);
-  const tooShort = useMemo(() => tooShortCount(sessions, exercises), [sessions, exercises]);
 
   return (
     <>
@@ -182,19 +171,6 @@ export function CalendarView({ today, onPickDate }: Props) {
         </ul>
       )}
 
-      {compare.length > 0 ? (
-        <>
-          <h2 className="section-title with-icon">
-            <Icon name="trend" />
-            種目の伸び
-          </h2>
-          {/*
-            記録のある種目を全部重ねる。凡例を押すとその種目だけが浮き上がり、
-            残りは無彩色に落ちる——色が意味を持つのは選んだ 1 本だけになる。
-          */}
-          <CompareChart series={compare} tooShort={tooShort} />
-        </>
-      ) : null}
     </div>
     </>
   );

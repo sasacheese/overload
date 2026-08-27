@@ -24,18 +24,19 @@
  * 狙わせないよう、透明な太い線を重ねて当たり判定を広げてある）。
  */
 
-import { useMemo, useState } from 'react';
-import { daysBetween } from '../lib/calendar.ts';
+import { useMemo } from 'react';
+import { dateLabel, daysBetween } from '../lib/calendar.ts';
 import type { CompareSeries } from '../lib/compare.ts';
 import { formatEstimate } from '../lib/progression.ts';
 import type { ExerciseId, IsoDate } from '../lib/types.ts';
 
 const WIDTH = 340;
-const HEIGHT = 190;
+const HEIGHT = 200;
 const PAD_LEFT = 30;
 const PAD_RIGHT = 10;
-const PAD_TOP = 10;
-const PAD_BOTTOM = 18;
+const PAD_TOP = 12;
+/** 下は日付の 1 行ぶん空ける。いつからいつまでの絵なのかが分からないと読めない */
+const PAD_BOTTOM = 26;
 
 /**
  * 線の色。
@@ -62,12 +63,15 @@ export function seriesColor(i: number): string {
 
 type Props = {
   series: readonly CompareSeries[];
-  /** 線にできなかった種目の数。0 なら何も言わない。 */
-  tooShort: number;
+  /**
+   * いま選んでいる種目。選択は親が持つ——選んだ種目の明細を絵の外
+   * （ExerciseTrends）に出すので、状態がここにあると渡し戻すことになる。
+   */
+  picked: ExerciseId | null;
+  onPick: (id: ExerciseId | null) => void;
 };
 
-export function CompareChart({ series, tooShort }: Props) {
-  const [picked, setPicked] = useState<ExerciseId | null>(null);
+export function CompareChart({ series, picked, onPick }: Props) {
 
   /*
    * 描く窓。全部の線が収まる指数の範囲に余白を足す。
@@ -96,17 +100,25 @@ export function CompareChart({ series, tooShort }: Props) {
   const baseline = y(100);
   /** 目盛は 3 本だけ。線が何本も重なる面なので、横罫を増やすと下が読めなくなる */
   const ticks = [view.min, 100, view.max];
+  const floor = HEIGHT - PAD_BOTTOM + 15;
 
   return (
-    <div className={`compare ${picked === null ? '' : 'has-pick'}`}>
-      <svg
-        className="compare-chart"
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        role="img"
-        aria-label={`${series.length} 種目の推移。初日を 100 とした指数で重ねたもの`}
-      >
+    <svg
+      className="compare-chart"
+      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      role="img"
+      aria-label={`${series.length} 種目の推移。初日を 100 とした指数で重ねたもの`}
+    >
         {/* 初日の線。ここより上にいるぶんだけ伸びている */}
         <line className="compare-base" x1={PAD_LEFT} y1={baseline} x2={WIDTH - PAD_RIGHT} y2={baseline} />
+
+        {/* いつからいつまでの絵なのか。両端だけ置けば読める */}
+        <text className="compare-axis" x={PAD_LEFT} y={floor}>
+          {dateLabel(view.from)}
+        </text>
+        <text className="compare-axis" x={WIDTH - PAD_RIGHT} y={floor} textAnchor="end">
+          {dateLabel(view.to)}
+        </text>
         {ticks.map((t) => (
           <text key={t} className="compare-tick" x={PAD_LEFT - 6} y={y(t) + 3} textAnchor="end">
             {Math.round(t)}
@@ -124,56 +136,52 @@ export function CompareChart({ series, tooShort }: Props) {
               style={{ '--series': seriesColor(i) } as React.CSSProperties}
             >
               {/* 細い線を指で狙わせないための、透明な当たり判定 */}
-              <polyline
-                className="compare-hit"
-                points={line}
-                onClick={() => setPicked(picked === s.id ? null : s.id)}
-              />
+              <polyline className="compare-hit" points={line} onClick={() => onPick(picked === s.id ? null : s.id)} />
               <polyline className="compare-line" points={line} />
               <circle className="compare-end" cx={x(end.date)} cy={y(end.index)} r={picked === s.id ? 4 : 2.5} />
             </g>
           );
         })}
-      </svg>
+    </svg>
+  );
+}
 
-      {/*
-        凡例。押すとその種目だけが浮き上がる。伸びた順に並んでいるので、
-        上から読むと「いちばん動いた種目」から目に入る。
-      */}
-      <ul className="compare-legend">
-        {series.map((s, i) => {
-          const on = picked === null || picked === s.id;
-          return (
-            <li key={s.id}>
-              <button
-                type="button"
-                className={`compare-key ${on ? '' : 'is-dim'} ${picked === s.id ? 'is-picked' : ''}`}
-                style={{ '--series': seriesColor(i) } as React.CSSProperties}
-                aria-pressed={picked === s.id}
-                onClick={() => setPicked(picked === s.id ? null : s.id)}
-              >
-                <span className="compare-swatch" aria-hidden="true" />
-                <span className="compare-name">{s.name}</span>
-                {/* 指数だけでは何 kg なのか分からない。実測を小さく添える */}
-                <span className="compare-real">
-                  {formatEstimate(s.latest)}
-                  {s.unit}
-                </span>
-                <span className={`compare-growth ${s.growth > 0 ? 'is-up' : ''}`}>
-                  {s.growth > 0 ? '+' : ''}
-                  {Math.round(s.growth * 100)}%
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      <p className="footnote">
-        初日を <strong>100</strong> とした指数。重さも回数も同じ物差しに直してあるので、
-        軽い種目と重い種目の伸び方を並べて読める。
-        {tooShort > 0 ? ` 記録が 1 日だけの種目が ${tooShort} 件あり、線にできるまで出ない。` : ''}
-      </p>
-    </div>
+/**
+ * 凡例。絵とは別に出せるようにしてある——選んだ種目の明細を絵のすぐ下に
+ * 置きたいので、絵と凡例のあいだに割り込める形にする必要があった。
+ *
+ * 伸びた順に並んでいるので、上から読むと「いちばん動いた種目」から目に入る。
+ * 押すとその種目だけが浮き上がり、もう一度押すと解除。
+ */
+export function CompareLegend({ series, picked, onPick }: Props) {
+  return (
+    <ul className="compare-legend">
+      {series.map((s, i) => {
+        const on = picked === null || picked === s.id;
+        return (
+          <li key={s.id}>
+            <button
+              type="button"
+              className={`compare-key ${on ? '' : 'is-dim'} ${picked === s.id ? 'is-picked' : ''}`}
+              style={{ '--series': seriesColor(i) } as React.CSSProperties}
+              aria-pressed={picked === s.id}
+              onClick={() => onPick(picked === s.id ? null : s.id)}
+            >
+              <span className="compare-swatch" aria-hidden="true" />
+              <span className="compare-name">{s.name}</span>
+              {/* 指数だけでは何 kg なのか分からない。実測を小さく添える */}
+              <span className="compare-real">
+                {formatEstimate(s.latest)}
+                {s.unit}
+              </span>
+              <span className={`compare-growth ${s.growth > 0 ? 'is-up' : ''}`}>
+                {s.growth > 0 ? '+' : ''}
+                {Math.round(s.growth * 100)}%
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
