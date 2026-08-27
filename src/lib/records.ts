@@ -90,12 +90,36 @@ export type Achievement = {
   kind: RecordKind;
   /** 見出しの一言。短くする。 */
   title: string;
+  /**
+   * **何がすごいのかを、その場で分かる日本語で言う 1 行。**
+   *
+   * `detail` の数字（`推定 1RM 79.2kg`、`60kg × 9 回`）は、その語を知っている人
+   * にしか意味が届かない。1RM もレップも普段づかいの言葉ではないので、数字だけを
+   * 大きく出すと「何かを褒められた」以上のことが読めない、という状態になっていた。
+   * 祝いの主役はこちらに置き、数字は根拠として下に添える。
+   */
+  plain: string;
+  /**
+   * 用語の言い換え。要らない種類は null。
+   *
+   * 「推定 1RM」のように、数字を読むのに前提知識が要るものにだけ添える。
+   * 毎回同じ説明が出るが、覚えるまでは毎回要るものなので削らない。
+   */
+  gloss: string | null;
   /** 事実 1 行。数字はここに集める。 */
   detail: string;
+  /**
+   * 今日の数字だけを、`previous` と同じ形で切り出したもの。
+   *
+   * `detail` は文脈込み（`60kg × 9 回`）なので、前の記録と横に並べると
+   * 単位も語順もそろわず、どこが動いたのかが読み取れない。**並べて比べる用**に、
+   * 前の記録と同じ物差しの数字だけをここに持つ（`8 回` ⇢ `9 回`）。
+   */
+  now: string;
   /** 前の記録。無ければ null（初めて到達した場合）。 */
   previous: string | null;
   /**
-   * 前の記録からどれだけ動いたか（`+2 レップ`）。previous が無ければ null。
+   * 前の記録からどれだけ動いたか（`+2 回`）。previous が無ければ null。
    *
    * detail と previous を引き算すれば出る数だが、**その引き算を人にさせない**ために
    * 別に持つ。「何がどのくらい進歩したのか」がこの 1 語で読めるようにする。
@@ -106,13 +130,45 @@ export type Achievement = {
 const LABEL: Record<RecordKind, string> = {
   e1rm: '最高到達点',
   'top-load': '重量更新',
-  'reps-at-load': 'レップ更新',
-  reps: 'レップ更新',
-  'reps-at-load-total': '総レップ更新',
+  'reps-at-load': '回数更新',
+  reps: '回数更新',
+  'reps-at-load-total': '合計回数の更新',
   sets: 'セット数更新',
   'exercise-volume': '種目の総量更新',
   'session-volume': '1日の総量更新',
 };
+
+/**
+ * 平たい言い方。**専門語を 1 つも使わない**のが条件。
+ *
+ * 「レップ」は「回」、「1RM」は言い換えて避ける。ここを読んだだけで、何が過去最高
+ * だったのかが分かるようにする。
+ */
+const PLAIN: Record<RecordKind, string> = {
+  e1rm: '重さと回数を合わせた力が、過去いちばん',
+  'top-load': 'これまでで、いちばん重い',
+  'reps-at-load': '同じ重さで、これまでいちばん多い回数',
+  reps: 'これまでで、いちばん多い回数',
+  'reps-at-load-total': '同じ重さで、1 日の合計回数が過去いちばん',
+  sets: '1 日にこなしたセット数が、過去いちばん',
+  'exercise-volume': 'この種目で持ち上げた 1 日の合計が、過去いちばん',
+  'session-volume': 'この日に持ち上げた合計が、過去いちばん',
+};
+
+/**
+ * 数字を読むのに前提知識が要るものだけ、その場で言い換える。
+ *
+ * 推定 1RM は「重さ × 回数」から出す推定値で、実際に 1 回だけ挙げた記録ではない。
+ * この一言が無いと、挙げた覚えのない重さが自己ベストとして出てくることになる。
+ */
+const GLOSS: Partial<Record<RecordKind, string>> = {
+  e1rm: '「重さ × 回数」から出す、1 回だけなら挙がりそうな重さの目安',
+};
+
+/** 種類から決まるぶん（見出し・平たい言い方・言い換え）をまとめて作る。 */
+function named(kind: RecordKind): Pick<Achievement, 'kind' | 'title' | 'plain' | 'gloss'> {
+  return { kind, title: LABEL[kind], plain: PLAIN[kind], gloss: GLOSS[kind] ?? null };
+}
 
 /** 総量のように桁が大きい数。カンマを入れて整数で出す。 */
 function heavy(n: number): string {
@@ -137,9 +193,9 @@ function gainCount(diff: number, unit: string): string {
 export function sessionVolumeRecord(today: number, bestPast: number): Achievement | null {
   if (bestPast <= 0 || today <= bestPast) return null;
   return {
-    kind: 'session-volume',
-    title: LABEL['session-volume'],
+    ...named('session-volume'),
     detail: `${heavy(today)}kg`,
+    now: `${heavy(today)}kg`,
     previous: `${heavy(bestPast)}kg`,
     gain: gainKg(today - bestPast, heavy),
   };
@@ -212,9 +268,9 @@ export function findRecords(input: RecordInput): Achievement[] {
     const bestPast = Math.max(0, ...past.filter((m) => m.byLoad).map((m) => m.best));
     if (now.best > bestPast) {
       found.push({
-        kind: 'e1rm',
-        title: LABEL.e1rm,
+        ...named('e1rm'),
         detail: `${peakName(exercise)} ${formatEstimate(now.best)}kg`,
+        now: `${formatEstimate(now.best)}kg`,
         previous: bestPast > 0 ? `${formatEstimate(bestPast)}kg` : null,
         gain: bestPast > 0 ? gainKg(now.best - bestPast, formatEstimate) : null,
       });
@@ -232,9 +288,11 @@ export function findRecords(input: RecordInput): Achievement[] {
   ) {
     const diff = Math.abs(nowTop - pastTop);
     found.push({
-      kind: 'top-load',
-      title: LABEL['top-load'],
+      ...named('top-load'),
+      // アシストは「重い」が前進ではない。同じ語で言うと意味が裏返る
+      plain: exercise.loadMode === 'assist' ? 'これまでで、いちばん補助が少ない' : PLAIN['top-load'],
       detail: loadWord(exercise, nowTop),
+      now: loadWord(exercise, nowTop),
       previous: loadWord(exercise, pastTop),
       // アシストは補助が減ったぶんが前進。+ を付けると増えたように読める
       gain: exercise.loadMode === 'assist' ? `補助 −${format(diff)}kg` : gainKg(diff),
@@ -249,11 +307,11 @@ export function findRecords(input: RecordInput): Achievement[] {
   const topGain = repGains[0];
   if (topGain && now.byLoad) {
     found.push({
-      kind: 'reps-at-load',
-      title: LABEL['reps-at-load'],
-      detail: `${loadWord(exercise, topGain.set.weight)} × ${topGain.set.reps} レップ`,
-      previous: `${topGain.best} レップ`,
-      gain: gainCount(topGain.set.reps - topGain.best, 'レップ'),
+      ...named('reps-at-load'),
+      detail: `${loadWord(exercise, topGain.set.weight)} × ${topGain.set.reps} 回`,
+      now: `${topGain.set.reps} 回`,
+      previous: `${topGain.best} 回`,
+      gain: gainCount(topGain.set.reps - topGain.best, '回'),
     });
   }
 
@@ -262,11 +320,11 @@ export function findRecords(input: RecordInput): Achievement[] {
     const bestPast = Math.max(0, ...past.filter((m) => !m.byLoad).map((m) => m.best));
     if (now.best > bestPast) {
       found.push({
-        kind: 'reps',
-        title: LABEL.reps,
-        detail: `${now.best} レップ`,
-        previous: bestPast > 0 ? `${bestPast} レップ` : null,
-        gain: bestPast > 0 ? gainCount(now.best - bestPast, 'レップ') : null,
+        ...named('reps'),
+        detail: `${now.best} 回`,
+        now: `${now.best} 回`,
+        previous: bestPast > 0 ? `${bestPast} 回` : null,
+        gain: bestPast > 0 ? gainCount(now.best - bestPast, '回') : null,
       });
     }
   }
@@ -288,11 +346,11 @@ export function findRecords(input: RecordInput): Achievement[] {
   const topTotal = totalGains[0];
   if (topTotal) {
     found.push({
-      kind: 'reps-at-load-total',
-      title: LABEL['reps-at-load-total'],
-      detail: `${loadWord(exercise, topTotal.weight)} 計 ${topTotal.now} レップ`,
-      previous: `計 ${topTotal.best} レップ`,
-      gain: gainCount(topTotal.now - topTotal.best, 'レップ'),
+      ...named('reps-at-load-total'),
+      detail: `${loadWord(exercise, topTotal.weight)} 計 ${topTotal.now} 回`,
+      now: `計 ${topTotal.now} 回`,
+      previous: `計 ${topTotal.best} 回`,
+      gain: gainCount(topTotal.now - topTotal.best, '回'),
     });
   }
 
@@ -300,9 +358,9 @@ export function findRecords(input: RecordInput): Achievement[] {
   const bestPastSets = Math.max(0, ...past.map((m) => m.setCount));
   if (bestPastSets > 0 && now.setCount > bestPastSets) {
     found.push({
-      kind: 'sets',
-      title: LABEL.sets,
+      ...named('sets'),
       detail: `${now.setCount} セット`,
+      now: `${now.setCount} セット`,
       previous: `${bestPastSets} セット`,
       gain: gainCount(now.setCount - bestPastSets, 'セット'),
     });
@@ -313,11 +371,11 @@ export function findRecords(input: RecordInput): Achievement[] {
   if (bestPastVolume > 0 && now.volume > bestPastVolume) {
     const diff = now.volume - bestPastVolume;
     found.push({
-      kind: 'exercise-volume',
-      title: LABEL['exercise-volume'],
-      detail: now.byLoad ? `${heavy(now.volume)}kg` : `${now.volume} レップ`,
-      previous: now.byLoad ? `${heavy(bestPastVolume)}kg` : `${bestPastVolume} レップ`,
-      gain: now.byLoad ? gainKg(diff, heavy) : gainCount(diff, 'レップ'),
+      ...named('exercise-volume'),
+      detail: now.byLoad ? `${heavy(now.volume)}kg` : `${now.volume} 回`,
+      now: now.byLoad ? `${heavy(now.volume)}kg` : `${now.volume} 回`,
+      previous: now.byLoad ? `${heavy(bestPastVolume)}kg` : `${bestPastVolume} 回`,
+      gain: now.byLoad ? gainKg(diff, heavy) : gainCount(diff, '回'),
     });
   }
 

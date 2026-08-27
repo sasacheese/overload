@@ -29,8 +29,8 @@ export const MAX_ENCODED_LENGTH = 8000;
 export type Period = { label: string; weeks: number | null };
 
 export const PERIODS: readonly Period[] = [
+  { label: '1週間', weeks: 1 },
   { label: '4週間', weeks: 4 },
-  { label: '12週間', weeks: 12 },
   { label: '全期間', weeks: null },
 ];
 

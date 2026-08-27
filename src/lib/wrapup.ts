@@ -176,7 +176,14 @@ function wholeDayRecord(
  */
 function praiseFor(w: Omit<WrapUp, 'praise'>): string {
   if (w.progressed >= 2) return `${w.progressed}種目の記録を更新しました`;
-  if (w.progressed === 1) return 'お疲れ様でした';
+  /*
+   * 1 種目でも「更新した」と言う。
+   *
+   * ここは以前 GREETING と同じ「お疲れ様でした」を返していて、締めの画面に
+   * 同じ一文が 2 行続けて出ていた（挨拶と、その下に添える一言）。挨拶の下は
+   * **その日に何があったか**を言う場所なので、件数を言う上の枝と揃える。
+   */
+  if (w.progressed === 1) return '1種目の記録を更新しました';
   if (w.volumeRatio !== null && w.volumeRatio >= 0.05) {
     return `前回より総量が ${Math.round(w.volumeRatio * 100)}% 多い。`;
   }

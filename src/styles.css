@@ -222,6 +222,35 @@ body {
   overscroll-behavior: none;
   /* 二度叩きの拡大を止める。面ごとの縦スクロールは .page 側で許可する */
   touch-action: manipulation;
+
+  /*
+   * 長押しで文字が選ばれないようにする。
+   *
+   * ✓ は 1 秒近く押しつづける操作なので、iOS ではその指に**文字選択**が乗って
+   * くる——虫めがねが出て、行の数字が青く反転し、コピーの吹き出しが立つ。
+   * ボタン自身は非選択にしてあったが、選択は近くの選べる文字（同じ行の
+   * `75` `kg` `1` `回`）へ伸びるので、ボタン側だけでは防げない。
+   *
+   * 面ぜんぶを非選択にして、**文字を打つ欄と、写して使う値だけ**選べるように
+   * 戻す。記録を読む画面で文字を選ぶ用事は無いので、失うものは無い。
+   */
+  -webkit-user-select: none;
+  user-select: none;
+  /* 長押しの吹き出し（コピー・調べる）も出さない */
+  -webkit-touch-callout: none;
+}
+
+/*
+ * 選べるものだけ戻す。打つ欄と、写して使う値（復旧の鍵）。
+ * ここを戻し忘れると、入力欄でカーソルが置けなくなる。
+ */
+input,
+textarea,
+[contenteditable],
+.key-value {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 button,
@@ -256,9 +285,7 @@ button {
   background: none;
   border: none;
   padding: 0;
-  /* 連打したときに文字が選択されて反転するのを防ぐ */
-  user-select: none;
-  -webkit-user-select: none;
+  /* 押したときに端末が出す灰色の覆いを消す（自前の :active があるので要らない） */
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1037,6 +1064,68 @@ button {
   gap: 0.4375rem;
   padding: 0.75rem 0;
   border-top: 1px solid var(--line);
+  /* 溜めの進みを行の下端に引くため（下の ::after） */
+  position: relative;
+  /* 溜まるほど行が色づく。7% までしか上げない——読む数字が乗っている面なので */
+  background: color-mix(in srgb, var(--accent) calc(var(--charge, 0) * 7%), transparent);
+}
+
+/*
+ * 溜めの進み。**押している指の外に出す唯一の合図。**
+ *
+ * ✓ は 44px しかなく、押している親指がその上を完全に覆う。ボタンの中だけで
+ * 溜まりを描いても当人には見えないので、行の下端いっぱいに線を引く。
+ * ボタン側（右）から左へ伸ばしているのは、力がボタンから行へ広がる向きに見せるため。
+ * 値は PowerCheck が --charge に毎フレーム書く。
+ */
+.set-item::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(var(--charge, 0));
+  transform-origin: 100% 50%;
+  opacity: var(--charge, 0);
+  pointer-events: none;
+}
+
+/*
+ * 弾けた瞬間、その線が**行いっぱいに開いて消える**。
+ *
+ * 破裂の輪と閃光はボタンの真上（＝押している指の下）で起きるので当人には見えない。
+ * 溜めのあいだ目で追っていたのはこの線なので、同じ線を解き放つ形にすると、
+ * 視線を移さずに「入った」が読める。値は PowerCheck が --release に流す。
+ */
+.set-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 calc(var(--release, 0) * 10px) var(--accent);
+  opacity: var(--release, 0);
+  /* 消えぎわに厚みが増して、線が「開いた」ように見せる */
+  transform: scaleY(calc(1 + (1 - var(--release, 0)) * 1.5));
+  pointer-events: none;
+}
+
+/*
+ * 溜まりきる手前で、その行の欄が赤く縁取られる。
+ * 「これから記録になる数字」が、指の外で先に色づく。
+ *
+ * `:focus-within` を外しているのは、この選択子のほうが打っている最中の枠
+ * （`.stepper:focus-within`）より強く、そのまま当てると**入力中の枠が消える**ため。
+ * 溜めているあいだに欄を打っていることは無いので、譲って困らない。
+ */
+.set-item:not(.is-done) .stepper:not(:focus-within) {
+  border-color: color-mix(in srgb, var(--accent) calc(var(--charge, 0) * 100%), var(--line));
 }
 
 .set-main {
@@ -1305,11 +1394,6 @@ button {
  * scaleY で伸ばすと角の丸みが潰れて伸びるので、塗りは置いたまま clip-path で
  * 下から現していく。
  */
-.check {
-  /* 長押しで端末の文字選択やコールアウトに指を取られない */
-  -webkit-touch-callout: none;
-}
-
 .check::before {
   content: '';
   position: absolute;
@@ -1386,6 +1470,52 @@ button {
   100% {
     transform: scale(1);
   }
+}
+
+/*
+ * 殴られたレンガ。**面が凹んで、そこからひびが縁まで走る。**
+ *
+ * 飛び散る破片は 1 秒で消えてしまうので、殴られたのがこの ✓ だったことを
+ * 残すものが要る。凹み（内側の影）とひびは破片より長く置いて、最後に薄れる。
+ * ボタンの角の丸みをそのまま継ぐので、欠けたのが「この面」だと分かる。
+ */
+.burst-crater {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  z-index: 2;
+  /* 拳がめり込んだ側を暗く。上から光が当たっている前提で、中心と上を落とす */
+  box-shadow:
+    inset 0 0 10px rgb(0 0 0 / 0.55),
+    inset 0 2px 5px rgb(0 0 0 / 0.4);
+  fill: none;
+  stroke: rgb(0 0 0 / 0.5);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: burst-crater 620ms var(--ease-out) both;
+}
+
+@keyframes burst-crater {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 金の格だけ、ひびの底も明るい。暗い割れ目だと金が濁って見える */
+.burst-legend .burst-crater {
+  stroke: rgb(60 40 0 / 0.55);
 }
 
 /* 破裂の絵。破片・輪・閃光はどれも一度きりで、終わったら DOM ごと消える */
@@ -2197,68 +2327,742 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── 画面ごと砕け散る（Smash） ─────────────────── */
+
 /*
- * 更新の年表。記録が動いた日だけが並ぶ。
+ * 溜め切った ✓ が弾けたときに、画面全体へ出ていく破裂。
  *
- * 増分（+2.5kg）にだけ赤い字を使う——実際に起きた前進なので、信号としての
- * 赤の使い方（前進した）に合っている。行そのものは無彩色のまま。
+ * ガラスにヒビが走る絵ではなく、**拳で殴られたレンガが粉々に爆散する**絵。
+ * 割れ目が伸びていく静かな壊れ方は時間で見せるものだが、こちらは
+ * **最初の 1 拍が最大**で、あとは飛び散った粉が薄れていくだけ。
+ *
+ * 面ではなく一瞬の光と粉なので、赤を面で塗らないという方針（冒頭の 2）とは
+ * 衝突しない——1 秒で消える。
+ *
+ * 中心（--ox / --oy）は押したボタンの位置。Smash が弾けた瞬間に測って渡す。
  */
-.timeline {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.smash {
+  position: fixed;
+  inset: 0;
+  z-index: 38;
+  /* 触れない。砕けているあいだも下のボタンは押せる */
+  pointer-events: none;
+  overflow: hidden;
 }
 
-.timeline-day {
-  width: 100%;
+/* 中心に置くものの共通の座り。左上を中心へ運んでから自分の半分を戻す */
+.smash-core,
+.smash-flare,
+.smash-ring,
+.smash-dust,
+.smash-chunk,
+.smash-grit {
+  position: absolute;
+  left: var(--ox);
+  top: var(--oy);
+}
+
+/*
+ * 当たった瞬間の芯。白から橙へ落ちる小さな球で、いちばん短い。
+ * これが無いと、粉塵だけが唐突に湧いたように見える。
+ */
+.smash-core {
+  width: 22vmax;
+  height: 22vmax;
+  margin: -11vmax 0 0 -11vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, #ffe6b8 22%, color-mix(in srgb, var(--accent) 85%, #fff) 46%, transparent 72%);
+  animation: smash-core 260ms cubic-bezier(0.1, 0.8, 0.2, 1) both;
+}
+
+@keyframes smash-core {
+  0% {
+    opacity: 1;
+    transform: scale(0.1);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+/*
+ * 十字に伸びる閃光。殴った一撃を「点」ではなく「衝突」に見せる。
+ * 細く長い十字は、粉塵の丸さと形で対比になる。
+ */
+.smash-flare {
+  width: 150vmax;
+  height: 150vmax;
+  margin: -75vmax 0 0 -75vmax;
+  background:
+    linear-gradient(to right, transparent 42%, #fff 50%, transparent 58%),
+    linear-gradient(to bottom, transparent 46%, #fff 50%, transparent 54%);
+  /* 中心だけ濃く、外へ行くほど消える */
+  mask-image: radial-gradient(circle, #000 0%, transparent 48%);
+  animation: smash-flare 300ms var(--ease-out) both;
+}
+
+@keyframes smash-flare {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.05) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1) rotate(12deg);
+  }
+}
+
+/* 画面の対角を越えて抜ける輪。粉の壁が広がる縁 */
+.smash-ring {
+  width: 20vmax;
+  height: 20vmax;
+  margin: -10vmax 0 0 -10vmax;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--accent) 70%, #fff);
+  animation: smash-ring 620ms cubic-bezier(0.15, 0.75, 0.25, 1) both;
+}
+
+@keyframes smash-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(8);
+  }
+}
+
+/*
+ * 粉塵。「粉々」を担う本体。
+ *
+ * ふちのない柔らかい塊を何個か、別々の向きへ膨らませる。1 個の大きな円で
+ * 済ませると煙幕になってしまい、砕けた粉には見えない。
+ */
+.smash-dust {
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 55%, #fff) 0%, color-mix(in srgb, var(--accent) 30%, transparent) 45%, transparent 70%);
+  filter: blur(6px);
+  animation: smash-dust 1100ms cubic-bezier(0.1, 0.7, 0.2, 1) var(--delay, 0ms) both;
+}
+
+@keyframes smash-dust {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(0) scale(0.2);
+  }
+  18% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(var(--d)) scale(1.5);
+  }
+}
+
+/*
+ * 瓦礫。**放射状にまっすぐ飛んで薄れる。**
+ *
+ * 落とさない。重さで落ちる絵は時間の長い演出で、こちらは弾けた一瞬だけを
+ * 見せたいので、途中で下へ引くとそこで拍が切れる（実際に切れて見えた）。
+ * 回るのは残してある——欠片が回転していないと、飛んでいるのに硬さが出ない。
+ */
+.smash-chunk {
+  background: color-mix(in srgb, var(--accent) 78%, #2a1410);
+  /* 角を落として、四角い紙ではなく割れた欠片に見せる */
+  clip-path: polygon(0 22%, 48% 0, 100% 34%, 84% 100%, 22% 88%);
+  animation: smash-chunk 1000ms cubic-bezier(0.12, 0.62, 0.3, 1) var(--delay, 0ms) both;
+}
+
+/* 何枚かを濃淡違いにする。全部同じ赤だと 1 枚の紙吹雪に見える */
+.smash-chunk:nth-child(3n) {
+  background: color-mix(in srgb, var(--accent) 45%, var(--fg));
+}
+
+.smash-chunk:nth-child(5n) {
+  background: color-mix(in srgb, var(--accent) 60%, #fff);
+}
+
+@keyframes smash-chunk {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(1vmax) rotate(0deg);
+  }
+  62% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(var(--d)) rotate(var(--spin));
+  }
+}
+
+/* 細礫。瓦礫より先に、遠くまで抜ける */
+.smash-grit {
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 65%, #fff);
+  animation: smash-grit 760ms cubic-bezier(0.08, 0.7, 0.25, 1) var(--delay, 0ms) both;
+}
+
+@keyframes smash-grit {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(1vmax);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(var(--d));
+  }
+}
+
+/* 記録更新の最上位だけ金で砕ける。祝福のカードと同じ格の色 */
+.smash-legend .smash-core {
+  background: radial-gradient(circle, #fff 0%, #fff0c4 24%, color-mix(in srgb, var(--gold) 88%, #fff) 48%, transparent 72%);
+}
+
+.smash-legend .smash-ring {
+  border-color: color-mix(in srgb, var(--gold) 75%, #fff);
+}
+
+.smash-legend .smash-dust {
+  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 55%, #fff) 0%, color-mix(in srgb, var(--gold) 30%, transparent) 45%, transparent 70%);
+}
+
+.smash-legend .smash-chunk {
+  background: color-mix(in srgb, var(--gold) 80%, #2a1c04);
+}
+
+.smash-legend .smash-chunk:nth-child(3n) {
+  background: color-mix(in srgb, var(--gold) 50%, var(--fg));
+}
+
+.smash-legend .smash-grit {
+  background: color-mix(in srgb, var(--gold) 70%, #fff);
+}
+
+/*
+ * 画面のぶれ。砕けた瞬間だけ、面ごと短く強く揺らす。
+ *
+ * 揺れる幅は 4px 台。これ以上動かすと、読んでいる数字が滲んで酔う。
+ * 揺らすのは面（.app）で、砕けの絵そのもの（position: fixed）は揺らさない
+ * ——両方揺れると、粉と画面が別々に動いて像が二重になる。
+ */
+.is-quaking .app {
+  animation: quake 460ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes quake {
+  0% {
+    transform: translate(0, 0);
+  }
+  8% {
+    transform: translate(-5px, 3px) rotate(-0.35deg);
+  }
+  20% {
+    transform: translate(5px, -4px) rotate(0.4deg);
+  }
+  33% {
+    transform: translate(-4px, -3px) rotate(-0.28deg);
+  }
+  47% {
+    transform: translate(3px, 4px) rotate(0.2deg);
+  }
+  61% {
+    transform: translate(-3px, 2px) rotate(-0.14deg);
+  }
+  75% {
+    transform: translate(2px, -2px);
+  }
+  88% {
+    transform: translate(-1px, 1px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 出す側でも止めているが、ここでも塞いでおく */
+  .smash {
+    display: none;
+  }
+  .is-quaking .app {
+    animation: none;
+  }
+}
+
+/* ── 推移タブ：種目 / 体重 の面の切り替え ────────── */
+
+/*
+ * 下のタブバー（面そのものの切り替え）と役割が違うので、見た目も変える。
+ * あちらは帯に沈んだアイコン、こちらは地の上に浮く 2 枚の札。
+ */
+.face-switch {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.face-switch button {
+  padding: 0.4375rem 1.125rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-md);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  transition:
+    background var(--t) var(--ease-out),
+    color var(--t) var(--ease-out);
+}
+
+.face-switch button.is-active {
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+
+/* ── 推移タブ：種目の面 ─────────────────────────── */
+
+.trends {
   display: flex;
   flex-direction: column;
-  gap: 0.1875rem;
-  text-align: left;
-  border-top: 1px solid var(--line);
-  padding: 0.6875rem 0;
+  gap: 0.875rem;
 }
 
-.timeline-date {
+/*
+ * 見出しの一文。**数字の羅列ではなく、読める文で今の状態を言う。**
+ *
+ * 面を開いた瞬間に受け取るのはこの 1 行だけでいい。折れ線は読み解くのに
+ * 時間がかかるものなので、その手前に「何が起きているか」を言葉で置く。
+ */
+.trends-lede {
+  margin: 0;
+  font-size: var(--fs-xl);
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  word-break: auto-phrase;
+}
+
+.trends-lede strong {
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  /* 数と字のベースラインを合わせる。数字だけ大きいと行が浮く */
+  margin-right: 0.125rem;
+}
+
+.trends-sub {
+  margin: -0.375rem 0 0;
+  font-size: var(--fs-md);
   color: var(--muted);
-  font-size: 0.75rem;
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 0.4375rem;
 }
 
-/* その日に動いた数。開かずに量が分かる（開閉の節の件数と同じ役割） */
-.timeline-count {
-  font-size: var(--fs-2xs);
-  color: var(--faint);
+.trends-sub strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.trends-lead-gain {
+  color: var(--accent-text);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.timeline-record {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4375rem;
-  font-size: var(--fs-md);
-  min-width: 0;
+.trends-note {
+  margin: 0;
 }
 
-.timeline-what {
+/*
+ * 読み取り窓。**選んでも動かない 1 枚。**
+ *
+ * 明細を「その場に足す」作りにしていたときは、押すたびに凡例が下へ押し出されて、
+ * 指の下にあったはずの行が動いた。原因は選択で高さが変わることなので、
+ * 高さを決め打ちして中身だけ差し替える。中身の切り替えは淡く重ねるだけにして、
+ * 位置が動く要素を 1 つも作らない。
+ *
+ * 貼り付けてはいない。凡例のほうが中でスクロールする箱になったので、窓も絵も
+ * そもそも画面から出ない——ここを sticky にすると、わずかに送っただけで窓が
+ * 上に貼り付き、その下にある**絵のほうが隠れる**（逆さまになる）。
+ */
+.trends-readout {
+  /* 中身が入れ替わっても動かない高さ。2 つの状態のうち高いほうに合わせてある */
+  min-height: 8rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface-2) 92%, var(--bg));
+  /* 選ぶとその種目の色が左に入る。選んでいないあいだは無彩色 */
+  border-left: 2px solid var(--line-strong);
+  transition: border-color var(--t) var(--ease-out);
+}
+
+.trends-readout.is-focused {
+  border-left-color: var(--series, var(--accent));
+}
+
+/* 差し替わったことが分かる程度に淡く。動く距離は持たせない */
+.trends-focus,
+.trends-howto {
+  animation: readout-in var(--t-slow) var(--ease-out) both;
+}
+
+@keyframes readout-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.trends-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* 読み方の案内。選ぶまでのあいだ、窓はここが座っている */
+.trends-howto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--fg-dim);
+}
+
+.trends-howto p {
+  margin: 0;
+}
+
+.trends-howto strong {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+/* 選択を解く。凡例をもう一度探して押し直さずに済む */
+.trends-clear {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+}
+
+.trends-clear:active {
+  background: var(--surface);
+  color: var(--fg);
+}
+
+.trends-focus-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.trends-focus-group {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.trends-focus-name {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.timeline-gain {
-  flex: none;
-  color: var(--accent-text);
-  font-size: var(--fs-sm);
+/*
+ * 初日 → 今日。1 行に収める。
+ *
+ * 日付を数字の上に添えていたときは行が 2 段になり、窓の高さが読み方の案内と
+ * そろわなくなった（そろわないと、選ぶたびに下の凡例が動く）。日付は下の行へ回す。
+ */
+.trends-journey {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trends-then {
+  font-size: var(--fs-lg);
   font-weight: 600;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-.timeline-more {
+/* 今日の側だけ本文の濃さと大きさにする。どちらが新しいかを差で先に伝える */
+.trends-now {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.trends-arrow {
+  color: var(--faint);
+}
+
+.trends-gain {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 伸びた側にだけ赤を渡す。落ちた側と横ばいは無彩色のまま */
+.trends-gain.is-up {
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  padding: 0.0625rem 0.5rem;
+}
+
+.trends-totals {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.trends-totals strong {
+  color: var(--fg-dim);
+  font-weight: 600;
+}
+
+/* ── 種目を重ねた推移（初日 = 100 の指数） ────────── */
+
+/*
+ * ここだけ色を配る面。
+ *
+ * このアプリは無彩色 + 赤 1 色で通していて、赤は「前進した」の信号に取ってある
+ * （冒頭の方針 2）。だが**何本もの線を見分ける**仕事は色でしか果たせない。
+ * 例外として色を配る代わりに、2 つの縛りを置く——信号の赤は線に使わないことと、
+ * 1 本を選んだら残りは無彩色に落ちること。色が意味を持つのは選んだ 1 本だけになる。
+ */
+.compare {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.compare-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+/* 初日の線。ここより上にいるぶんだけ伸びている */
+.compare-base {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.compare-tick {
+  fill: var(--faint);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* いつからいつまでの絵なのか。両端だけ置けば読める */
+.compare-axis {
+  fill: var(--faint);
+  font-size: 9px;
+}
+
+.compare-series {
+  /* 選ばれていない線が沈むときの動き。切り替わりが瞬間だと機械的になる */
+  transition: opacity var(--t) var(--ease-out);
+}
+
+.compare-line {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition:
+    stroke var(--t) var(--ease-out),
+    stroke-width var(--t) var(--ease-out);
+}
+
+.compare-end {
+  fill: var(--series);
+  transition:
+    fill var(--t) var(--ease-out),
+    r var(--t) var(--ease-out);
+}
+
+/* 細い線を指で狙わせない。見えない太い線を重ねて当たり判定にする */
+.compare-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+/*
+ * 選ばれなかった線。色を捨てて無彩色に落ちる。
+ * 薄くするだけだと、薄い色が何本も残って画面が濁る。
+ */
+.compare-series.is-dim {
+  opacity: 0.28;
+}
+
+.compare-series.is-dim .compare-line,
+.compare-series.is-dim .compare-end {
+  stroke: var(--faint);
+  fill: var(--faint);
+}
+
+.compare-series.is-picked .compare-line {
+  stroke-width: 2.6;
+}
+
+/*
+ * 凡例。**それ自体が中でスクロールする箱**にしてある。
+ *
+ * 種目の数だけ縦に伸びる一覧だったころは、下の方の行を押すために画面を送ると
+ * 絵が上へ抜けてしまい、「押したのに何が変わったのか見えない」状態になった。
+ * 高さを画面に収まる量で止めて中だけ動かせば、**絵も窓も一度も画面から出ない**。
+ *
+ * 高さは画面の 34%（上限 19rem）。これ以上取ると絵が押し出され、これ以下だと
+ * 一度に 3 行しか見えず、探すのにスクロールばかりすることになる。
+ */
+.compare-legend {
+  list-style: none;
+  margin: 0;
+  /* 下の余白は、最後の行が薄れの帯に沈まないための逃げ */
+  padding: 0 0.25rem 0.75rem 0;
+  display: flex;
+  flex-direction: column;
+  max-height: min(34dvh, 19rem);
+  overflow-y: auto;
+  /* 端まで来たときに、後ろの面まで一緒に動かない */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /*
+   * 下端をわずかに薄くして「まだ続く」ことを言う。線や影で仕切ると、凡例が
+   * 独立した部品に見えて絵との関係が切れる。
+   *
+   * 薄れは 1rem だけ。深く取ると、最後まで送ったときに**選んだ行そのものが
+   * 沈んで**、押した結果が読めなくなる（上の padding-bottom と組で効かせる）。
+   */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1rem), transparent 100%);
+  scrollbar-width: thin;
+}
+
+/*
+ * 凡例。押すとその種目だけが浮き上がる。
+ *
+ * 名前・実測・伸びを 1 行に並べる。指数だけでは何 kg なのか分からないので、
+ * 実測を必ず添える（指数は比べるための物差しであって、記録そのものではない）。
+ */
+.compare-key {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 0.625rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.25rem;
+  text-align: left;
+  border-radius: var(--radius-xs);
+  transition:
+    background var(--t-fast) var(--ease-out),
+    opacity var(--t) var(--ease-out);
+}
+
+.compare-key:active {
+  background: var(--surface-2);
+}
+
+.compare-key.is-picked {
+  background: var(--surface-2);
+}
+
+.compare-key.is-dim {
+  opacity: 0.45;
+}
+
+.compare-swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 2px;
+  background: var(--series);
+  transition: background var(--t) var(--ease-out);
+}
+
+.compare-key.is-dim .compare-swatch {
+  background: var(--faint);
+}
+
+.compare-name {
+  font-size: var(--fs-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-key.is-picked .compare-name {
+  font-weight: 600;
+}
+
+.compare-real {
   font-size: var(--fs-xs);
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * 伸び。増えたぶんにだけ赤を渡す——実際に起きた前進なので、信号としての
+ * 赤の使い方に合っている。落ちた側と横ばいは無彩色のまま。
+ */
+.compare-growth {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.75rem;
+  text-align: right;
+}
+
+.compare-growth.is-up {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compare-series,
+  .compare-line,
+  .compare-end,
+  .compare-key,
+  .compare-swatch {
+    transition: none;
+  }
 }
 
 /* ── Claude に頼む ──────────────────────────────── */
@@ -2670,6 +3474,25 @@ button {
   gap: 0.4375rem;
 }
 
+/*
+ * 通算。設定の行（目安の回数・セット数）の下に、数字だけの行として置く。
+ *
+ * 一番弱い色を地にして、数だけを本文の濃さで立てている。行全体を読ませたいのでは
+ * なく、**数が積み上がっていること**が視界の端で分かればいいため。
+ */
+.ex-totals {
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.0625rem;
+}
+
+.ex-totals strong {
+  color: var(--fg-dim);
+  font-weight: 600;
+}
+
 .ex-item .muted {
   font-size: 0.6875rem;
   letter-spacing: 0.02em;
@@ -2731,7 +3554,9 @@ button {
   font-family: var(--mono);
   font-size: 0.6875rem;
   word-break: break-all;
+  /* 鍵は写して使うので、触れば丸ごと選べるようにしておく */
   user-select: all;
+  -webkit-user-select: all;
   background: var(--surface-2);
   padding: 0.4375rem 0.5rem;
   border-radius: var(--radius-sm);
@@ -3018,6 +3843,7 @@ button {
   animation: fade-in 180ms ease-out;
   /* カードが起き上がる（rotateY）ときの奥行き。無いと回転がただの伸縮に見える */
   perspective: 900px;
+  padding: var(--gutter);
 }
 
 @keyframes fade-in {
@@ -3075,8 +3901,11 @@ button {
   box-shadow:
     inset 0 1px 0 var(--sheen),
     var(--shadow-3);
-  padding: 1.5rem 1.75rem;
+  padding: 1.5rem 1.5rem 1.625rem;
   min-width: 14rem;
+  /* 画面いっぱいまで育つと、引き当てた 1 枚ではなく画面そのものに見える */
+  max-width: 21rem;
+  width: 100%;
   text-align: center;
   /* 走る光をカードの縁で切る */
   overflow: hidden;
@@ -3182,9 +4011,22 @@ button {
 }
 
 .tier-legend .celebrate-title,
-.tier-legend .celebrate-gain,
 .tier-legend .celebrate-more-gain {
   color: var(--gold-text);
+}
+
+.tier-legend .celebrate-crest {
+  background: color-mix(in srgb, var(--gold) 15%, transparent);
+}
+
+.tier-legend .celebrate-gain,
+.tier-legend .celebrate-timer {
+  background: var(--gold);
+}
+
+/* 金の地に白抜きは沈む。金だけ文字を地の色に落として読めるようにする */
+.tier-legend .celebrate-gain {
+  color: #1a1206;
 }
 
 .tier-legend .celebrate-rays span {
@@ -3195,16 +4037,29 @@ button {
   background: var(--gold);
 }
 
+/*
+ * 記章。印と格の名前を横に並べて 1 つの塊にする。
+ * 縦に積むと、その 2 つが別々の情報として読まれて、主役の 1 行が下へ押し出される。
+ */
+.celebrate-crest {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.6875rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  margin-bottom: 0.4375rem;
+}
+
 .celebrate-icon {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 0.9375rem;
+  height: 0.9375rem;
   color: var(--accent);
-  margin-bottom: 0.375rem;
 }
 
 .celebrate-title {
-  font-size: var(--fs-sm);
-  letter-spacing: 0.09em;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.11em;
   color: var(--accent-text);
   font-weight: 700;
 }
@@ -3214,20 +4069,92 @@ button {
   color: var(--muted);
 }
 
-.celebrate-detail {
-  font-size: var(--fs-2xl);
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  margin-top: 0.125rem;
+/*
+ * 主役。**専門語を使わずに「何がすごいか」だけを言う 1 行。**
+ *
+ * ここが一番大きい。以前は数字（`推定 1RM 103.3kg`）が最大で、その語を知らないと
+ * 何を褒められたのか読み取れなかった。字の大きさの順が、読む順そのものになる。
+ */
+.celebrate-plain {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  margin-top: 0.4375rem;
+  /*
+   * 和文は語の途中でも折れるので、放っておくと「重さと回数を合わせ／た力が」の
+   * ように読みの切れ目と行の切れ目がずれる。文節で折らせ、行の長さも揃える。
+   * auto-phrase を解さない環境では balance だけが効く（従来どおりの折り返し）。
+   */
+  max-width: 17rem;
+  text-wrap: balance;
+  word-break: auto-phrase;
 }
 
-.celebrate-prev {
-  font-size: var(--fs-xs);
-  color: var(--muted);
+/* 主役の根拠になる数字。読めなくても上の 1 行で意味は通る位置づけ */
+.celebrate-detail {
+  font-size: var(--fs-base);
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.3125rem;
 }
 
 /*
- * どれだけ動いたか。到達した数字と前の記録の間に置く。
+ * どこから動いたか。前と今を**横に並べて**、間に矢印を置く。
+ *
+ * 到達した数字だけを置いても、それが上がった結果なのかは読み取れない。
+ * 並べれば、引き算をしなくても「動いた」ことが形で分かる。
+ */
+.celebrate-shift {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.6875rem;
+  margin-top: 0.875rem;
+  padding: 0.5625rem 0.875rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  width: 100%;
+}
+
+.shift-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.0625rem;
+}
+
+.shift-label {
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.shift-value {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 今日の側だけ本文の濃さにする。どちらが新しいかを色の差で先に伝える */
+.shift-side.is-now .shift-value {
+  color: var(--fg);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.shift-arrow {
+  color: var(--faint);
+  font-size: var(--fs-base);
+  /* ラベルのぶん下がった数字の行に矢印を合わせる */
+  transform: translateY(0.3125rem);
+}
+
+/*
+ * どれだけ動いたか。
  *
  * 数字が 2 つ出ていても、進んだ量はその場で引き算しないと出てこない。
  * 祝う場面で計算をさせないために、増分だけを 1 語で置く。
@@ -3235,26 +4162,51 @@ button {
 .celebrate-gain {
   font-size: var(--fs-md);
   font-weight: 700;
-  color: var(--accent-text);
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  padding: 0.125rem 0.5625rem;
   letter-spacing: 0.01em;
+  transform: translateY(0.25rem);
+}
+
+/* 比べる相手が居ない記録。空白にせず、それ自体を言う */
+.celebrate-first {
+  margin-top: 0.75rem;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+/*
+ * 用語の言い換え。推定 1RM のように、数字を読むのに前提知識が要るものにだけ出る。
+ * 毎回同じ文が出るが、覚えるまでは毎回要るものなので削らない。
+ */
+.celebrate-gloss {
+  margin-top: 0.625rem;
+  font-size: var(--fs-2xs);
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 17rem;
+  word-break: auto-phrase;
 }
 
 /*
  * 同じ ✓ で一緒に動いたもの。主役の下に細く並べる。
  *
- * 重量も上がって同じ重さでのレップも伸びた日に片方しか映らないと、何がどう
+ * 重量も上がって同じ重さでの回数も伸びた日に片方しか映らないと、何がどう
  * 動いたのかが分からない。ただし主役と同じ大きさで並べると 3 つとも読まれずに
- * 消えるので、行の高さを詰めて添え物にしてある。
+ * 消えるので、行の高さを詰めて添え物にしてある。ここも平たい言い方を先に置く。
  */
 .celebrate-more {
   list-style: none;
-  margin: 0.75rem 0 0;
-  padding: 0.6875rem 0 0;
+  margin: 0.875rem 0 0;
+  padding: 0.75rem 0 0;
   width: 100%;
   border-top: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 0.3125rem;
+  gap: 0.4375rem;
 }
 
 .celebrate-more li {
@@ -3262,17 +4214,17 @@ button {
   align-items: baseline;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: 0.25rem 0.4375rem;
   font-size: var(--fs-sm);
 }
 
-.celebrate-more-title {
-  color: var(--muted);
-  letter-spacing: 0.06em;
+.celebrate-more-plain {
+  color: var(--fg-dim);
 }
 
 .celebrate-more-detail {
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .celebrate-more-gain {
@@ -3280,12 +4232,40 @@ button {
   font-weight: 700;
 }
 
+/*
+ * 自分で消えるまでの残り。カードの下端を尽きていく線。
+ *
+ * 黙って消えると「読み切れなかった」だけが残る。あと何秒あるのかが見えれば、
+ * 読むか、触って閉じて次のセットへ行くかを選べる。
+ */
+.celebrate-timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: 0 50%;
+  /* 長さは Celebration が --close-ms で渡す（消える時刻と同じ 1 つの値） */
+  animation: celebrate-timer var(--close-ms, 6200ms) linear both;
+}
+
+@keyframes celebrate-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .celebrate,
   .celebrate-card,
   .celebrate-rays span,
   .celebrate-shine,
-  .celebrate-sparkles span {
+  .celebrate-sparkles span,
+  .celebrate-timer {
     animation: none;
   }
   .celebrate-rays,
@@ -3518,7 +4498,7 @@ button {
 }
 
 /*
- * 置き場所は 5 つとも明示する。
+ * 置き場所は 6 つとも明示する。
  *
  * 一部だけ行を指定して残りを自動配置に任せると、行を指定した要素が先に場所を
  * 取って、見出しが右の列へ押し出される（実際にそうなった）。
@@ -3544,8 +4524,18 @@ button {
   white-space: nowrap;
 }
 
-.wrap-record-detail {
+/* 専門語を使わない 1 行。数字より先に読ませたいので、見出しのすぐ下に置く */
+.wrap-record-plain {
   grid-row: 2;
+  grid-column: 1 / -1;
+  font-size: var(--fs-sm);
+  color: var(--fg-dim);
+  line-height: 1.55;
+  word-break: auto-phrase;
+}
+
+.wrap-record-detail {
+  grid-row: 3;
   grid-column: 1;
   font-size: var(--fs-lg);
   font-weight: 600;
@@ -3553,7 +4543,7 @@ button {
 }
 
 .wrap-record-gain {
-  grid-row: 2;
+  grid-row: 3;
   grid-column: 2;
   align-self: baseline;
   text-align: right;
@@ -3564,7 +4554,7 @@ button {
 }
 
 .wrap-record-prev {
-  grid-row: 3;
+  grid-row: 4;
   grid-column: 1 / -1;
   font-size: var(--fs-xs);
   color: var(--muted);
@@ -3856,7 +4846,21 @@ button {
   color: var(--accent-text);
 }
 
-.weight-range {
+
+/* ── 横並びの選択（期間・絞り込み） ───────────────── */
+
+/*
+ * 面の中で「いま何を見ているか」を選ぶ帯。体重の期間・推移の期間・種目の
+ * 絞り込みで同じものを使う。
+ *
+ * 面そのものを切り替える札（.face-switch）とは別物。あちらは中身が丸ごと
+ * 入れ替わる操作なので浮いた札、こちらは同じ一覧の見え方を変えるだけなので
+ * 地に沈んだ帯にしてある。
+ *
+ * 選択肢は 3 つまでを想定した等幅。4 つ以上並べると 1 つあたりの的が
+ * 指の幅を割る。
+ */
+.segmented {
   display: flex;
   gap: 0.25rem;
   border: 1px solid var(--line);
@@ -3864,7 +4868,7 @@ button {
   overflow: hidden;
 }
 
-.weight-range button {
+.segmented button {
   flex: 1;
   padding: 0.5rem;
   font-size: var(--fs-sm);
@@ -3875,14 +4879,32 @@ button {
     color var(--t-fast) var(--ease-out);
 }
 
-.weight-range button:last-child {
+.segmented button:last-child {
   border-right: none;
 }
 
-.weight-range button.is-active {
+.segmented button.is-active {
   background: var(--surface-2);
   color: var(--fg);
   font-weight: 600;
+}
+
+/* 押しても何も出ない選択肢。消さずに沈めて、そこに何件あるかは読ませる */
+.segmented button:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+/* 件数。選ぶ前に「いくつあるか」が分かると、押すかどうかを決められる */
+.segmented .count {
+  margin-left: 0.3125rem;
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.segmented button.is-active .count {
+  color: var(--muted);
 }
 
 /* ── アイコンを置いた小さなボタン ───────────────── */
@@ -4373,7 +5395,7 @@ button {
   }
 
   /* 3 つの選択肢に 35rem は要らない */
-  .weight-range {
+  .segmented {
     max-width: 22rem;
   }
 
@@ -4508,13 +5530,37 @@ button {
     gap: 0.75rem;
   }
 
-  /* ── 体重：左に折れ線、右に一覧 ─────────────────── */
-
-  .view-weight {
+  /*
+   * 推移（体重の面）：左に折れ線、右に一覧。
+   *
+   * 面の切り替え（.face-switch）は列に分けず、上に 1 本置いたままにする。
+   * 左右どちらの列にも属さない操作なので、列の中に入れると片側に寄って見える。
+   */
+  .view-trends {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 17rem;
     align-items: start;
     column-gap: 2rem;
+  }
+
+  .face-switch,
+  .trends {
+    grid-column: 1 / -1;
+  }
+
+  /* 種目の面は 1 枚の絵として通しで使う。列に割ると折れ線が痩せる */
+  .trends {
+    max-width: 46rem;
+  }
+
+  /* 広い画面は縦に余裕があるので、凡例を高く取って一度に多く見せる */
+  .compare-legend {
+    max-height: min(46dvh, 28rem);
+  }
+
+  /* 広い画面では案内が折り返さないぶん、窓も低くて足りる */
+  .trends-readout {
+    min-height: 6.5rem;
   }
 
   .weight-main,

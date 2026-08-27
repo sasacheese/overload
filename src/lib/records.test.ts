@@ -66,8 +66,8 @@ test('同じ重量でレップが増えたら拾う（重量アップと同格�
   );
   const gain = found.find((r) => r.kind === 'reps-at-load');
   assert.ok(gain);
-  assert.equal(gain.detail, '60kg × 9 レップ');
-  assert.equal(gain.previous, '8 レップ');
+  assert.equal(gain.detail, '60kg × 9 回');
+  assert.equal(gain.previous, '8 回');
 });
 
 test('その重量を初めてやった日はレップ更新にしない（比較対象が無い）', () => {
@@ -126,9 +126,9 @@ test('同じ重量でセットの組み方が良くなった日を拾う（単�
 
   const total = found.find((r) => r.kind === 'reps-at-load-total');
   assert.ok(total, '同じ重量で 2 レップ多いのに何も祝われない');
-  assert.equal(total.detail, '30kg 計 30 レップ');
-  assert.equal(total.previous, '計 28 レップ');
-  assert.equal(total.gain, '+2 レップ');
+  assert.equal(total.detail, '30kg 計 30 回');
+  assert.equal(total.previous, '計 28 回');
+  assert.equal(total.gain, '+2 回');
 });
 
 test('総レップは日をまたいで足さない（通算ではなく 1 日の積み上げを比べる）', () => {
@@ -142,7 +142,7 @@ test('総レップは日をまたいで足さない（通算ではなく 1 日�
     (r) => r.kind === 'reps-at-load-total',
   );
   assert.ok(total);
-  assert.equal(total.previous, '計 20 レップ');
+  assert.equal(total.previous, '計 20 回');
 });
 
 test('その重量を初めてやった日は総レップ更新にしない', () => {
@@ -176,8 +176,8 @@ test('レップ数で測る種目は単一セットの最高レップを拾う',
   const found = findRecords(input({ exercise: roller, today, history: past([[[0, 12]]]) }));
   const reps = found.find((r) => r.kind === 'reps');
   assert.ok(reps);
-  assert.equal(reps.detail, '14 レップ');
-  assert.equal(reps.previous, '12 レップ');
+  assert.equal(reps.detail, '14 回');
+  assert.equal(reps.previous, '12 回');
   // 重さで測っていないので推定 1RM の更新は出ない
   assert.equal(found.find((r) => r.kind === 'e1rm'), undefined);
 });

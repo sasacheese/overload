@@ -119,12 +119,12 @@ test('compareToPrev: 差だけを出す。前回が無ければ何も出さな�
 });
 
 test('compareToPrev: 伸びた/落ちたを推定 1RM の順で分ける', () => {
-  assert.deepEqual(compareToPrev(bench, set(60, 11), set(60, 10)), { kind: 'up', label: '+1レップ' });
+  assert.deepEqual(compareToPrev(bench, set(60, 11), set(60, 10)), { kind: 'up', label: '+1回' });
   assert.deepEqual(compareToPrev(bench, set(62.5, 10), set(60, 10)), { kind: 'up', label: '+2.5kg' });
-  assert.deepEqual(compareToPrev(bench, set(60, 9), set(60, 10)), { kind: 'down', label: '−1レップ' });
+  assert.deepEqual(compareToPrev(bench, set(60, 9), set(60, 10)), { kind: 'down', label: '−1回' });
   // 重量を上げてレップを落とした場合は推定 1RM で決める
   assert.equal(compareToPrev(bench, set(62.5, 7), set(60, 10)).kind, 'down');
-  assert.equal(compareToPrev(bench, set(62.5, 7), set(60, 10)).label, '+2.5kg −3レップ');
+  assert.equal(compareToPrev(bench, set(62.5, 7), set(60, 10)).label, '+2.5kg −3回');
 });
 
 test('compareToPrev: アシスト種目は補助が少ない方を伸びたとみなす', () => {

@@ -9,21 +9,35 @@ import { Overlay } from './Overlay.tsx';
  * カードが起き上がりながら現れ、面を光が一度だけ走り、周りに星が瞬く。
  * 派手さは記録の格（recordTier）で 3 段に変わる——最上位（到達点・重量の更新）
  * だけが金で、それ以外は赤のまま。金は祝福のここ以外では使わない。
- * 紙吹雪のような画面全体の賑やかしはやらず、光はカードの周りに集める。
- * 自動で閉じるのは、ジムで画面を閉じる操作を増やしたくないため。
+ *
+ * ## 何を、どの順で読ませるか
+ *
+ * 出す順は **何がすごいか → その数字 → どこから動いたか** で固定してある。
+ *
+ * 以前は数字（`推定 1RM 103.3kg`）が主役だった。だがこれは「その語を知っている人
+ * だけが読める祝福」で、実際に**何を褒められたのか分からない**という状態になっていた
+ * ——1RM もレップも、普段づかいの言葉ではない。いまは平たい 1 行（`plain`）を
+ * 一番大きく置き、数字はその根拠として下に添える。前提知識が要る数字には
+ * その場で言い換え（`gloss`）を付ける。
+ *
+ * 変化そのものも**横に並べて**出す（`これまで 97.5kg → 103.3kg`）。数字が 1 つだけ
+ * 置いてあっても、それが上がった結果なのかどうかは読み取れない。
  *
  * ## 何を出すか
  *
  * その ✓ で当たった更新を**全部**受け取り、一番強いものを大きく、残りをその下に
  * 1 行ずつ添える。以前は先頭の 1 つしか出していなかったが、それだと「重量も上がって
- * 同じ重さでのレップも伸びた」日に片方しか映らず、何がどう動いたのかが分からない。
- *
- * どの行にも**増分**（`+2 レップ`）を置く。到達した数字と前の記録の 2 つを出しても、
- * どれだけ進んだかはその場で引き算しないと出てこない。祝う場面で計算をさせない。
+ * 同じ重さでの回数も伸びた」日に片方しか映らず、何がどう動いたのかが分からない。
  */
 
-/** 自動で閉じるまで。カードの披露（起き上がり・光走り）のぶん、読み切りより少し長め。 */
-const AUTO_CLOSE_MS = 3800;
+/**
+ * 自動で閉じるまで。
+ *
+ * 以前は 3.2 秒で、**読み終わる前に消える**という状態だった。祝福には読ませたい
+ * 文が 3 つ（何がすごいか・数字・どこから動いたか）あるので、それを追える長さにする。
+ * 残り時間はカードの下端の線で見えるようにしてあり、待ちたくなければ触れば閉じる。
+ */
+const AUTO_CLOSE_MS = 6200;
 /** 添える行の上限。これ以上並べると、次のセットに戻るまでが長くなる。 */
 const MAX_EXTRA = 3;
 
@@ -94,25 +108,71 @@ export function Celebration({
         </div>
         <div className="celebrate-card">
           <span className="celebrate-shine" aria-hidden="true" />
-          <Icon name="rise" className="celebrate-icon" />
-          <strong className="celebrate-title">{lead.title}</strong>
+
+          <span className="celebrate-crest">
+            <Icon name="rise" className="celebrate-icon" />
+            <span className="celebrate-title">{lead.title}</span>
+          </span>
           <span className="celebrate-exercise">{exerciseName}</span>
+
+          {/* 主役。専門語を使わずに「何がすごいのか」だけを言う */}
+          <strong className="celebrate-plain">{lead.plain}</strong>
+
+          {/* その根拠になる数字。読めなくても上の 1 行で意味は通る */}
           <span className="celebrate-detail">{lead.detail}</span>
-          {lead.gain ? <span className="celebrate-gain">{lead.gain}</span> : null}
-          {lead.previous ? <span className="celebrate-prev">これまで {lead.previous}</span> : null}
+
+          {/*
+            どこから動いたか。前と今を横に並べて、間に矢印と増分を置く。
+            初めて到達した記録（previous が無い）には比べる相手が居ないので出さない。
+          */}
+          {lead.previous ? (
+            <span className="celebrate-shift">
+              <span className="shift-side">
+                <span className="shift-label">これまで</span>
+                <span className="shift-value">{lead.previous}</span>
+              </span>
+              <span className="shift-arrow" aria-hidden="true">
+                →
+              </span>
+              <span className="shift-side is-now">
+                <span className="shift-label">今日</span>
+                <span className="shift-value">{lead.now}</span>
+              </span>
+              {lead.gain ? <span className="celebrate-gain">{lead.gain}</span> : null}
+            </span>
+          ) : (
+            <span className="celebrate-first">はじめての記録</span>
+          )}
+
+          {/* 前提知識が要る数字にだけ添える言い換え */}
+          {lead.gloss ? <span className="celebrate-gloss">{lead.gloss}</span> : null}
 
           {/* 同じ ✓ で一緒に動いたもの。主役より小さく、行で並べる */}
           {extra.length > 0 ? (
             <ul className="celebrate-more">
               {extra.map((a) => (
                 <li key={a.kind}>
-                  <span className="celebrate-more-title">{a.title}</span>
+                  <span className="celebrate-more-plain">{a.plain}</span>
                   <span className="celebrate-more-detail">{a.detail}</span>
                   {a.gain ? <span className="celebrate-more-gain">{a.gain}</span> : null}
                 </li>
               ))}
             </ul>
           ) : null}
+
+          {/*
+            自分で消えるまでの残り。黙って消えるより、線が尽きるのが見えるほうが
+            「読み切れなかった」にならない。待たずに触れば閉じる。
+          */}
+          {/*
+            長さは CSS に書かず、ここから渡す。同じ秒数を 2 か所に書くと、片方だけ
+            直したときに線と実際の消える時刻がずれる（実際にずれた）。
+          */}
+          <span
+            className="celebrate-timer"
+            style={{ '--close-ms': `${AUTO_CLOSE_MS}ms` } as React.CSSProperties}
+            aria-hidden="true"
+          />
         </div>
       </div>
     </Overlay>

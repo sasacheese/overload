@@ -110,6 +110,57 @@ export function exerciseHistory(sessions: readonly Session[], id: ExerciseId): E
     );
 }
 
+/**
+ * ✓ の付いたセットが 1 度でもある種目の id。
+ *
+ * 種目の一覧を「記録あり / 記録なし」で絞るために使う。種目ごとに
+ * `exerciseHistory` を引くと種目の数だけ全期間を舐めることになるので、
+ * ここは 1 回の走査で集める。
+ *
+ * 数えるのは ✓ の付いたセットだけ。並べただけで一度もやっていない種目は
+ * 「記録あり」に入れない——入れると、絞ったのに何も減らない。
+ */
+export function recordedExerciseIds(sessions: readonly Session[]): Set<ExerciseId> {
+  const found = new Set<ExerciseId>();
+  for (const session of sessions) {
+    for (const entry of session.entries) {
+      if (doneSets(entry).length > 0) found.add(entry.exerciseId);
+    }
+  }
+  return found;
+}
+
+/**
+ * 通算。**その種目をこれまでどれだけやったか**を 3 つの数で持つ。
+ *
+ * ここだけが「減らない数」で、記録の伸び（ベスト・推移）とは性格が違う。
+ * ベストは伸び悩めば何か月も動かないが、通算はやった日には必ず増える。
+ * 続けたこと自体を数として見せるために、ベストと並べて置く。
+ *
+ * 数えるのは ✓ の付いたセットだけ（`doneSets`）。入力欄に数字が入っているだけの
+ * 行はまだやっていないので、通算に混ぜると「並べただけ」で数が増えてしまう。
+ */
+export type ExerciseTotals = {
+  /** やった日数。 */
+  days: number;
+  /** ✓ の付いたセットの数。 */
+  sets: number;
+  /** その合計レップ数。 */
+  reps: number;
+};
+
+export function exerciseTotals(history: ExerciseHistory): ExerciseTotals {
+  let sets = 0;
+  let reps = 0;
+  for (const h of history) {
+    for (const set of doneSets(h.entry)) {
+      sets += 1;
+      reps += set.reps;
+    }
+  }
+  return { days: history.length, sets, reps };
+}
+
 /** 指定日より前の直近の記録。今日の入力欄の初期値の元になる。 */
 export function previousEntry(
   sessions: readonly Session[],

@@ -1,11 +1,27 @@
 /**
  * 種目の管理。一覧の各行には到達点の推移を小さな線で添え、開いたシートは
  * 「設定」（編集できる項目）と「記録」（推移の詳細と履歴）の 2 面に分かれる。
+ *
+ * ## 絞り込み
+ *
+ * 一覧はプリセットを全部並べるので、**実際に使っている種目より、使っていない
+ * 種目のほうが多い**。「記録あり」で絞れば、自分が回しているものだけの一覧になる。
+ *
+ * 逆の「記録なし」も置いてある。日々使う面ではないが、まだ触っていない種目を
+ * 見渡す用（次に足すものを探す・非表示にするものを選ぶ）には、これしかない。
+ * 3 つとも件数を添えてあるので、押す前にどれだけ減るかが分かる。
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { mergeImpact } from '../lib/merge.ts';
-import { bestSeries, byRecentUse, exerciseHistory, lastPerformed } from '../lib/query.ts';
+import {
+  bestSeries,
+  byRecentUse,
+  exerciseHistory,
+  exerciseTotals,
+  lastPerformed,
+  recordedExerciseIds,
+} from '../lib/query.ts';
 import {
   LOAD_MODES,
   LOAD_MODE_KEYS,
@@ -42,6 +58,15 @@ function blankDraft(): Draft {
   };
 }
 
+/** 一覧の絞り込み。記録の有無だけで、部位や負荷では絞らない（左の見出しで足りる）。 */
+type Filter = 'all' | 'recorded' | 'untouched';
+
+const FILTERS: readonly { key: Filter; label: string }[] = [
+  { key: 'all', label: 'すべて' },
+  { key: 'recorded', label: '記録あり' },
+  { key: 'untouched', label: '記録なし' },
+];
+
 type Props = {
   startNew: boolean;
   onStartNewHandled: () => void;
@@ -51,6 +76,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
   const { exercises, sessions, upsertExercise, removeExercise, mergeExercise } = useStore();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [filter, setFilter] = useState<Filter>('all');
   const [message, setMessage] = useState<string | null>(null);
   /*
    * まとめ先の種目 id。null は「まとめる操作を開いていない」、'' は「開いたがまだ選んでいない」。
@@ -83,7 +109,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
     if (!draft) return;
     const name = draft.name.trim();
     if (name === '') return setMessage('種目名を入れる');
-    if (draft.repMin > draft.repMax) return setMessage('レップの目安の下限が上限を超えている');
+    if (draft.repMin > draft.repMax) return setMessage('回数の目安の下限が上限を超えている');
     if (draft.increment <= 0) return setMessage('重量の刻みは 0 より大きくする');
     upsertExercise({
       ...draft,
@@ -115,9 +141,28 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
   };
 
   const last = useMemo(() => lastPerformed(sessions), [sessions]);
-  const shown = useMemo(
+  /** ✓ の付いたセットが 1 度でもある種目。絞り込みと件数の両方に使う。 */
+  const recorded = useMemo(() => recordedExerciseIds(sessions), [sessions]);
+
+  /** 非表示の扱いだけを済ませた一覧。絞り込みの件数はここを母数にする。 */
+  const visible = useMemo(
     () => byRecentUse(exercises.filter((e) => showArchived || !e.archived), last),
     [exercises, showArchived, last],
+  );
+  const counts = useMemo(
+    () => ({
+      all: visible.length,
+      recorded: visible.filter((e) => recorded.has(e.id)).length,
+      untouched: visible.filter((e) => !recorded.has(e.id)).length,
+    }),
+    [visible, recorded],
+  );
+  const shown = useMemo(
+    () =>
+      filter === 'all'
+        ? visible
+        : visible.filter((e) => (filter === 'recorded' ? recorded.has(e.id) : !recorded.has(e.id))),
+    [visible, filter, recorded],
   );
 
   /*
@@ -138,6 +183,23 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
     return map;
   }, [exercises, sessions]);
 
+  /*
+   * 通算。**これまでその種目をどれだけやったか。**
+   *
+   * 一覧に出しているのがこれまで設定（目安の回数とセット数）だけだったので、
+   * どの種目をどれだけ続けてきたのかが、開くまで分からなかった。通算は伸び悩んでも
+   * 必ず増える数なので、一覧を「やってきたものの棚」として読めるようにする。
+   * 1 度もやっていない種目には出さない（0 を並べても意味を持たない）。
+   */
+  const totals = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof exerciseTotals>>();
+    for (const e of exercises) {
+      const t = exerciseTotals(exerciseHistory(sessions, e.id));
+      if (t.sets > 0) map.set(e.id, t);
+    }
+    return map;
+  }, [exercises, sessions]);
+
   return (
     <>
       <header className="view-head">
@@ -147,6 +209,36 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
           追加
         </button>
       </header>
+
+      {/*
+        絞り込み。件数を添えてあるので、押す前にどれだけ残るかが分かる。
+        1 つも無い選択肢は押せない——押しても何も出ない札を残さない。
+      */}
+      <div className="segmented" role="group" aria-label="一覧の絞り込み">
+        {FILTERS.map((f) => (
+          <button
+            type="button"
+            key={f.key}
+            className={filter === f.key ? 'is-active' : ''}
+            aria-pressed={filter === f.key}
+            disabled={counts[f.key] === 0 && filter !== f.key}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+            <span className="count">{counts[f.key]}</span>
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 ? (
+        <p className="empty">
+          {filter === 'recorded'
+            ? 'まだ記録のある種目がない。「今日」から始めると、ここに並ぶ。'
+            : filter === 'untouched'
+              ? '並んでいる種目は全部やったことがある。'
+              : '種目がない。右上の「追加」から作る。'}
+        </p>
+      ) : null}
 
       {MUSCLE_GROUP_KEYS.map((key) => {
         const items = shown.filter((e) => e.group === key);
@@ -158,6 +250,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
             <ul className="ex-list">
               {items.map((e) => {
                 const trend = trends.get(e.id);
+                const total = totals.get(e.id);
                 return (
                   <li key={e.id}>
                     <button type="button" className="ex-item" onClick={() => openDraft({ ...e, id: e.id })}>
@@ -167,8 +260,18 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                           {e.archived ? <span className="chip subtle">非表示</span> : null}
                         </span>
                         <span className="muted">
-                          {LOAD_MODES[e.loadMode].label} · {e.repMin}〜{e.repMax}レップ × {e.sets}セット
+                          {LOAD_MODES[e.loadMode].label} · {e.repMin}〜{e.repMax}回 × {e.sets}セット
                         </span>
+                        {/*
+                          通算。設定（上の行）と混ぜず、数字だけの行として下に置く。
+                          「目安」と「やった量」は別のものなので、同じ行に並べると読み違える。
+                        */}
+                        {total ? (
+                          <span className="ex-totals">
+                            通算 <strong>{total.days}</strong> 日 · <strong>{total.sets}</strong> セット ·{' '}
+                            <strong>{total.reps.toLocaleString('ja-JP')}</strong> 回
+                          </span>
+                        ) : null}
                       </span>
                       {/* 到達点の推移。形だけを見せる（数字は開いた先の記録の面にある） */}
                       {trend ? <Sparkline values={trend.values} atBest={trend.atBest} /> : null}
@@ -282,7 +385,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                 </label>
                 <div className="pair">
                   <label>
-                    <span>レップの目安 下限</span>
+                    <span>回数の目安 下限</span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -291,7 +394,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                     />
                   </label>
                   <label>
-                    <span>レップの目安 上限</span>
+                    <span>回数の目安 上限</span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -352,7 +455,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                         </select>
                       </label>
                       <p className="footnote">
-                        この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・レップの目安・
+                        この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・回数の目安・
                         コツ）は移らないので、残したいものはまとめ先の側で直す。
                       </p>
                       <div className="btn-row">

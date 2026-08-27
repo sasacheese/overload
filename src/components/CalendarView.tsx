@@ -16,7 +16,7 @@ import {
   weekStreak,
   type YearMonth,
 } from '../lib/calendar.ts';
-import { lifetimeTotals, recordTimeline, volumeParts } from '../lib/milestones.ts';
+import { lifetimeTotals, volumeParts } from '../lib/milestones.ts';
 import { bodyWeightOn, countedSets, sessionGroups, sessionVolume, sortedSessions } from '../lib/query.ts';
 import { MUSCLE_GROUPS, type IsoDate, type MuscleGroup } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
@@ -60,12 +60,6 @@ export function CalendarView({ today, onPickDate }: Props) {
    */
   const lifetime = useMemo(() => lifetimeTotals(sessions, exercises), [sessions, exercises]);
   const lifted = volumeParts(lifetime.volume);
-
-  /*
-   * 更新の年表。記録が動いた日だけが並ぶ——動かなかった日は行ごと無い
-   * （足りない側の欄を作らない）。全期間を舐めるので開いたときに 1 回だけ計算する。
-   */
-  const timeline = useMemo(() => recordTimeline(sessions, exercises), [sessions, exercises]);
 
   return (
     <>
@@ -177,42 +171,6 @@ export function CalendarView({ today, onPickDate }: Props) {
         </ul>
       )}
 
-      {timeline.length > 0 ? (
-        <>
-          <h2 className="section-title with-icon">
-            <Icon name="rise" />
-            更新の年表
-          </h2>
-          {/*
-            記録が動いた日だけの一覧。祝福と同じ判定（records.ts）を過去に流し直して
-            いるので、当時祝われたものとここに並ぶものが食い違わない。
-          */}
-          <ul className="timeline">
-            {timeline.slice(0, 6).map((day) => (
-              <li key={day.date}>
-                <button type="button" className="timeline-day" onClick={() => onPickDate(day.date)}>
-                  <span className="timeline-date">
-                    {dateLabel(day.date)}
-                    <span className="timeline-count">{day.records.length}</span>
-                  </span>
-                  {day.records.slice(0, 3).map((r, i) => (
-                    <span className="timeline-record" key={`${r.exerciseName ?? 'day'}-${r.achievement.kind}-${i}`}>
-                      <span className="timeline-what">
-                        {r.exerciseName !== null ? `${r.exerciseName} · ` : ''}
-                        {r.achievement.title} {r.achievement.detail}
-                      </span>
-                      {r.achievement.gain !== null ? <span className="timeline-gain">{r.achievement.gain}</span> : null}
-                    </span>
-                  ))}
-                  {day.records.length > 3 ? (
-                    <span className="timeline-more">ほか {day.records.length - 3} 件</span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
     </div>
     </>
   );
