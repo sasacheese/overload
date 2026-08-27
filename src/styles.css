@@ -1450,6 +1450,52 @@ button {
   }
 }
 
+/*
+ * 殴られたレンガ。**面が凹んで、そこからひびが縁まで走る。**
+ *
+ * 飛び散る破片は 1 秒で消えてしまうので、殴られたのがこの ✓ だったことを
+ * 残すものが要る。凹み（内側の影）とひびは破片より長く置いて、最後に薄れる。
+ * ボタンの角の丸みをそのまま継ぐので、欠けたのが「この面」だと分かる。
+ */
+.burst-crater {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  z-index: 2;
+  /* 拳がめり込んだ側を暗く。上から光が当たっている前提で、中心と上を落とす */
+  box-shadow:
+    inset 0 0 10px rgb(0 0 0 / 0.55),
+    inset 0 2px 5px rgb(0 0 0 / 0.4);
+  fill: none;
+  stroke: rgb(0 0 0 / 0.5);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: burst-crater 620ms var(--ease-out) both;
+}
+
+@keyframes burst-crater {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 金の格だけ、ひびの底も明るい。暗い割れ目だと金が濁って見える */
+.burst-legend .burst-crater {
+  stroke: rgb(60 40 0 / 0.55);
+}
+
 /* 破裂の絵。破片・輪・閃光はどれも一度きりで、終わったら DOM ごと消える */
 .burst {
   position: absolute;
@@ -2401,11 +2447,11 @@ button {
 }
 
 /*
- * 瓦礫。**飛びながら落ちる。**
+ * 瓦礫。**放射状にまっすぐ飛んで薄れる。**
  *
- * 放射方向の飛距離（translateX）と、画面に対する落下（translateY）を
- * 別々に持たせてある。translateY を rotate より先に置いてあるのがその仕掛けで、
- * 向きに関わらず必ず真下へ落ちる。中間フレームで落ちを抑えて放物線にする。
+ * 落とさない。重さで落ちる絵は時間の長い演出で、こちらは弾けた一瞬だけを
+ * 見せたいので、途中で下へ引くとそこで拍が切れる（実際に切れて見えた）。
+ * 回るのは残してある——欠片が回転していないと、飛んでいるのに硬さが出ない。
  */
 .smash-chunk {
   background: color-mix(in srgb, var(--accent) 78%, #2a1410);
@@ -2426,16 +2472,14 @@ button {
 @keyframes smash-chunk {
   0% {
     opacity: 1;
-    transform: translate(-50%, -50%) translateY(0) rotate(var(--a)) translateX(1vmax) rotate(0deg);
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(1vmax) rotate(0deg);
   }
-  55% {
+  62% {
     opacity: 1;
-    transform: translate(-50%, -50%) translateY(calc(var(--fall) * 0.18)) rotate(var(--a)) translateX(calc(var(--d) * 0.72))
-      rotate(calc(var(--spin) * 0.6));
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) translateY(var(--fall)) rotate(var(--a)) translateX(var(--d)) rotate(var(--spin));
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(var(--d)) rotate(var(--spin));
   }
 }
 
@@ -2449,11 +2493,14 @@ button {
 @keyframes smash-grit {
   0% {
     opacity: 1;
-    transform: translate(-50%, -50%) translateY(0) rotate(var(--a)) translateX(1vmax);
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(1vmax);
+  }
+  70% {
+    opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) translateY(var(--fall)) rotate(var(--a)) translateX(var(--d));
+    transform: translate(-50%, -50%) rotate(var(--a)) translateX(var(--d));
   }
 }
 
@@ -2622,27 +2669,97 @@ button {
 }
 
 /*
- * 選んだ種目の明細。
+ * 読み取り窓。**選んでも動かない 1 枚。**
  *
- * 左の 2px だけをその種目の色にしてある——面ごと色で塗ると、絵の中の
- * 「選んだ 1 本だけが色を持つ」という決めごとが崩れる。
+ * 明細を「その場に足す」作りにしていたときは、押すたびに凡例が下へ押し出されて、
+ * 指の下にあったはずの行が動いた。原因は選択で高さが変わることなので、
+ * 高さを決め打ちして中身だけ差し替える。中身の切り替えは淡く重ねるだけにして、
+ * 位置が動く要素を 1 つも作らない。
+ *
+ * さらに**貼り付く**（sticky）。凡例は種目の数だけ縦に伸びるので、下の方の行を
+ * 押したときに説明が画面の外にある、という状態になりやすい。窓が上に残っていれば、
+ * どこを押しても結果は同じ場所に出る。
  */
+.trends-readout {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* 中身が入れ替わっても動かない高さ。2 つの状態のうち高いほうに合わせてある */
+  min-height: 8rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-sm);
+  /* 下を流れる凡例が透けないよう、地の色で塞ぐ */
+  background: color-mix(in srgb, var(--surface-2) 92%, var(--bg));
+  backdrop-filter: blur(12px);
+  /* 選ぶとその種目の色が左に入る。選んでいないあいだは無彩色 */
+  border-left: 2px solid var(--line-strong);
+  transition: border-color var(--t) var(--ease-out);
+}
+
+.trends-readout.is-focused {
+  border-left-color: var(--series, var(--accent));
+}
+
+/* 差し替わったことが分かる程度に淡く。動く距離は持たせない */
+.trends-focus,
+.trends-howto {
+  animation: readout-in var(--t-slow) var(--ease-out) both;
+}
+
+@keyframes readout-in {
+  from {
+    opacity: 0;
+  }
+}
+
 .trends-focus {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
-  padding: 0.875rem 0 0.875rem 0.875rem;
-  border-left: 2px solid var(--series, var(--accent));
-  background: var(--surface-2);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  animation: unfold var(--t-slow) var(--ease);
+  gap: 0.5rem;
+}
+
+/* 読み方の案内。選ぶまでのあいだ、窓はここが座っている */
+.trends-howto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  color: var(--fg-dim);
+}
+
+.trends-howto p {
+  margin: 0;
+}
+
+.trends-howto strong {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+/* 選択を解く。凡例をもう一度探して押し直さずに済む */
+.trends-clear {
+  margin-left: auto;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+}
+
+.trends-clear:active {
+  background: var(--surface);
+  color: var(--fg);
 }
 
 .trends-focus-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
 .trends-focus-group {
@@ -2652,52 +2769,44 @@ button {
 }
 
 .trends-focus-name {
-  font-size: var(--fs-xl);
+  font-size: var(--fs-lg);
   font-weight: 700;
   letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /*
- * 初日 → 今日。目標ではなく過去の事実なので、外れようがない。
- * 日付を数字の上に添えて、「いつの自分と比べているか」を出す。
+ * 初日 → 今日。1 行に収める。
+ *
+ * 日付を数字の上に添えていたときは行が 2 段になり、窓の高さが読み方の案内と
+ * そろわなくなった（そろわないと、選ぶたびに下の凡例が動く）。日付は下の行へ回す。
  */
 .trends-journey {
   display: flex;
-  align-items: center;
-  gap: 0.6875rem;
+  align-items: baseline;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.trends-then,
-.trends-now {
-  display: flex;
-  flex-direction: column;
-  gap: 0.0625rem;
-}
-
-.trends-when {
-  font-size: var(--fs-2xs);
-  color: var(--muted);
-}
-
-.trends-value {
+.trends-then {
   font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-/* 今日の側だけ本文の濃さにする。どちらが新しいかを色の差で先に伝える */
-.trends-now .trends-value {
-  color: var(--fg);
+/* 今日の側だけ本文の濃さと大きさにする。どちらが新しいかを差で先に伝える */
+.trends-now {
   font-size: var(--fs-2xl);
   font-weight: 700;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .trends-arrow {
   color: var(--faint);
-  transform: translateY(0.3125rem);
 }
 
 .trends-gain {
@@ -2705,7 +2814,6 @@ button {
   font-weight: 700;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-  transform: translateY(0.25rem);
 }
 
 /* 伸びた側にだけ赤を渡す。落ちた側と横ばいは無彩色のまま */
@@ -2713,7 +2821,7 @@ button {
   color: var(--accent-fg);
   background: var(--accent);
   border-radius: var(--radius-pill);
-  padding: 0.125rem 0.5rem;
+  padding: 0.0625rem 0.5rem;
 }
 
 .trends-totals {
@@ -5367,6 +5475,11 @@ button {
   /* 種目の面は 1 枚の絵として通しで使う。列に割ると折れ線が痩せる */
   .trends {
     max-width: 46rem;
+  }
+
+  /* 広い画面では案内が折り返さないぶん、窓も低くて足りる */
+  .trends-readout {
+    min-height: 6.5rem;
   }
 
   .weight-main,

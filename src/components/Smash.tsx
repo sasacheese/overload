@@ -10,8 +10,11 @@
  *
  *  1. **衝撃の光**。芯の白と、十字に伸びる閃光。当たった瞬間を確定させる
  *  2. **粉塵**。大きく柔らかい塊が外へ膨らんで薄れる。「粉々」を担うのはこれ
- *  3. **瓦礫**。大きめの欠片が放物線を描いて飛ぶ（飛びながら落ちる）
- *  4. **細礫**。小さい粒が速く遠くまで飛ぶ。粉塵より先に着く
+ *  3. **瓦礫**。欠片が放射状にまっすぐ飛んで薄れる。落とさない——重さで落ちる絵は
+ *     時間の長い演出で、こちらは弾けた一瞬だけを見せたいので、途中で下へ引くと
+ *     そこで拍が切れる
+ *  4. **細礫**。細かい粒を大量に。粉塵と瓦礫のあいだを埋めるのがこれで、
+ *     数がそのまま「粉々になった」の density になる
  *  5. **衝撃波**。画面の対角を越える輪
  *
  * 加えて画面全体を短く強くぶらす（`is-quaking` を html に付ける）。
@@ -33,10 +36,16 @@ const QUAKE_MS = 460;
 
 export type SmashTier = RecordTier | 'plain';
 
-/** 飛び散るものの数。格が上がるほど激しく砕ける。 */
-const CHUNKS: Record<SmashTier, number> = { plain: 14, rare: 18, epic: 24, legend: 30 };
-const GRIT: Record<SmashTier, number> = { plain: 18, rare: 24, epic: 32, legend: 42 };
-const DUST: Record<SmashTier, number> = { plain: 6, rare: 8, epic: 10, legend: 12 };
+/**
+ * 飛び散るものの数。格が上がるほど激しく砕ける。
+ *
+ * 細礫は瓦礫の 4 倍ほど撒く。**粉々に見えるかどうかは粒の数で決まる**ので、
+ * 大きい欠片を増やすより細かいものを増やすほうが効く（大きいのを増やすと、
+ * 砕けたというより物が飛んできたように見える）。
+ */
+const CHUNKS: Record<SmashTier, number> = { plain: 22, rare: 28, epic: 34, legend: 42 };
+const GRIT: Record<SmashTier, number> = { plain: 80, rare: 100, epic: 125, legend: 155 };
+const DUST: Record<SmashTier, number> = { plain: 7, rare: 9, epic: 11, legend: 13 };
 
 /**
  * 飛び先。乱数は使わない——描き直しのたびに散り方が変わると、同じ 1 回の
@@ -46,29 +55,33 @@ function spread(i: number, count: number, jitter: number): number {
   return i * (360 / count) + ((i * 53) % (jitter * 2)) - jitter;
 }
 
-/** 瓦礫。飛びながら落ちるので、放物線は CSS 側の中間フレームで作る。 */
+/** 瓦礫。まっすぐ飛んで薄れる。大きさも飛距離もばらけさせて群れに見せる。 */
 function chunkStyle(i: number, count: number): React.CSSProperties {
-  const size = 7 + (i % 5) * 6;
+  const size = 4 + (i % 6) * 3;
   return {
-    '--a': `${spread(i, count, 14)}deg`,
-    '--d': `${30 + ((i * 37) % 40)}vmax`,
+    '--a': `${spread(i, count, 16)}deg`,
+    '--d': `${26 + ((i * 37) % 48)}vmax`,
     '--spin': `${((i * 97) % 900) - 450}deg`,
-    '--fall': `${16 + ((i * 29) % 22)}vh`,
-    '--delay': `${(i * 13) % 60}ms`,
+    '--delay': `${(i * 13) % 70}ms`,
     width: `${size}px`,
     height: `${size - 1 - (i % 3)}px`,
   } as React.CSSProperties;
 }
 
-/** 細礫。瓦礫より小さく、速く、遠くへ。 */
+/**
+ * 細礫。瓦礫より小さく、速く、遠くへ。
+ *
+ * 数が多いので、飛距離を 3 段にばらけさせて層を作る。全部同じ速さで広がると
+ * 1 枚の輪に見えて、粒が散っているようには見えない。
+ */
 function gritStyle(i: number, count: number): React.CSSProperties {
+  const layer = i % 3;
   return {
-    '--a': `${spread(i, count, 20)}deg`,
-    '--d': `${48 + ((i * 41) % 46)}vmax`,
-    '--fall': `${8 + ((i * 17) % 16)}vh`,
-    '--delay': `${(i * 7) % 40}ms`,
-    width: `${2 + (i % 3)}px`,
-    height: `${2 + ((i + 1) % 3)}px`,
+    '--a': `${spread(i, count, 26)}deg`,
+    '--d': `${(30 + layer * 22) + ((i * 41) % 26)}vmax`,
+    '--delay': `${(i * 7) % 70}ms`,
+    width: `${1 + (i % 3)}px`,
+    height: `${1 + ((i + 1) % 3)}px`,
   } as React.CSSProperties;
 }
 

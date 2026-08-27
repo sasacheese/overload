@@ -32,7 +32,8 @@ import type { ExerciseId, IsoDate } from '../lib/types.ts';
 
 const WIDTH = 340;
 const HEIGHT = 200;
-const PAD_LEFT = 30;
+/* 実寸に切り替わると目盛が長くなる（`205.3kg`）ので、左は広めに取る */
+const PAD_LEFT = 42;
 const PAD_RIGHT = 10;
 const PAD_TOP = 12;
 /** 下は日付の 1 行ぶん空ける。いつからいつまでの絵なのかが分からないと読めない */
@@ -102,6 +103,20 @@ export function CompareChart({ series, picked, onPick }: Props) {
   const ticks = [view.min, 100, view.max];
   const floor = HEIGHT - PAD_BOTTOM + 15;
 
+  /*
+   * 目盛の読み方は、選んでいるかどうかで変わる。
+   *
+   * 何も選んでいないあいだは指数（100 が初日）——桁の違う種目を並べるための
+   * 物差しなので、そこに kg を書くと嘘になる。1 本だけ選んだときは比べる相手が
+   * 居ないので、**その種目の実寸に戻す**。同じ絵の同じ高さが、選んだ瞬間に
+   * 自分の記録の数字として読めるようになる。
+   */
+  const focus = picked === null ? null : (series.find((s) => s.id === picked) ?? null);
+  const tickLabel = (index: number) =>
+    focus === null
+      ? String(Math.round(index))
+      : `${formatEstimate((index / 100) * focus.first)}${focus.unit}`;
+
   return (
     <svg
       className="compare-chart"
@@ -121,7 +136,7 @@ export function CompareChart({ series, picked, onPick }: Props) {
         </text>
         {ticks.map((t) => (
           <text key={t} className="compare-tick" x={PAD_LEFT - 6} y={y(t) + 3} textAnchor="end">
-            {Math.round(t)}
+            {tickLabel(t)}
           </text>
         ))}
 

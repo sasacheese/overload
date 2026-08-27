@@ -13,11 +13,21 @@
  *  1. **見出しの一文**。何種目が初日を超えているか、いちばん動いたのはどれか
  *  2. **期間**。1か月 / 3か月 / 全期間。切り替えると基準もその期間の初日へ移る
  *  3. **重ねた折れ線**（CompareChart）。縦軸は初日を 100 とした指数
- *  4. **選んだ種目の明細**。選ぶまでは全体の注記が座っていて、選ぶと入れ替わる
- *  5. **凡例**（CompareChart の中）。伸びた順で、押すと選択が変わる
+ *  4. **読み取り窓**。絵の直下に貼り付く 1 枚。選ぶ前は読み方、選んだあとは
+ *     その種目の来し方が**同じ枠の中で入れ替わる**
+ *  5. **凡例**。伸びた順で、押すと読み取り窓の中身が変わる
  *
- * 選択は**この面が持つ**。絵と明細の 2 か所が同じ選択を見るので、どちらかの中に
- * 置くと渡し戻しになる。
+ * ## 押しても何も動かない
+ *
+ * 選んだ種目の明細を「その場に足す」作りにしていたときは、押すたびに凡例が
+ * 下へ押し出されて、指の下にあったはずの行が動いた。**選択で高さが変わる**のが
+ * 原因なので、読み取り窓は高さを決め打ちして中身だけを差し替える。
+ * さらにこの窓は貼り付く（sticky）ので、凡例をどれだけ下までたどっても
+ * 選んだ種目の話が画面から消えない——長い一覧の下の方を押したときに、
+ * 説明が画面の外にある、という状態を作らない。
+ *
+ * 選択は**この面が持つ**。絵・窓・凡例の 3 か所が同じ選択を見るので、
+ * どれかの中に置くと渡し戻しになる。
  */
 
 import { useMemo, useState } from 'react';
@@ -59,6 +69,16 @@ export function ExerciseTrends({ today }: { today: IsoDate }) {
 
   const rising = series.filter((s) => s.growth > 0).length;
   const lead = series[0];
+  /*
+   * 絵がいつから始まっているか。
+   *
+   * 並びは伸びた順なので、先頭の種目の初日が一番古いとは限らない——そこを
+   * そのまま出すと、絵の下に出ている日付と食い違う（実際に 4 日ずれていた）。
+   */
+  const from = series.reduce<string | null>(
+    (oldest, s) => (oldest === null || s.points[0]!.date < oldest ? s.points[0]!.date : oldest),
+    null,
+  );
 
   if (series.length === 0) {
     return (
@@ -103,56 +123,74 @@ export function ExerciseTrends({ today }: { today: IsoDate }) {
       <CompareChart series={series} picked={chosen ? chosen.id : null} onPick={setPicked} />
 
       {/*
-        絵のすぐ下。選ぶ前は全体の注記、選んだあとはその種目の来し方が座る。
-        凡例より上に置いているのは、**線を見ている目の位置**に説明を出すため
-        ——凡例の下だと、押した種目の話が画面の外へ落ちることがある。
-      */}
-      {chosen && totals ? (
-        <div className="trends-focus" style={{ '--series': seriesColor(chosenIndex) } as React.CSSProperties}>
-          <div className="trends-focus-head">
-            <span className="trends-focus-group">{MUSCLE_GROUPS[chosen.group].label}</span>
-            <strong className="trends-focus-name">{chosen.name}</strong>
-          </div>
+        読み取り窓。**高さは中身によらず一定**で、絵の直下に貼り付く。
+        選択で高さが変わると凡例が動いて、押した行が指の下から逃げる。
 
-          {/* 初日 → 今日。目標ではなく過去の事実なので、外れようがない */}
-          <div className="trends-journey">
-            <span className="trends-then">
-              <span className="trends-when">{dateLabel(chosen.points[0]!.date)}</span>
-              <span className="trends-value">
+        key を付けているのは、切り替わるたびに中の淡い animation を
+        引き直すため（同じ要素を使い回すと、差し替わったことが目に見えない）。
+      */}
+      <div
+        className={`trends-readout ${chosen ? 'is-focused' : ''}`}
+        style={chosen ? ({ '--series': seriesColor(chosenIndex) } as React.CSSProperties) : undefined}
+      >
+        {chosen && totals ? (
+          <div className="trends-focus" key={chosen.id}>
+            <div className="trends-focus-head">
+              <span className="trends-focus-group">{MUSCLE_GROUPS[chosen.group].label}</span>
+              <strong className="trends-focus-name">{chosen.name}</strong>
+              <button type="button" className="trends-clear" onClick={() => setPicked(null)}>
+                全部見る
+              </button>
+            </div>
+
+            {/*
+              初日 → 今日。目標ではなく過去の事実なので、外れようがない。
+              日付は下の行へ回してある——数字の上に添えると行が 2 段になり、
+              窓の高さが読み方の案内とそろわなくなる（そろわないと押すたびに動く）。
+            */}
+            <div className="trends-journey">
+              <span className="trends-then">
                 {formatEstimate(chosen.first)}
                 {chosen.unit}
               </span>
-            </span>
-            <span className="trends-arrow" aria-hidden="true">
-              →
-            </span>
-            <span className="trends-now">
-              <span className="trends-when">{dateLabel(chosen.points.at(-1)!.date)}</span>
-              <span className="trends-value">
+              <span className="trends-arrow" aria-hidden="true">
+                →
+              </span>
+              <span className="trends-now">
                 {formatEstimate(chosen.latest)}
                 {chosen.unit}
               </span>
-            </span>
-            <span className={`trends-gain ${chosen.growth > 0 ? 'is-up' : ''}`}>
-              {chosen.growth > 0 ? '+' : ''}
-              {Math.round(chosen.growth * 100)}%
-            </span>
-          </div>
+              <span className={`trends-gain ${chosen.growth > 0 ? 'is-up' : ''}`}>
+                {chosen.growth > 0 ? '+' : ''}
+                {Math.round(chosen.growth * 100)}%
+              </span>
+            </div>
 
-          {/* 通算。伸び悩んでも必ず増えている側の数 */}
-          <p className="trends-totals">
-            通算 <strong>{totals.days}</strong> 日 · <strong>{totals.sets}</strong> セット ·{' '}
-            <strong>{totals.reps.toLocaleString('ja-JP')}</strong> 回
-          </p>
-        </div>
-      ) : (
-        <p className="footnote trends-note">
-          縦軸は{days === null ? '初日' : 'この期間のはじめ'}を <strong>100</strong> とした指数。
-          重さも回数も同じ物差しに直してあるので、軽い種目と重い種目の伸び方を並べて読める。
-          線か凡例を押すと、その種目だけが浮き上がる。
-          {tooShort > 0 ? ` 記録が 1 日だけの種目が ${tooShort} 件あり、線にできるまで出ない。` : ''}
-        </p>
-      )}
+            {/*
+              通算。伸び悩んでも必ず増えている側の数。
+              いつからいつまでは絵の下に出ているので、ここでは繰り返さない
+              （繰り返すと行が折り返して、窓の高さが読み方の案内とずれる）。
+            */}
+            <p className="trends-totals">
+              通算 <strong>{totals.days}</strong> 日 · <strong>{totals.sets}</strong> セット ·{' '}
+              <strong>{totals.reps.toLocaleString('ja-JP')}</strong> 回
+            </p>
+          </div>
+        ) : (
+          <div className="trends-howto" key="howto">
+            <p>
+              縦軸は{days === null ? '初日' : 'この期間のはじめ'}を <strong>100</strong> とした指数。
+              重さも回数も同じ物差しに直してある。
+            </p>
+            <p className="muted">線か凡例を押すと、その種目だけが残って目盛が実際の重さに戻る。</p>
+            {/* 窓の高さを埋める 1 行でもある。選んだときの明細と行数をそろえておく */}
+            <p className="muted">
+              {series.length} 種目 · {from === null ? '' : `${dateLabel(from as IsoDate)} から`}
+              {tooShort > 0 ? ` ／ 記録が 1 日だけの種目が ${tooShort} 件` : ''}
+            </p>
+          </div>
+        )}
+      </div>
 
       <CompareLegend series={series} picked={chosen ? chosen.id : null} onPick={setPicked} />
     </div>

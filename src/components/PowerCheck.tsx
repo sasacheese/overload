@@ -46,6 +46,24 @@ import { Smash, useSmashAllowed } from './Smash.tsx';
 type BurstTier = RecordTier | 'plain';
 
 /**
+ * 殴られたレンガの割れ目。ボタンの中（44px）に引く。
+ *
+ * 中心から縁へ、途中で 1 度折れる線を 6 本。まっすぐ引くと星印になってしまい、
+ * 割れ目に見えない——ひびは必ずどこかで向きを変える。左右非対称にしてあるのも
+ * 同じ理由で、対称なひびは模様として読まれる。
+ *
+ * 24 の枠で描いて、ボタンの大きさへ伸ばす（viewBox に任せる）。
+ */
+const CRACKS = [
+  'M12 12 15 7 14 2',
+  'M12 12 18 10 23 6',
+  'M12 12 19 15 24 14',
+  'M12 12 15 18 13 23',
+  'M12 12 6 16 2 21',
+  'M12 12 4 11 0 8',
+] as const;
+
+/**
  * 満タンまでの長さ。
  *
  * 短いと「溜めた」実感が出る前に弾け、1 秒を超えると毎セットの負担になる。
@@ -302,6 +320,15 @@ export function PowerCheck({ done, label, onToggle }: Props) {
       <Icon name="check" />
       {burst ? (
         <span className={`burst burst-${burst}`} aria-hidden="true">
+          {/*
+            殴られた跡。面が凹んで（内側の影）、そこからひびが縁まで走る。
+            破片が飛んだあとに残るのはこれだけなので、閃光より長く置いてある。
+          */}
+          <svg className="burst-crater" viewBox="0 0 24 24" preserveAspectRatio="none">
+            {CRACKS.map((d) => (
+              <path key={d} d={d} />
+            ))}
+          </svg>
           <span className="burst-flash" />
           <span className="burst-ring" />
           {burst !== 'plain' ? <span className="burst-ring is-second" /> : null}
