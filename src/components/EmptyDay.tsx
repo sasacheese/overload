@@ -52,7 +52,7 @@ export function EmptyDay({ date, today, last }: Props) {
         </p>
       ) : null}
       <p className="empty">
-        種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して ✓ を押す。
+        種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して、✓ を長押しで溜め切る。
       </p>
     </div>
   );

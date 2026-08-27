@@ -33,6 +33,7 @@ import {
   trendLabel,
 } from '../lib/progression.ts';
 import { bestSeries, exerciseHistory, orderInDay, previousEntry, sessionOn } from '../lib/query.ts';
+import type { RecordTier } from '../lib/records.ts';
 import {
   LOAD_MODES,
   MUSCLES,
@@ -48,6 +49,7 @@ import { useStore } from '../store.tsx';
 import { BodyMap } from './BodyMap.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { Icon, type IconName } from './Icon.tsx';
+import { PowerCheck } from './PowerCheck.tsx';
 import { Stepper } from './Stepper.tsx';
 import { ForecastNote, TrendChart } from './TrendChart.tsx';
 
@@ -65,7 +67,8 @@ type Props = {
   onToggleFold: () => void;
   onChange: (entry: SessionEntry) => void;
   onRemove: () => void;
-  onSetCompleted: (exercise: Exercise, entry: SessionEntry, index: number) => void;
+  /** ✓ が付いた。記録更新ならその格を返す（✓ の破裂の派手さに使う）。 */
+  onSetCompleted: (exercise: Exercise, entry: SessionEntry, index: number) => RecordTier | null;
   onSetUndone: (exercise: Exercise, index: number) => void;
 };
 
@@ -290,9 +293,9 @@ export function ExerciseCard({
     else (document.activeElement as HTMLElement | null)?.blur();
   };
 
-  const toggleDone = (index: number) => {
+  const toggleDone = (index: number): RecordTier | null => {
     const set = entry.sets[index];
-    if (!set) return;
+    if (!set) return null;
     // 画面を見ずに押すことがあるので、入ったことを指に返す
     tapFeedback();
     const nextEntry: SessionEntry = {
@@ -308,8 +311,11 @@ export function ExerciseCard({
       sets: entry.sets.map((s, i) => (i === index ? { ...s, done: !s.done } : s)),
     };
     onChange(nextEntry);
-    if (set.done) onSetUndone(exercise, index);
-    else onSetCompleted(exercise, nextEntry, index);
+    if (set.done) {
+      onSetUndone(exercise, index);
+      return null;
+    }
+    return onSetCompleted(exercise, nextEntry, index);
   };
 
   const toggleNote = (index: number) => {
@@ -441,6 +447,7 @@ export function ExerciseCard({
                       zeroLabel={exercise.loadMode === 'bodyweight' ? '自重' : undefined}
                       /* マシンごとに刻みが違うので、決まった量ずつ動かすボタンは役に立たない */
                       showSteps={false}
+                      dial
                       onNext={focusNextField}
                       onChange={(weight) => patchSet(i, { weight })}
                     />
@@ -450,18 +457,15 @@ export function ExerciseCard({
                       min={0}
                       label={`${i + 1}セット目のレップ`}
                       suffix="回"
+                      dial
                       onNext={focusNextField}
                       onChange={(reps) => patchSet(i, { reps })}
                     />
-                    <button
-                      type="button"
-                      className={`check ${set.done ? 'is-on' : ''}`}
-                      aria-label={`${i + 1}セット目を${set.done ? '未実施に戻す' : '実施済みにする'}`}
-                      aria-pressed={set.done}
-                      onClick={() => toggleDone(i)}
-                    >
-                      <Icon name="check" />
-                    </button>
+                    <PowerCheck
+                      done={set.done}
+                      label={`${i + 1}セット目を${set.done ? '未実施に戻す' : '実施済みにする'}`}
+                      onToggle={() => toggleDone(i)}
+                    />
                   </div>
 
                   {isAssist && bodyWeight > 0 ? (

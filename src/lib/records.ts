@@ -70,6 +70,22 @@ export const RECORD_ORDER = [
 
 export type RecordKind = (typeof RECORD_ORDER)[number];
 
+/**
+ * 祝いの格。演出（✓ の破裂・祝福のカード）の派手さを決める。
+ *
+ * RECORD_ORDER の強さをそのまま 3 段に畳む。負荷そのものの更新（到達点・重量）が
+ * 最上位なのは findRecords の冒頭に書いた理屈と同じで、レップ更新はそれと同格の
+ * 前進だが「重さが動いた」ほうが希少なので、演出の上では一段分ける。
+ * 積み上げ系（合計レップ・セット数・総量）は下位に置く。
+ */
+export type RecordTier = 'rare' | 'epic' | 'legend';
+
+export function recordTier(kind: RecordKind): RecordTier {
+  if (kind === 'e1rm' || kind === 'top-load') return 'legend';
+  if (kind === 'reps-at-load' || kind === 'reps') return 'epic';
+  return 'rare';
+}
+
 export type Achievement = {
   kind: RecordKind;
   /** 見出しの一言。短くする。 */

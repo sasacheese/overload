@@ -66,6 +66,15 @@
   --accent-fg: #fff;
 
   /*
+   * 金。**記録更新の最上位（到達点・重量）の祝福だけ**に使う第 3 の色。
+   * 無彩色 + 赤の方針（冒頭の 2）の例外だが、赤が「前進した」の合図である以上、
+   * その中でも希少な前進を同じ赤で祝うと差が付かない。出る場所を祝福の演出
+   * （✓ の破裂とカード）に閉じ、面や文字の常用には決して使わない。
+   */
+  --gold: #d9a62e;
+  --gold-text: #e6bc55;
+
+  /*
    * 曜日の色だけが無彩色 + 赤という配色の例外。カレンダーの慣習（土は水色、
    * 日は赤）に合わせている。休日の区別は色以外に置き換えが効かないので、
    * 意味のある色として通す。使うのは曜日の 1 文字だけに限る。
@@ -169,6 +178,9 @@
     --accent-text: #b3241a;
     --accent-soft: rgb(196 39 28 / 0.09);
     --accent-fg: #fff;
+
+    --gold: #c08a10;
+    --gold-text: #8f660a;
 
     --sat: #1f6d92;
 
@@ -1104,6 +1116,47 @@ button {
   padding: 0 0.75rem;
 }
 
+/*
+ * 弧のダイヤル（ArcDial）の入り口。左端に細く置く。
+ *
+ * 右端は ✓ の隣になるので置かない——記録を確定する列に、値を動かすボタンが
+ * 並ぶと押し間違える。幅は −/+ より一段狭くしてあり、「主の入れかたは直打ち、
+ * こちらは別口」という格の差を幅で言う。
+ */
+.stepper.has-dial {
+  grid-template-columns: 1.625rem var(--tap) minmax(0, 1fr) var(--tap);
+}
+
+.stepper.is-plain.has-dial {
+  grid-template-columns: 1.625rem minmax(0, 1fr);
+}
+
+.stepper.is-plain.has-dial .stepper-field {
+  /* 左はダイヤルが余白を兼ねる。両側 0.75rem のままだと数字が右へ寄りすぎる */
+  padding: 0 0.75rem 0 0.125rem;
+}
+
+.stepper-dial {
+  color: var(--faint);
+  display: grid;
+  place-items: center;
+  height: 100%;
+  border-right: 1px solid var(--line);
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+
+.stepper-dial:active {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.stepper-dial .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
 .set-item.is-done .stepper {
   border-color: var(--line-strong);
 }
@@ -1243,6 +1296,230 @@ button {
   to {
     stroke-dashoffset: 0;
   }
+}
+
+/* ── 長押しの溜めと解放（PowerCheck） ─────────────── */
+
+/*
+ * 溜まっていく赤。--charge（0〜1）は PowerCheck が rAF で毎フレーム書く。
+ * scaleY で伸ばすと角の丸みが潰れて伸びるので、塗りは置いたまま clip-path で
+ * 下から現していく。
+ */
+.check {
+  /* 長押しで端末の文字選択やコールアウトに指を取られない */
+  -webkit-touch-callout: none;
+}
+
+.check::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  clip-path: inset(calc((1 - var(--charge, 0)) * 100%) 0 0 0);
+}
+
+/* ✓ の字は塗りの上に出す。沈むと「溜めるほど見えなくなる」逆の絵になる */
+.check .icon {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * 震え。振れ幅を --charge に掛けてあるので、溜まるほど強く震える。
+ * カスタムプロパティはフレームごとに読み直されるため、keyframes は 1 組で足りる。
+ */
+.check.is-charging {
+  animation: check-quake 110ms linear infinite;
+  border-color: color-mix(in srgb, var(--accent) calc(var(--charge, 0) * 100%), var(--line));
+  color: color-mix(in srgb, var(--accent-fg) calc(var(--charge, 0) * 100%), var(--faint));
+  /* 光が漏れ始める。破裂の予告 */
+  box-shadow: 0 0 calc(var(--charge, 0) * 18px) color-mix(in srgb, var(--accent) calc(var(--charge, 0) * 70%), transparent);
+}
+
+@keyframes check-quake {
+  0%,
+  100% {
+    transform: translate(calc(var(--charge, 0) * 1.4px), calc(var(--charge, 0) * -1px)) scale(calc(1 + var(--charge, 0) * 0.06));
+  }
+  25% {
+    transform: translate(calc(var(--charge, 0) * -1.6px), calc(var(--charge, 0) * 1.2px)) scale(calc(1 + var(--charge, 0) * 0.06));
+  }
+  50% {
+    transform: translate(calc(var(--charge, 0) * 1.2px), calc(var(--charge, 0) * 1.5px)) scale(calc(1 + var(--charge, 0) * 0.06));
+  }
+  75% {
+    transform: translate(calc(var(--charge, 0) * -1.3px), calc(var(--charge, 0) * -1.4px)) scale(calc(1 + var(--charge, 0) * 0.06));
+  }
+}
+
+/* 弾けた瞬間、ボタン自身も一拍ふくらんで戻る。破片だけだと本体が他人事に見える */
+.check.is-burst {
+  animation: check-slam 480ms var(--spring);
+}
+
+/* 記録更新（レップ以上）の破裂は、ふくらみも一段大きい */
+.check.is-burst-epic,
+.check.is-burst-legend {
+  animation: check-slam-big 560ms var(--spring);
+}
+
+@keyframes check-slam {
+  0% {
+    transform: scale(0.88);
+  }
+  30% {
+    transform: scale(1.26);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes check-slam-big {
+  0% {
+    transform: scale(0.82);
+  }
+  30% {
+    transform: scale(1.42);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 破裂の絵。破片・輪・閃光はどれも一度きりで、終わったら DOM ごと消える */
+.burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* 中心の閃光。最初の 1 フレームの「バーン」を受け持つ */
+.burst-flash {
+  position: absolute;
+  inset: -40%;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--accent-fg) 0%, color-mix(in srgb, var(--accent) 70%, transparent) 40%, transparent 68%);
+  animation: burst-flash 240ms var(--ease-out) both;
+}
+
+@keyframes burst-flash {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+/* 外へ抜ける衝撃波の輪 */
+.burst-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  animation: burst-ring 560ms var(--ease-out) both;
+}
+
+@keyframes burst-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.5);
+  }
+}
+
+/*
+ * 割れて飛ぶ破片。飛ぶ向き（--sa）・距離（--sd）・破片自身の回転（--sr）は
+ * PowerCheck が破片ごとに渡す。速度計曲線で最初に勢いよく飛び、失速して消える。
+ */
+.burst-shard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 1px;
+  background: var(--accent);
+  animation: burst-shard 620ms var(--ease-out) both;
+}
+
+/* 全部同じ赤だと 1 枚の紙吹雪に見える。何枚かを濃淡違いにして「割れた」質感を出す */
+.burst-shard:nth-child(3n) {
+  background: color-mix(in srgb, var(--accent) 60%, var(--fg));
+}
+
+.burst-shard:nth-child(4n) {
+  background: color-mix(in srgb, var(--accent) 75%, var(--bg));
+}
+
+@keyframes burst-shard {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--sa)) translateX(6px) rotate(var(--sr));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--sa)) translateX(var(--sd)) rotate(var(--sr));
+  }
+}
+
+/*
+ * 破裂の格（burst-rare / epic / legend）。記録更新と一緒に入った ✓ は派手に割れる。
+ * 数と飛距離は PowerCheck が持ち、色と輪の本数をここで変える。
+ * 最上位（legend = 到達点・重量の更新）だけが金——出た瞬間に「いつもと違う」と分かる。
+ */
+.burst-ring.is-second {
+  animation-delay: 90ms;
+  animation-duration: 640ms;
+  border-width: 1px;
+}
+
+/* 上へ舞う火花。破片（外へ飛ぶ）との対比で、弾けたあとの余韻を受け持つ */
+.burst-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: burst-spark 700ms var(--ease-out) var(--d) both;
+}
+
+@keyframes burst-spark {
+  0% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--px) * 0.3), -50%) scale(0.4) rotate(0deg);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--px)), calc(-50% + var(--py) - 22px)) scale(1) rotate(90deg);
+  }
+}
+
+.burst-legend .burst-flash {
+  background: radial-gradient(circle, #fff 0%, color-mix(in srgb, var(--gold) 80%, transparent) 45%, transparent 70%);
+}
+
+.burst-legend .burst-ring {
+  border-color: var(--gold);
+}
+
+.burst-legend .burst-shard:nth-child(odd) {
+  background: var(--gold);
+}
+
+.burst-legend .burst-spark {
+  background: var(--gold);
 }
 
 .set-extra {
@@ -1497,6 +1774,21 @@ button {
   .check.is-on .icon path {
     animation: none;
     stroke-dasharray: none;
+  }
+  /*
+   * 動きを減らす設定では、震え・破裂・閃光を全部止める。
+   * 下から満ちる赤（--charge の塗り）だけは残す——あれは飾りではなく
+   * 「あとどれだけ押せば入るか」を伝える進み具合の表示なので。
+   */
+  .check.is-charging,
+  .check.is-burst,
+  .burst-flash,
+  .burst-ring,
+  .burst-shard {
+    animation: none;
+  }
+  .burst {
+    display: none;
   }
   .tabbar button::after {
     transition: none;
@@ -2139,6 +2431,100 @@ button {
   flex: 1;
 }
 
+/* ── 弧のダイヤル（ArcDial） ─────────────────────── */
+
+.dial-sheet {
+  gap: 0.75rem;
+}
+
+.dial-stage {
+  position: relative;
+  width: min(19rem, 100%);
+  margin: 0 auto;
+}
+
+.dial-gauge {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* なぞる面。指の動きを全部もらう——ここでスクロールが始まると値が飛ぶ */
+  touch-action: none;
+}
+
+.dial-tick {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.dial-tick.is-major {
+  stroke: var(--faint);
+  stroke-width: 1.5;
+}
+
+.dial-track {
+  fill: none;
+  stroke: var(--surface-2);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+/* 満ちた弧は赤。ここでも赤は「これから記録になる数字」へ向かう合図 */
+.dial-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+.dial-thumb {
+  fill: var(--fg);
+  stroke: var(--surface);
+  stroke-width: 3;
+}
+
+/* 弧の真ん中に、いまの値を大きく。読みながらなぞるので指の外に置く */
+.dial-readout {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 34%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  pointer-events: none;
+}
+
+.dial-readout strong {
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.dial-readout span {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+/* 弧の両端の値。縮尺が読めれば足りるので一番弱い字で */
+.dial-bound {
+  position: absolute;
+  bottom: 3%;
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}
+
+.dial-bound.is-min {
+  left: 23%;
+  transform: translateX(-50%);
+}
+
+.dial-bound.is-max {
+  right: 23%;
+  transform: translateX(50%);
+}
+
 .picker-group h3 {
   font-size: var(--fs-xs);
   letter-spacing: 0.07em;
@@ -2630,6 +3016,8 @@ button {
   background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(3px);
   animation: fade-in 180ms ease-out;
+  /* カードが起き上がる（rotateY）ときの奥行き。無いと回転がただの伸縮に見える */
+  perspective: 900px;
 }
 
 @keyframes fade-in {
@@ -2671,6 +3059,10 @@ button {
   }
 }
 
+/*
+ * カード。引き当てた 1 枚として披露する——伏せられていた札が起き上がるように
+ * 現れ（card-reveal）、面を光が一度だけ走る（celebrate-shine）。
+ */
 .celebrate-card {
   position: relative;
   display: flex;
@@ -2686,14 +3078,121 @@ button {
   padding: 1.5rem 1.75rem;
   min-width: 14rem;
   text-align: center;
-  animation: pop 420ms var(--spring) both;
+  /* 走る光をカードの縁で切る */
+  overflow: hidden;
+  animation: card-reveal 560ms var(--spring) both;
 }
 
-@keyframes pop {
-  from {
-    transform: scale(0.92);
+@keyframes card-reveal {
+  0% {
+    transform: rotateY(65deg) scale(0.8);
     opacity: 0;
   }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotateY(0deg) scale(1);
+  }
+}
+
+/*
+ * 面を斜めに走る光。ホログラフィックカードの照り返し。
+ * 一度きり——繰り返すと「光っている画面」になり、数字が読めなくなる。
+ * 色は格ごとの --shine で変える（rare は無彩色、epic は赤、legend は金）。
+ */
+.celebrate-shine {
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(115deg, transparent 40%, var(--shine, rgb(255 255 255 / 0.25)) 50%, transparent 60%);
+  transform: translateX(-130%);
+  animation: card-shine 900ms var(--ease-out) 450ms both;
+  pointer-events: none;
+}
+
+@keyframes card-shine {
+  to {
+    transform: translateX(130%);
+  }
+}
+
+/* カードの周りで瞬く星。位置は Celebration が渡す。格が上がるほど数が増える */
+.celebrate-sparkles {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.celebrate-sparkles span {
+  position: absolute;
+  width: 0.5625rem;
+  height: 0.5625rem;
+  background: var(--accent);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  transform: translate(var(--tx), var(--ty)) scale(0);
+  animation: sparkle 1500ms ease-in-out var(--d) infinite;
+}
+
+@keyframes sparkle {
+  0%,
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  40% {
+    transform: translate(var(--tx), var(--ty)) scale(var(--s)) rotate(45deg);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.4;
+  }
+}
+
+/* ── 格ごとの色。rare は無彩色の照りだけ、epic は赤、legend だけが金 ── */
+
+.tier-rare {
+  --shine: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+
+.tier-rare .celebrate-sparkles span {
+  background: var(--fg-dim);
+}
+
+.tier-epic {
+  --shine: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.tier-legend {
+  --shine: color-mix(in srgb, var(--gold) 40%, transparent);
+}
+
+.tier-legend .celebrate-card {
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent),
+    0 0 42px color-mix(in srgb, var(--gold) 28%, transparent),
+    var(--shadow-3);
+}
+
+.tier-legend .celebrate-icon {
+  color: var(--gold);
+}
+
+.tier-legend .celebrate-title,
+.tier-legend .celebrate-gain,
+.tier-legend .celebrate-more-gain {
+  color: var(--gold-text);
+}
+
+.tier-legend .celebrate-rays span {
+  background: linear-gradient(to top, var(--gold), transparent);
+}
+
+.tier-legend .celebrate-sparkles span {
+  background: var(--gold);
 }
 
 .celebrate-icon {
@@ -2784,10 +3283,14 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .celebrate,
   .celebrate-card,
-  .celebrate-rays span {
+  .celebrate-rays span,
+  .celebrate-shine,
+  .celebrate-sparkles span {
     animation: none;
   }
-  .celebrate-rays {
+  .celebrate-rays,
+  .celebrate-shine,
+  .celebrate-sparkles {
     display: none;
   }
 }
@@ -3584,6 +4087,13 @@ button {
     var(--shadow-3);
   padding: 1.25rem;
   animation: pop 240ms var(--spring) both;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
 }
 
 .confirm-title {
