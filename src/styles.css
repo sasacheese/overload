@@ -2259,68 +2259,383 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── 画面ごと割れる（Shatter） ─────────────────── */
+
 /*
- * 更新の年表。記録が動いた日だけが並ぶ。
+ * 溜め切った ✓ が弾けたときに、画面全体へ出ていく破裂。
  *
- * 増分（+2.5kg）にだけ赤い字を使う——実際に起きた前進なので、信号としての
- * 赤の使い方（前進した）に合っている。行そのものは無彩色のまま。
+ * ボタンの中の破裂は指と行の幅に閉じ込められていて、1 秒近く溜めたことに
+ * 見合う手応えにならなかった。ここは**面ではなく一瞬の光**なので、
+ * 赤を面で塗らないという方針（冒頭の 2）とは衝突しない——1 秒で消える。
+ *
+ * 中心（--ox / --oy）は押したボタンの位置。Shatter が弾けた瞬間に測って渡す。
  */
-.timeline {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.shatter {
+  position: fixed;
+  inset: 0;
+  z-index: 38;
+  /* 触れない。割れているあいだも下のボタンは押せる */
+  pointer-events: none;
+  overflow: hidden;
 }
 
-.timeline-day {
-  width: 100%;
+/* 最初の 1 フレームを飛ばす白。ここで「何かが起きた」を確定させる */
+.shatter-flash {
+  position: absolute;
+  left: var(--ox);
+  top: var(--oy);
+  width: 60vmax;
+  height: 60vmax;
+  margin: -30vmax 0 0 -30vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, color-mix(in srgb, var(--accent) 75%, transparent) 32%, transparent 68%);
+  animation: shatter-flash 300ms var(--ease-out) both;
+}
+
+@keyframes shatter-flash {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.15);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+/* 画面の対角を越えて抜ける輪 */
+.shatter-wave {
+  position: absolute;
+  left: var(--ox);
+  top: var(--oy);
+  width: 20vmax;
+  height: 20vmax;
+  margin: -10vmax 0 0 -10vmax;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: shatter-wave 700ms var(--ease-out) both;
+}
+
+@keyframes shatter-wave {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(9);
+  }
+}
+
+/*
+ * 亀裂。中心から画面の外まで走る線。
+ *
+ * 幅 0 から伸ばすのではなく、伸びきった線を scaleX で伸ばして「割れ目が走る」
+ * 動きにしている。長さは画面の対角より長い 120vmax で、どの向きでも端まで届く。
+ */
+.shatter-crack {
+  position: absolute;
+  left: var(--ox);
+  top: var(--oy);
+  width: 120vmax;
+  height: var(--w, 2px);
+  background: linear-gradient(to right, #fff 0%, var(--accent) 12%, color-mix(in srgb, var(--accent) 35%, transparent) 55%, transparent 100%);
+  transform-origin: 0 50%;
+  rotate: var(--a);
+  animation: shatter-crack 620ms var(--ease-out) var(--d, 0ms) both;
+}
+
+@keyframes shatter-crack {
+  0% {
+    opacity: 1;
+    transform: scaleX(0);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+/* 割れた面。亀裂の間を外へ飛んでいく */
+.shatter-chunk {
+  position: absolute;
+  left: var(--ox);
+  top: var(--oy);
+  background: var(--accent);
+  /* 角を落として、四角い紙ではなく割れた欠片に見せる */
+  clip-path: polygon(0 18%, 55% 0, 100% 42%, 72% 100%, 12% 82%);
+  animation: shatter-chunk 900ms cubic-bezier(0.1, 0.7, 0.3, 1) var(--d, 0ms) both;
+}
+
+/* 何枚かを濃淡違いにする。全部同じ赤だと 1 枚の紙吹雪に見える */
+.shatter-chunk:nth-child(3n) {
+  background: color-mix(in srgb, var(--accent) 55%, var(--fg));
+}
+
+.shatter-chunk:nth-child(4n) {
+  background: color-mix(in srgb, var(--accent) 70%, #fff);
+}
+
+@keyframes shatter-chunk {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--a)) translateX(2vmax) rotate(0deg) scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(var(--dist)) rotate(var(--spin)) scale(1);
+  }
+}
+
+/* 記録更新の最上位だけ金で割れる。祝福のカードと同じ格の色 */
+.shatter-legend .shatter-flash {
+  background: radial-gradient(circle, #fff 0%, color-mix(in srgb, var(--gold) 80%, transparent) 32%, transparent 68%);
+}
+
+.shatter-legend .shatter-wave {
+  border-color: var(--gold);
+}
+
+.shatter-legend .shatter-crack {
+  background: linear-gradient(to right, #fff 0%, var(--gold) 12%, color-mix(in srgb, var(--gold) 35%, transparent) 55%, transparent 100%);
+}
+
+.shatter-legend .shatter-chunk {
+  background: var(--gold);
+}
+
+.shatter-legend .shatter-chunk:nth-child(3n) {
+  background: color-mix(in srgb, var(--gold) 60%, var(--fg));
+}
+
+/*
+ * 画面のぶれ。割れた瞬間だけ、面ごと小さく揺らす。
+ *
+ * 揺れる幅は 3px 台。これ以上動かすと、読んでいる数字が滲んで酔う。
+ * 揺らすのは面（.app）で、割れの絵そのもの（position: fixed）は揺らさない
+ * ——両方揺れると、割れ目と画面が別々に動いて像が二重になる。
+ */
+.is-quaking .app {
+  animation: quake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes quake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-3px, 2px) rotate(-0.25deg);
+  }
+  25% {
+    transform: translate(4px, -3px) rotate(0.3deg);
+  }
+  40% {
+    transform: translate(-3px, -2px) rotate(-0.2deg);
+  }
+  55% {
+    transform: translate(2px, 3px) rotate(0.15deg);
+  }
+  70% {
+    transform: translate(-2px, 1px) rotate(-0.1deg);
+  }
+  85% {
+    transform: translate(1px, -1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 出す側でも止めているが、ここでも塞いでおく */
+  .shatter {
+    display: none;
+  }
+  .is-quaking .app {
+    animation: none;
+  }
+}
+
+/* ── 種目を重ねた推移（初日 = 100 の指数） ────────── */
+
+/*
+ * ここだけ色を配る面。
+ *
+ * このアプリは無彩色 + 赤 1 色で通していて、赤は「前進した」の信号に取ってある
+ * （冒頭の方針 2）。だが**何本もの線を見分ける**仕事は色でしか果たせない。
+ * 例外として色を配る代わりに、2 つの縛りを置く——信号の赤は線に使わないことと、
+ * 1 本を選んだら残りは無彩色に落ちること。色が意味を持つのは選んだ 1 本だけになる。
+ */
+.compare {
   display: flex;
   flex-direction: column;
-  gap: 0.1875rem;
-  text-align: left;
-  border-top: 1px solid var(--line);
-  padding: 0.6875rem 0;
+  gap: 0.75rem;
 }
 
-.timeline-date {
-  color: var(--muted);
-  font-size: 0.75rem;
-  display: flex;
-  align-items: baseline;
-  gap: 0.4375rem;
+.compare-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
 }
 
-/* その日に動いた数。開かずに量が分かる（開閉の節の件数と同じ役割） */
-.timeline-count {
-  font-size: var(--fs-2xs);
-  color: var(--faint);
+/* 初日の線。ここより上にいるぶんだけ伸びている */
+.compare-base {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.compare-tick {
+  fill: var(--faint);
+  font-size: 9px;
   font-variant-numeric: tabular-nums;
 }
 
-.timeline-record {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4375rem;
-  font-size: var(--fs-md);
-  min-width: 0;
+.compare-series {
+  /* 選ばれていない線が沈むときの動き。切り替わりが瞬間だと機械的になる */
+  transition: opacity var(--t) var(--ease-out);
 }
 
-.timeline-what {
+.compare-line {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition:
+    stroke var(--t) var(--ease-out),
+    stroke-width var(--t) var(--ease-out);
+}
+
+.compare-end {
+  fill: var(--series);
+  transition:
+    fill var(--t) var(--ease-out),
+    r var(--t) var(--ease-out);
+}
+
+/* 細い線を指で狙わせない。見えない太い線を重ねて当たり判定にする */
+.compare-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+/*
+ * 選ばれなかった線。色を捨てて無彩色に落ちる。
+ * 薄くするだけだと、薄い色が何本も残って画面が濁る。
+ */
+.compare-series.is-dim {
+  opacity: 0.28;
+}
+
+.compare-series.is-dim .compare-line,
+.compare-series.is-dim .compare-end {
+  stroke: var(--faint);
+  fill: var(--faint);
+}
+
+.compare-series.is-picked .compare-line {
+  stroke-width: 2.6;
+}
+
+.compare-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * 凡例。押すとその種目だけが浮き上がる。
+ *
+ * 名前・実測・伸びを 1 行に並べる。指数だけでは何 kg なのか分からないので、
+ * 実測を必ず添える（指数は比べるための物差しであって、記録そのものではない）。
+ */
+.compare-key {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 0.625rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.25rem;
+  text-align: left;
+  border-radius: var(--radius-xs);
+  transition:
+    background var(--t-fast) var(--ease-out),
+    opacity var(--t) var(--ease-out);
+}
+
+.compare-key:active {
+  background: var(--surface-2);
+}
+
+.compare-key.is-picked {
+  background: var(--surface-2);
+}
+
+.compare-key.is-dim {
+  opacity: 0.45;
+}
+
+.compare-swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 2px;
+  background: var(--series);
+  transition: background var(--t) var(--ease-out);
+}
+
+.compare-key.is-dim .compare-swatch {
+  background: var(--faint);
+}
+
+.compare-name {
+  font-size: var(--fs-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.timeline-gain {
-  flex: none;
-  color: var(--accent-text);
-  font-size: var(--fs-sm);
+.compare-key.is-picked .compare-name {
   font-weight: 600;
+}
+
+.compare-real {
+  font-size: var(--fs-xs);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-.timeline-more {
+/*
+ * 伸び。増えたぶんにだけ赤を渡す——実際に起きた前進なので、信号としての
+ * 赤の使い方に合っている。落ちた側と横ばいは無彩色のまま。
+ */
+.compare-growth {
   font-size: var(--fs-xs);
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.75rem;
+  text-align: right;
+}
+
+.compare-growth.is-up {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compare-series,
+  .compare-line,
+  .compare-end,
+  .compare-key,
+  .compare-swatch {
+    transition: none;
+  }
 }
 
 /* ── Claude に頼む ──────────────────────────────── */

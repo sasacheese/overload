@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { journeyOf, lifetimeTotals, recordTimeline, strongestSet, volumeLabel } from './milestones.ts';
+import { journeyOf, lifetimeTotals, strongestSet, volumeLabel } from './milestones.ts';
 import type { ExerciseHistory } from './progression.ts';
 import { exerciseId, isoDate, type Exercise, type Session, type SessionEntry } from './types.ts';
 
@@ -89,40 +89,3 @@ test('journeyOf: 落ちていても隠さない（improved が false になる�
   assert.equal(j.improved, false);
 });
 
-test('recordTimeline: 記録が動いた日だけを新しい順で返す', () => {
-  const sessions = [
-    session('2026-08-01', [entry(bench.id, [[60, 8]])]), // 初日。更新ではないので出ない
-    session('2026-08-03', [entry(bench.id, [[60, 8]])]), // 同じ。何も動かない
-    session('2026-08-05', [entry(bench.id, [[62.5, 8]])]), // 更新
-  ];
-  const timeline = recordTimeline(sessions, [bench]);
-  assert.equal(timeline.length, 1);
-  assert.equal(timeline[0]!.date, '2026-08-05');
-  const kinds = timeline[0]!.records.map((r) => r.achievement.kind);
-  assert.ok(kinds.includes('e1rm'));
-  assert.ok(kinds.includes('top-load'));
-  // どの行にも previous がある（初日の到達は入れない約束）
-  assert.ok(timeline[0]!.records.every((r) => r.achievement.previous !== null));
-});
-
-test('recordTimeline: 1 日の総量の更新は 1 回だけ、種目名なしで出る', () => {
-  const other: Exercise = { ...bench, id: exerciseId('squat'), name: 'スクワット', group: 'legs' };
-  const sessions = [
-    session('2026-08-01', [entry(bench.id, [[60, 10]]), entry(other.id, [[80, 10]])]), // 総量 1400
-    session('2026-08-03', [entry(bench.id, [[60, 10], [60, 10]]), entry(other.id, [[80, 10], [80, 10]])]), // 総量 2800
-  ];
-  const timeline = recordTimeline(sessions, [bench, other]);
-  const day = timeline.find((d) => d.date === '2026-08-03');
-  assert.ok(day);
-  const wholeDay = day.records.filter((r) => r.achievement.kind === 'session-volume');
-  assert.equal(wholeDay.length, 1);
-  assert.equal(wholeDay[0]!.exerciseName, null);
-});
-
-test('recordTimeline: ✓ の無い日は行ごと無い', () => {
-  const sessions = [
-    session('2026-08-01', [entry(bench.id, [[60, 8]])]),
-    session('2026-08-02', [], 70), // 体重だけの日
-  ];
-  assert.equal(recordTimeline(sessions, [bench]).length, 0);
-});

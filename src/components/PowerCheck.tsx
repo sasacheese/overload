@@ -27,12 +27,20 @@
  * 記録更新と同時に入ったときは、破裂が更新の格に応じて派手になる。どの格かは
  * onToggle の戻り値で受け取る（lib/records.ts の recordTier）——破裂を描き始める
  * 瞬間に判定が要るので、あとから prop で降ってくるのを待たず、その場で返してもらう。
+ *
+ * ## 画面ごと割る
+ *
+ * ボタンの中の破裂は、押している指と行の幅に閉じ込められている。1 秒近く溜めた
+ * ことに見合う手応えにはならないので、弾けた先を画面そのものへ出す（`Shatter`）。
+ * 押した場所を中心に亀裂が画面の外まで走り、破片が飛び、画面が一瞬ぶれる。
+ * ボタンの中の破裂は、その中心で起きている小さいほうとして残してある。
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { smashFeedback, tickFeedback } from '../lib/haptics.ts';
 import type { RecordTier } from '../lib/records.ts';
 import { Icon } from './Icon.tsx';
+import { Shatter, useShatterAllowed } from './Shatter.tsx';
 
 /** 破裂の格。plain は更新なしの通常の破裂。 */
 type BurstTier = RecordTier | 'plain';
@@ -109,6 +117,9 @@ export function PowerCheck({ done, label, onToggle }: Props) {
   const row = useRef<HTMLElement | null>(null);
   const [charging, setCharging] = useState(false);
   const [burst, setBurst] = useState<BurstTier | null>(null);
+  /** 画面が割れている最中。中心は押したボタンの位置（画面に対する %）。 */
+  const [shatter, setShatter] = useState<{ x: number; y: number; tier: BurstTier } | null>(null);
+  const shatterAllowed = useShatterAllowed();
   const raf = useRef(0);
   /** 解き放った線の減衰。溜めとは別に持つ——溜め側を止めても線は走り切らせる */
   const releaseRaf = useRef(0);
@@ -173,6 +184,24 @@ export function PowerCheck({ done, label, onToggle }: Props) {
     return () => clearTimeout(id);
   }, [burst]);
 
+  /**
+   * 画面を割る。中心は押したボタンの真ん中。
+   *
+   * 位置は弾けた瞬間に測る。行はスクロールで動くので、あとから測ると割れ目の
+   * 中心が押した場所からずれる。
+   */
+  const shatterFrom = (tier: BurstTier) => {
+    if (!shatterAllowed) return;
+    const el = btn.current;
+    if (el === null) return;
+    const r = el.getBoundingClientRect();
+    setShatter({
+      x: ((r.left + r.width / 2) / window.innerWidth) * 100,
+      y: ((r.top + r.height / 2) / window.innerHeight) * 100,
+      tier,
+    });
+  };
+
   /** 力が抜ける。満ちた赤が下へ引いていき、何も起きなかったことが目で分かる。 */
   const drain = () => {
     cancelAnimationFrame(raf.current);
@@ -223,7 +252,9 @@ export function PowerCheck({ done, label, onToggle }: Props) {
       setCharging(false);
       setCharge(0);
       release();
-      setBurst(onToggle() ?? 'plain');
+      const tier = onToggle() ?? 'plain';
+      setBurst(tier);
+      shatterFrom(tier);
       smashFeedback();
     };
     raf.current = requestAnimationFrame(loop);
@@ -262,7 +293,10 @@ export function PowerCheck({ done, label, onToggle }: Props) {
         }
         const tier = onToggle();
         // キーボードで入れたときも破裂は返す（done はまだ入れる前の値）
-        if (!done) setBurst(tier ?? 'plain');
+        if (!done) {
+          setBurst(tier ?? 'plain');
+          shatterFrom(tier ?? 'plain');
+        }
       }}
     >
       <Icon name="check" />
@@ -278,6 +312,9 @@ export function PowerCheck({ done, label, onToggle }: Props) {
             <span key={`k${i}`} className="burst-spark" style={sparkStyle(i)} />
           ))}
         </span>
+      ) : null}
+      {shatter ? (
+        <Shatter origin={shatter} tier={shatter.tier} onDone={() => setShatter(null)} />
       ) : null}
     </button>
   );

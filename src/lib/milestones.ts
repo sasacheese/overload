@@ -1,23 +1,22 @@
 /**
  * 長い弧のまとめ。1 セット・1 日の前進は祝福と締めが手厚く扱うが、
  * 「何ヶ月でどれだけ変わったか」を受け取る場所が無かった。ここに置くのは
- * その 3 つ——通算の積み上げ・初日から今日まで・更新の年表。
+ * その 2 つ——通算の積み上げと、初日から今日まで。
  *
- * どれも**過去の事実の言い換え**で、目標ではない。未達が出うる形
+ * どちらも**過去の事実の言い換え**で、目標ではない。未達が出うる形
  * （週◯回のノルマ、達成率、ゲージ）はこのファイルにも作らない。
  *
  * - **通算の積み上げ**は絶対に減らない数字。休んでも下がらないので、
  *   休むことが罰にならない（週単位の連続記録と同じ性質を、数字の側で持つ）
  * - **初日から今日まで**は、目標と違って外れようがない。比べる相手が
  *   未来ではなく過去だから
- * - **更新の年表**は、記録が動いた日だけを並べる。動かなかった日は
- *   行ごと無い——足りない側の欄を作らない
+ *
+ * 種目どうしを並べて見る面は `compare.ts` が持つ（初日を 100 とした指数）。
  */
 
-import { bodyWeightOn, countedSets, sessionVolume, sortedSessions } from './query.ts';
-import { findRecords, type Achievement } from './records.ts';
+import { bodyWeightOn, countedSets, sessionVolume } from './query.ts';
 import { comparable, loadWord, type ExerciseHistory, type Performance } from './progression.ts';
-import { doneSets, type Exercise, type ExerciseId, type IsoDate, type Session, type SetRecord } from './types.ts';
+import { doneSets, type Exercise, type IsoDate, type Session, type SetRecord } from './types.ts';
 
 /** 通算。days は ✓ が 1 つ以上ある日、volume は全期間の総ボリューム（kg）。 */
 export type Lifetime = { days: number; volume: number };
@@ -89,67 +88,4 @@ export function journeyOf(ex: Exercise, history: ExerciseHistory): Journey | nul
     latest: { date: b.date, label: label(b.set) },
     improved: comparable(ex, b.set) > comparable(ex, a.set),
   };
-}
-
-/** 年表の 1 件。セッション全体の記録（1 日の総量）は exerciseName が null。 */
-export type TimelineRecord = { exerciseName: string | null; achievement: Achievement };
-/** 記録が動いた 1 日。動かなかった日は配列に入らない。 */
-export type TimelineDay = { date: IsoDate; records: TimelineRecord[] };
-
-/**
- * 更新の年表。記録が動いた日だけを新しい順で返す。
- *
- * findRecords を過去に向かって流し直す。祝福と同じ判定を使うので、
- * ここに出る行と当時祝われたものが食い違わない。
- *
- * 初日の到達（previous が無いもの）は入れない。祝福は初回の到達点も祝うが、
- * 年表は「更新」の一覧なので、種目を足しただけの日が並ぶと薄まる。
- *
- * 全期間を舐めるので O(日数 × 種目の履歴)。開いたときに 1 回計算して
- * memoize する前提で、描画のたびに呼ばない。
- */
-export function recordTimeline(sessions: readonly Session[], exercises: readonly Exercise[]): TimelineDay[] {
-  const byId = new Map(exercises.map((e) => [e.id, e]));
-  // 古い順に流す。sortedSessions はメモだけの日も含むが、✓ が無ければ何も出ない
-  const days = [...sortedSessions(sessions)].reverse();
-  const histories = new Map<ExerciseId, (Performance & { date: IsoDate })[]>();
-  let bestPastSessionVolume = 0;
-  const out: TimelineDay[] = [];
-
-  for (const session of days) {
-    const bodyWeight = bodyWeightOn(sessions, session.date);
-    const dayVolume = sessionVolume(session, exercises, bodyWeight);
-    const records: TimelineRecord[] = [];
-    // 1 日の総量は種目に属さないので、種目ごとの findRecords から重複して出る。1 回だけ拾う
-    let sessionVolumeSeen = false;
-
-    for (const entry of session.entries) {
-      const exercise = byId.get(entry.exerciseId);
-      if (!exercise || doneSets(entry).length === 0) continue;
-      const history = histories.get(entry.exerciseId) ?? [];
-      const found = findRecords({
-        exercise,
-        today: { entry, bodyWeight },
-        history,
-        todaySessionVolume: dayVolume,
-        bestPastSessionVolume,
-      });
-      for (const achievement of found) {
-        if (achievement.previous === null) continue;
-        if (achievement.kind === 'session-volume') {
-          if (sessionVolumeSeen) continue;
-          sessionVolumeSeen = true;
-          records.push({ exerciseName: null, achievement });
-        } else {
-          records.push({ exerciseName: exercise.name, achievement });
-        }
-      }
-      histories.set(entry.exerciseId, [{ date: session.date, entry, bodyWeight }, ...history]);
-    }
-
-    bestPastSessionVolume = Math.max(bestPastSessionVolume, dayVolume);
-    if (records.length > 0) out.push({ date: session.date, records });
-  }
-
-  return out.reverse();
 }
