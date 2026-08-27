@@ -46,6 +46,7 @@ import { useStore } from '../store.tsx';
 import { BodyMap } from './BodyMap.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { Icon, type IconName } from './Icon.tsx';
+import { PowerCheck } from './PowerCheck.tsx';
 import { Stepper } from './Stepper.tsx';
 import { ForecastNote, TrendChart } from './TrendChart.tsx';
 
@@ -410,6 +411,7 @@ export function ExerciseCard({
                       zeroLabel={exercise.loadMode === 'bodyweight' ? '自重' : undefined}
                       /* マシンごとに刻みが違うので、決まった量ずつ動かすボタンは役に立たない */
                       showSteps={false}
+                      dial
                       onNext={focusNextField}
                       onChange={(weight) => patchSet(i, { weight })}
                     />
@@ -419,18 +421,15 @@ export function ExerciseCard({
                       min={0}
                       label={`${i + 1}セット目のレップ`}
                       suffix="回"
+                      dial
                       onNext={focusNextField}
                       onChange={(reps) => patchSet(i, { reps })}
                     />
-                    <button
-                      type="button"
-                      className={`check ${set.done ? 'is-on' : ''}`}
-                      aria-label={`${i + 1}セット目を${set.done ? '未実施に戻す' : '実施済みにする'}`}
-                      aria-pressed={set.done}
-                      onClick={() => toggleDone(i)}
-                    >
-                      <Icon name="check" />
-                    </button>
+                    <PowerCheck
+                      done={set.done}
+                      label={`${i + 1}セット目を${set.done ? '未実施に戻す' : '実施済みにする'}`}
+                      onToggle={() => toggleDone(i)}
+                    />
                   </div>
 
                   {isAssist && bodyWeight > 0 ? (

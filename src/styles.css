@@ -956,6 +956,47 @@ button {
   padding: 0 0.75rem;
 }
 
+/*
+ * 弧のダイヤル（ArcDial）の入り口。左端に細く置く。
+ *
+ * 右端は ✓ の隣になるので置かない——記録を確定する列に、値を動かすボタンが
+ * 並ぶと押し間違える。幅は −/+ より一段狭くしてあり、「主の入れかたは直打ち、
+ * こちらは別口」という格の差を幅で言う。
+ */
+.stepper.has-dial {
+  grid-template-columns: 1.625rem var(--tap) minmax(0, 1fr) var(--tap);
+}
+
+.stepper.is-plain.has-dial {
+  grid-template-columns: 1.625rem minmax(0, 1fr);
+}
+
+.stepper.is-plain.has-dial .stepper-field {
+  /* 左はダイヤルが余白を兼ねる。両側 0.75rem のままだと数字が右へ寄りすぎる */
+  padding: 0 0.75rem 0 0.125rem;
+}
+
+.stepper-dial {
+  color: var(--faint);
+  display: grid;
+  place-items: center;
+  height: 100%;
+  border-right: 1px solid var(--line);
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+
+.stepper-dial:active {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.stepper-dial .icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
 .set-item.is-done .stepper {
   border-color: var(--line-strong);
 }
@@ -1094,6 +1135,159 @@ button {
   }
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+/* ── 長押しの溜めと解放（PowerCheck） ─────────────── */
+
+/*
+ * 溜まっていく赤。--charge（0〜1）は PowerCheck が rAF で毎フレーム書く。
+ * scaleY で伸ばすと角の丸みが潰れて伸びるので、塗りは置いたまま clip-path で
+ * 下から現していく。
+ */
+.check {
+  /* 長押しで端末の文字選択やコールアウトに指を取られない */
+  -webkit-touch-callout: none;
+}
+
+.check::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  clip-path: inset(calc((1 - var(--charge, 0)) * 100%) 0 0 0);
+}
+
+/* ✓ の字は塗りの上に出す。沈むと「溜めるほど見えなくなる」逆の絵になる */
+.check .icon {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * 震え。振れ幅を --charge に掛けてあるので、溜まるほど強く震える。
+ * カスタムプロパティはフレームごとに読み直されるため、keyframes は 1 組で足りる。
+ */
+.check.is-charging {
+  animation: check-quake 110ms linear infinite;
+  border-color: color-mix(in srgb, var(--accent) calc(var(--charge, 0) * 100%), var(--line));
+  color: color-mix(in srgb, var(--accent-fg) calc(var(--charge, 0) * 100%), var(--faint));
+  /* 光が漏れ始める。破裂の予告 */
+  box-shadow: 0 0 calc(var(--charge, 0) * 18px) color-mix(in srgb, var(--accent) calc(var(--charge, 0) * 70%), transparent);
+}
+
+@keyframes check-quake {
+  0%,
+  100% {
+    transform: translate(calc(var(--charge, 0) * 1.4px), calc(var(--charge, 0) * -1px)) scale(calc(1 + var(--charge, 0) * 0.06));
+  }
+  25% {
+    transform: translate(calc(var(--charge, 0) * -1.6px), calc(var(--charge, 0) * 1.2px)) scale(calc(1 + var(--charge, 0) * 0.06));
+  }
+  50% {
+    transform: translate(calc(var(--charge, 0) * 1.2px), calc(var(--charge, 0) * 1.5px)) scale(calc(1 + var(--charge, 0) * 0.06));
+  }
+  75% {
+    transform: translate(calc(var(--charge, 0) * -1.3px), calc(var(--charge, 0) * -1.4px)) scale(calc(1 + var(--charge, 0) * 0.06));
+  }
+}
+
+/* 弾けた瞬間、ボタン自身も一拍ふくらんで戻る。破片だけだと本体が他人事に見える */
+.check.is-burst {
+  animation: check-slam 480ms var(--spring);
+}
+
+@keyframes check-slam {
+  0% {
+    transform: scale(0.88);
+  }
+  30% {
+    transform: scale(1.26);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 破裂の絵。破片・輪・閃光はどれも一度きりで、終わったら DOM ごと消える */
+.burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* 中心の閃光。最初の 1 フレームの「バーン」を受け持つ */
+.burst-flash {
+  position: absolute;
+  inset: -40%;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--accent-fg) 0%, color-mix(in srgb, var(--accent) 70%, transparent) 40%, transparent 68%);
+  animation: burst-flash 240ms var(--ease-out) both;
+}
+
+@keyframes burst-flash {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+/* 外へ抜ける衝撃波の輪 */
+.burst-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  animation: burst-ring 560ms var(--ease-out) both;
+}
+
+@keyframes burst-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.5);
+  }
+}
+
+/*
+ * 割れて飛ぶ破片。飛ぶ向き（--sa）・距離（--sd）・破片自身の回転（--sr）は
+ * PowerCheck が破片ごとに渡す。速度計曲線で最初に勢いよく飛び、失速して消える。
+ */
+.burst-shard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 1px;
+  background: var(--accent);
+  animation: burst-shard 620ms var(--ease-out) both;
+}
+
+/* 全部同じ赤だと 1 枚の紙吹雪に見える。何枚かを濃淡違いにして「割れた」質感を出す */
+.burst-shard:nth-child(3n) {
+  background: color-mix(in srgb, var(--accent) 60%, var(--fg));
+}
+
+.burst-shard:nth-child(4n) {
+  background: color-mix(in srgb, var(--accent) 75%, var(--bg));
+}
+
+@keyframes burst-shard {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--sa)) translateX(6px) rotate(var(--sr));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--sa)) translateX(var(--sd)) rotate(var(--sr));
   }
 }
 
@@ -1349,6 +1543,21 @@ button {
   .check.is-on .icon path {
     animation: none;
     stroke-dasharray: none;
+  }
+  /*
+   * 動きを減らす設定では、震え・破裂・閃光を全部止める。
+   * 下から満ちる赤（--charge の塗り）だけは残す——あれは飾りではなく
+   * 「あとどれだけ押せば入るか」を伝える進み具合の表示なので。
+   */
+  .check.is-charging,
+  .check.is-burst,
+  .burst-flash,
+  .burst-ring,
+  .burst-shard {
+    animation: none;
+  }
+  .burst {
+    display: none;
   }
   .tabbar button::after {
     transition: none;
@@ -1819,6 +2028,100 @@ button {
 
 .sheet-actions > * {
   flex: 1;
+}
+
+/* ── 弧のダイヤル（ArcDial） ─────────────────────── */
+
+.dial-sheet {
+  gap: 0.75rem;
+}
+
+.dial-stage {
+  position: relative;
+  width: min(19rem, 100%);
+  margin: 0 auto;
+}
+
+.dial-gauge {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* なぞる面。指の動きを全部もらう——ここでスクロールが始まると値が飛ぶ */
+  touch-action: none;
+}
+
+.dial-tick {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.dial-tick.is-major {
+  stroke: var(--faint);
+  stroke-width: 1.5;
+}
+
+.dial-track {
+  fill: none;
+  stroke: var(--surface-2);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+/* 満ちた弧は赤。ここでも赤は「これから記録になる数字」へ向かう合図 */
+.dial-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+.dial-thumb {
+  fill: var(--fg);
+  stroke: var(--surface);
+  stroke-width: 3;
+}
+
+/* 弧の真ん中に、いまの値を大きく。読みながらなぞるので指の外に置く */
+.dial-readout {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 34%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  pointer-events: none;
+}
+
+.dial-readout strong {
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.dial-readout span {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+/* 弧の両端の値。縮尺が読めれば足りるので一番弱い字で */
+.dial-bound {
+  position: absolute;
+  bottom: 3%;
+  font-size: var(--fs-2xs);
+  color: var(--faint);
+}
+
+.dial-bound.is-min {
+  left: 23%;
+  transform: translateX(-50%);
+}
+
+.dial-bound.is-max {
+  right: 23%;
+  transform: translateX(50%);
 }
 
 .picker-group h3 {
