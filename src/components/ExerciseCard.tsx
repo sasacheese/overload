@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { relativeLabel } from '../lib/calendar.ts';
 import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
+import { journeyOf } from '../lib/milestones.ts';
 import { tapFeedback } from '../lib/haptics.ts';
 import { bodyweightCap, guideFor } from '../lib/presets.ts';
 import {
@@ -31,13 +32,14 @@ import {
   sessionsSinceBest,
   trendLabel,
 } from '../lib/progression.ts';
-import { bestSeries, exerciseHistory, previousEntry } from '../lib/query.ts';
+import { bestSeries, exerciseHistory, orderInDay, previousEntry, sessionOn } from '../lib/query.ts';
 import type { RecordTier } from '../lib/records.ts';
 import {
   LOAD_MODES,
   MUSCLES,
   MUSCLE_GROUPS,
   doneSets,
+  startedAt,
   type Exercise,
   type IsoDate,
   type SessionEntry,
@@ -58,6 +60,8 @@ type Props = {
   entry: SessionEntry;
   /** その日の体重。アシスト種目の実効負荷に使う。0 は未記録。 */
   bodyWeight: number;
+  /** その日の何種目目に実施したか。1 始まり。0 はまだ ✓ が無い（順番が決まっていない）。 */
+  order: number;
   /** 畳んでいるか。何種目も並ぶ日に、終えたものを閉じて縦を詰められるようにしてある。 */
   folded: boolean;
   onToggleFold: () => void;
@@ -149,6 +153,7 @@ export function ExerciseCard({
   today,
   entry,
   bodyWeight,
+  order,
   folded,
   onToggleFold,
   onChange,
@@ -202,8 +207,21 @@ export function ExerciseCard({
   const performance = useMemo(() => ({ entry, bodyWeight }), [entry, bodyWeight]);
 
   const history = useMemo(() => exerciseHistory(sessions, exercise.id), [sessions, exercise.id]);
-  const past = useMemo(() => history.filter((h) => h.date < date).slice(0, HISTORY_ROWS), [history, date]);
+  /** これまでの記録。1 行ごとに、その日の何種目目だったかを添える（0 は分からない）。 */
+  const past = useMemo(
+    () =>
+      history
+        .filter((h) => h.date < date)
+        .slice(0, HISTORY_ROWS)
+        .map((h) => ({ ...h, order: orderInDay(sessionOn(sessions, h.date), exercise.id) })),
+    [history, date, sessions, exercise.id],
+  );
   const series = useMemo(() => bestSeries(exercise, history), [exercise, history]);
+  /*
+   * 初日から直近まで。これから担ぐ直前に「あの日の自分」と並べる。
+   * 目標ではなく過去の事実なので外れようがない。2 日ぶん無ければ出ない。
+   */
+  const journey = useMemo(() => journeyOf(exercise, history), [exercise, history]);
   const bestsNewestFirst = useMemo(() => [...series].reverse().map((s) => s.best), [series]);
   const trendPoints = useMemo(() => series.map((s) => ({ date: s.date, value: s.best })), [series]);
 
@@ -282,6 +300,14 @@ export function ExerciseCard({
     tapFeedback();
     const nextEntry: SessionEntry = {
       ...entry,
+      /*
+       * 初めて ✓ を付けた時刻を残す。その日の何種目目に実施したかは、これを
+       * 並べて出す（`query.ts` の orderInDay）。
+       *
+       * 一度入れたら動かさない。✓ を外して入れ直すたびに時刻が後ろへ動くと、
+       * 途中で戻って直した種目が、その日の最後にやったことになってしまう。
+       */
+      startedAt: startedAt(entry) > 0 ? startedAt(entry) : Date.now(),
       sets: entry.sets.map((s, i) => (i === index ? { ...s, done: !s.done } : s)),
     };
     onChange(nextEntry);
@@ -322,6 +348,11 @@ export function ExerciseCard({
             {group.short}
           </span>
           <span className="card-name">{exercise.name}</span>
+          {/*
+            その日の何種目目か。✓ を 1 つ付けた時点で決まる。同じ部位でも
+            1 種目目と 3 種目目では出る数字が違うので、記録と一緒に見えるところに置く。
+          */}
+          {order > 0 ? <OrderChip order={order} /> : null}
           <Icon name="down" className="card-chevron" />
         </button>
         <button
@@ -548,6 +579,19 @@ export function ExerciseCard({
                 open={openSections.has('history')}
                 onToggle={() => toggleSection('history')}
               >
+                {journey ? (
+                  <p className="journey">
+                    <span className="journey-then">
+                      初日 <span className="muted">{relativeLabel(journey.first.date, today)}</span> {journey.first.label}
+                    </span>
+                    <span className={`journey-arrow${journey.improved ? ' is-up' : ''}`} aria-hidden="true">
+                      →
+                    </span>
+                    <span className={`journey-now${journey.improved ? ' is-up' : ''}`}>
+                      {journey.latest.label}
+                    </span>
+                  </p>
+                ) : null}
                 <ul className="past-list">
                   {past.map((h) => (
                     <li key={h.date}>
@@ -556,6 +600,8 @@ export function ExerciseCard({
                         <span className="muted"> {relativeLabel(h.date, today)}</span>
                       </span>
                       <span className="past-sets">{setsLabel(exercise, doneSets(h.entry))}</span>
+                      {/* その日の何種目目だったか。時刻を持たない古い記録には出ない */}
+                      {h.order > 0 ? <OrderChip order={h.order} className="past-order" /> : null}
                       {h.entry.note.trim() !== '' ? <span className="past-note">{h.entry.note}</span> : null}
                       {doneSets(h.entry)
                         .map((s, i) => (s.note.trim() !== '' ? `${i + 1}セット目: ${s.note}` : null))
@@ -636,6 +682,18 @@ export function ExerciseCard({
         />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * その日の何種目目か。
+ *
+ * 1 種目目だけ濃くしてある。同じ部位なら 1 種目目がいちばん重いものを扱えて、
+ * あとになるほど落ちる——数字を読み返すときの前提がここで分かる。
+ */
+function OrderChip({ order, className }: { order: number; className?: string }) {
+  return (
+    <span className={`order-chip ${order === 1 ? 'is-first' : ''} ${className ?? ''}`}>{order}種目目</span>
   );
 }
 

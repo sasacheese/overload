@@ -16,17 +16,21 @@ import {
   countedSets,
   exerciseHistory,
   lastPerformed,
+  orderInDay,
   previousEntry,
+  sessionGroups,
   sessionVolume,
+  sortedSessions,
 } from '../lib/query.ts';
 
 import { recordFeedback } from '../lib/haptics.ts';
 import { findRecords, recordTier, type Achievement, type RecordKind, type RecordTier } from '../lib/records.ts';
-import type { Exercise, IsoDate, Session, SessionEntry } from '../lib/types.ts';
+import { startedAt, type Exercise, type IsoDate, type Session, type SessionEntry } from '../lib/types.ts';
 import { canFinish, wrapUp } from '../lib/wrapup.ts';
 import { useSession, useStore } from '../store.tsx';
 import { Celebration } from './Celebration.tsx';
 import { Wrapup } from './Wrapup.tsx';
+import { EmptyDay, type LastDay } from './EmptyDay.tsx';
 import { ExerciseCard } from './ExerciseCard.tsx';
 import { ExercisePicker } from './ExercisePicker.tsx';
 import { Icon } from './Icon.tsx';
@@ -47,6 +51,38 @@ const REST_KEY = 'overload:rest';
 const SHOWN_KEY = 'overload:shownRecords';
 /** 畳んでいる種目。タブを行き来しても畳んだままにするために外へ出す。 */
 const FOLD_KEY = 'overload:folded';
+
+/**
+ * ここから上は「広い画面」。左に筋が出るのと同じ境目（styles.css の 60rem）。
+ *
+ * 狭い画面では種目を 1 つだけ開く。1 枚が画面のほとんどを占めるので、複数開くと
+ * 目当ての種目まで指を何度も送ることになる。広い画面は縦に余裕があるので、
+ * 見比べられるように複数開けたままにする。
+ */
+const WIDE = '(min-width: 60rem)';
+
+function useWide(): boolean {
+  const [wide, setWide] = useState(() => {
+    try {
+      return matchMedia(WIDE).matches;
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    let mq: MediaQueryList;
+    try {
+      mq = matchMedia(WIDE);
+    } catch {
+      return;
+    }
+    const on = () => setWide(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
 
 /** どのセットが始めた休憩かを覚えておく。✓ を外したときに畳むため。 */
 type Rest = { at: number; targetSec: number; exerciseId: string; index: number };
@@ -90,26 +126,55 @@ function readShown(): Set<string> {
  * 並ぶ種目が違うので、前の日で閉じたものが次の日でも閉じていると、開いた覚えの
  * 無いものが閉じたまま並ぶ。
  */
-function readFolded(date: IsoDate): Set<string> {
+function readFolded(date: IsoDate): Set<string> | null {
   try {
     const raw = sessionStorage.getItem(FOLD_KEY);
-    if (!raw) return new Set();
+    if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return new Set();
+    if (typeof parsed !== 'object' || parsed === null) return null;
     const { date: on, ids } = parsed as Record<string, unknown>;
-    if (on !== date || !Array.isArray(ids)) return new Set();
+    if (on !== date || !Array.isArray(ids)) return null;
     return new Set(ids.filter((v): v is string => typeof v === 'string'));
   } catch {
-    return new Set();
+    return null;
   }
 }
 
+/**
+ * その日、いま向かっている種目。いちばん最後に始めたもの、無ければ末尾。
+ *
+ * 途中でタブを閉じて開き直したとき、開いているべきは手を付けたところ。行の並びの
+ * 末尾を採ると、先にまとめて種目を選んでおく日に、まだ触っていない種目が開く。
+ */
+function currentEntry(entries: readonly SessionEntry[]): SessionEntry | undefined {
+  const started = [...entries].filter((e) => startedAt(e) > 0).sort((a, b) => startedAt(a) - startedAt(b));
+  return started.at(-1) ?? entries.at(-1);
+}
+
+/**
+ * その日を開いたときの畳み方。
+ *
+ * 触った覚えがあるならそれを正とする（null は「この日はまだ触っていない」）。
+ * 触っていない日を狭い画面で開いたときは、いま向かっている 1 つだけ開く——
+ * 1 つずつしか開かない画面で、読み込み直後だけ全部開いていると規則が崩れて見える。
+ */
+function initialFolded(date: IsoDate, entries: readonly SessionEntry[], wide: boolean): Set<string> {
+  const stored = readFolded(date);
+  if (stored !== null) return stored;
+  if (wide || entries.length < 2) return new Set();
+  const open = currentEntry(entries);
+  return new Set(entries.filter((e) => e !== open).map((e) => e.exerciseId as string));
+}
+
 export function SessionView({ date, today, onDateChange, onCreateExercise }: Props) {
-  const { exercises, sessions, saveSession } = useStore();
+  const { exercises, sessions, saveSession, setBodyWeight } = useStore();
   const session = useSession(date);
+  const wide = useWide();
   const [picking, setPicking] = useState(false);
   const [rest, setRest] = useState(readRest);
-  const [folded, setFolded] = useState<ReadonlySet<string>>(() => readFolded(date));
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() =>
+    initialFolded(date, session.entries, wide),
+  );
   const [celebration, setCelebration] = useState<{ achievements: Achievement[]; exerciseName: string } | null>(null);
   /** 締めの画面。fresh は「いま押して締めた」——あとから見直したときは光を出さない。 */
   const [wrap, setWrap] = useState<{ fresh: boolean } | null>(null);
@@ -131,22 +196,46 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     return () => observer.disconnect();
   }, []);
 
-  // 日付を送ったら、その日の畳みを読み直す（別の日の畳みを持ち越さない）
+  /*
+   * 日付を送ったら、その日の畳みを読み直す（別の日の畳みを持ち越さない）。
+   *
+   * 依存は date だけ。session.entries を入れると、セットに数字を打つたびに
+   * 畳み方が組み直されて、開いたばかりの種目が閉じてしまう。
+   */
   useEffect(() => {
-    setFolded(readFolded(date));
+    setFolded(initialFolded(date, session.entries, wide));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  const toggleFold = (exerciseId: string) => {
+  /**
+   * 畳み方を決めて覚える。覚えられなければ、タブを離れたときに開いた状態へ戻るだけ。
+   *
+   * 直前の畳み方は引数で受け取る（描画時の値を読まない）。1 回の描画のあいだに
+   * 2 度決まることがあり、そのとき古い方を元にすると片方の操作が消える。
+   */
+  const applyFold = (next: (prev: ReadonlySet<string>) => Set<string>) => {
     setFolded((prev) => {
-      const next = new Set(prev);
-      if (next.has(exerciseId)) next.delete(exerciseId);
-      else next.add(exerciseId);
+      const ids = next(prev);
       try {
-        sessionStorage.setItem(FOLD_KEY, JSON.stringify({ date, ids: [...next] }));
+        sessionStorage.setItem(FOLD_KEY, JSON.stringify({ date, ids: [...ids] }));
       } catch {
-        // 覚えられなければ、タブを離れたときに開いた状態へ戻るだけ
+        // 覚えられなくてもこの画面のあいだは畳んだまま
       }
-      return next;
+      return ids;
+    });
+  };
+
+  /**
+   * 見出しを押したとき。
+   *
+   * 狭い画面では 1 つだけ開く（開いた種目以外は畳む）。広い画面はそのまま
+   * 開け閉めするだけで、何枚でも並べて見比べられる。
+   */
+  const toggleFold = (exerciseId: string) => {
+    const others = session.entries.map((e) => e.exerciseId as string).filter((id) => id !== exerciseId);
+    applyFold((prev) => {
+      if (!prev.has(exerciseId)) return new Set([...prev, exerciseId]);
+      return wide ? new Set([...prev].filter((id) => id !== exerciseId)) : new Set(others);
     });
   };
 
@@ -161,6 +250,18 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
       .sort((a, b) => b.date.localeCompare(a.date))[0];
     return found ? { date: found.date, weight: found.bodyWeight } : null;
   }, [sessions, date]);
+  /**
+   * その日より前で、実際に ✓ が付いた直近の日。1 種目も並んでいない日にだけ出す。
+   *
+   * `hasRecord` ではなく ✓ の数で絞っている。メモだけ書いた日を「前回やった日」と
+   * 呼ぶと、開けたぶんの日数が実際にトレーニングを空けた日数と合わなくなる。
+   */
+  const previousDay = useMemo<LastDay | null>(() => {
+    if (session.entries.length > 0) return null;
+    const found = sortedSessions(sessions).find((s) => s.date < date && countedSets(s) > 0);
+    return found ? { date: found.date, groups: sessionGroups(found, exercises) } : null;
+  }, [sessions, exercises, date, session.entries.length]);
+
   const volume = sessionVolume(session, exercises, bodyWeight);
   const sets = countedSets(session);
   const parts = dateParts(date);
@@ -176,6 +277,12 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     }
     const prev = previousEntry(sessions, exercise.id, date);
     setEntries([...session.entries, { exerciseId: exercise.id, sets: initialSets(exercise, prev?.entry), note: '' }]);
+    /*
+     * 足したものだけを開く。いま向かう種目は必ず最後の 1 枚なので、それより上を
+     * 畳んでおけば、追加した直後に指を送らなくても入力欄が目の前にある。
+     * 終えた種目は畳まれて 1 行になり、その日の並びが一覧として残る。
+     */
+    applyFold(() => new Set(session.entries.map((e) => e.exerciseId as string)));
     setPicking(false);
   };
 
@@ -319,7 +426,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         today={date}
         todayWeight={session.bodyWeight}
         latest={latestBefore}
-        onChange={(v) => saveSession({ ...session, bodyWeight: v })}
+        onChange={(v) => setBodyWeight(session, v)}
       />
 
       {/*
@@ -399,6 +506,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
             today={today}
             entry={entry}
             bodyWeight={bodyWeight}
+            order={orderInDay(session, entry.exerciseId)}
             folded={folded.has(entry.exerciseId)}
             onToggleFold={() => toggleFold(entry.exerciseId)}
             onChange={(next) => setEntries(session.entries.map((e, j) => (j === i ? next : e)))}
@@ -409,9 +517,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         );
       })}
 
-      {session.entries.length === 0 ? (
-        <p className="empty">種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して、✓ を長押しで溜め切る。</p>
-      ) : null}
+      {session.entries.length === 0 ? <EmptyDay date={date} today={today} last={previousDay} /> : null}
 
       {/*
         面のいちばん下。浮いているもの（追加ボタン・休憩タイマー）は画面に貼り付いて

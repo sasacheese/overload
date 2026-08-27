@@ -186,7 +186,13 @@ export function demoData(today: IsoDate = todayIso()): { exercises: Exercise[]; 
       if (isToday && position === 0) sets[0]!.done = true;
       const note =
         !isToday && plan.id === 'squat' && index === 17 ? '深さ優先。重量は据え置き' : '';
-      entries.push({ exerciseId: exerciseId(plan.id), sets, note });
+      // 1 種目 12 分の間隔で回した想定。その日の何種目目かがサンプルでも見える
+      entries.push({
+        exerciseId: exerciseId(plan.id),
+        sets,
+        note,
+        startedAt: sets.some((s) => s.done) ? eveningOf(date, 19) + position * 12 * 60_000 : 0,
+      });
       counts.set(plan.id, n + 1);
     });
 
@@ -195,6 +201,7 @@ export function demoData(today: IsoDate = todayIso()): { exercises: Exercise[]; 
       entries,
       note: SESSION_NOTES[index] ?? '',
       bodyWeight: isToday ? 0 : (weightOn.get(date) ?? 0),
+      bodyWeightAt: isToday ? 0 : eveningOf(date, 7),
       // 過去の日は締め済みにしておく。まとめを見直す導線もサンプルで見える
       finishedAt: isToday ? 0 : eveningOf(date),
       updatedAt: eveningOf(date, 22),
@@ -205,7 +212,15 @@ export function demoData(today: IsoDate = todayIso()): { exercises: Exercise[]; 
   // 体重だけの日（休養日）。カレンダーで「やった日」と区別されて見える
   for (const [date, weight] of weightOn) {
     if (weight <= 0) continue;
-    sessions.push({ date, entries: [], note: '', bodyWeight: weight, finishedAt: 0, updatedAt: eveningOf(date, 8) });
+    sessions.push({
+      date,
+      entries: [],
+      note: '',
+      bodyWeight: weight,
+      bodyWeightAt: eveningOf(date, 7),
+      finishedAt: 0,
+      updatedAt: eveningOf(date, 8),
+    });
   }
 
   const exercises = presetExercises().map((e) =>

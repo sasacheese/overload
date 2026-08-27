@@ -25,6 +25,14 @@ export type Store = {
   exercises: Exercise[];
   sessions: Session[];
   saveSession: (session: Session) => void;
+  /**
+   * その日の体重を入れる。
+   *
+   * saveSession とは別の入口にしてあるのは、**体重だけ入れた時刻を別に残す**ため。
+   * 同期の突き合わせは日ごとに新しい方を採るので、この時刻が無いと、あとから
+   * 記録を触った端末の未記録（0）が、もう片方で入れた体重を消す（`lib/sync.ts`）。
+   */
+  setBodyWeight: (session: Session, weight: number) => void;
   upsertExercise: (exercise: Exercise) => void;
   /**
    * 種目を隠す。物理削除はしない。
@@ -137,6 +145,14 @@ export function StoreProvider({ children, seed }: { children: ReactNode; seed?: 
       (keep ? db.put(db.STORES.sessions, next) : db.deleteSession(next.date)).catch(report);
     },
     [report, inMemory],
+  );
+
+  const setBodyWeight = useCallback(
+    (session: Session, weight: number) => {
+      // 押すのはここだけ。呼ぶ側に任せると、同期の要になる時刻が入らない経路が残る
+      saveSession({ ...session, bodyWeight: weight, bodyWeightAt: Date.now() });
+    },
+    [saveSession],
   );
 
   const upsertExercise = useCallback(
@@ -266,6 +282,7 @@ export function StoreProvider({ children, seed }: { children: ReactNode; seed?: 
       exercises,
       sessions,
       saveSession,
+      setBodyWeight,
       upsertExercise,
       removeExercise,
       mergeExercise,
@@ -282,6 +299,7 @@ export function StoreProvider({ children, seed }: { children: ReactNode; seed?: 
       exercises,
       sessions,
       saveSession,
+      setBodyWeight,
       upsertExercise,
       removeExercise,
       mergeExercise,

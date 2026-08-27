@@ -175,8 +175,8 @@ function wholeDayRecord(
  * ここが空になる経路を作らないため。
  */
 function praiseFor(w: Omit<WrapUp, 'praise'>): string {
-  if (w.progressed >= 2) return `記録が ${w.progressed} つ動いた日。`;
-  if (w.progressed === 1) return '今日、記録が動いた。';
+  if (w.progressed >= 2) return `${w.progressed}種目の記録を更新しました`;
+  if (w.progressed === 1) return 'お疲れ様でした';
   if (w.volumeRatio !== null && w.volumeRatio >= 0.05) {
     return `前回より総量が ${Math.round(w.volumeRatio * 100)}% 多い。`;
   }

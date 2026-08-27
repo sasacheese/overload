@@ -132,7 +132,7 @@ export function compareToPrev(ex: Exercise, now: SetRecord, prev: SetRecord | un
  * 同じならレップが多い方が上）。レップは 1000 未満なので、補助を 1000 倍して
  * 主キーにすれば辞書順の比較になる。
  */
-function comparable(ex: Exercise, set: SetRecord): number {
+export function comparable(ex: Exercise, set: SetRecord): number {
   if (ex.loadMode === 'assist') return -set.weight * 1000 + set.reps;
   return e1rm(set.weight, set.reps) || set.reps;
 }
