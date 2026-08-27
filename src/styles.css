@@ -66,6 +66,15 @@
   --accent-fg: #fff;
 
   /*
+   * 金。**記録更新の最上位（到達点・重量）の祝福だけ**に使う第 3 の色。
+   * 無彩色 + 赤の方針（冒頭の 2）の例外だが、赤が「前進した」の合図である以上、
+   * その中でも希少な前進を同じ赤で祝うと差が付かない。出る場所を祝福の演出
+   * （✓ の破裂とカード）に閉じ、面や文字の常用には決して使わない。
+   */
+  --gold: #d9a62e;
+  --gold-text: #e6bc55;
+
+  /*
    * 曜日の色だけが無彩色 + 赤という配色の例外。カレンダーの慣習（土は水色、
    * 日は赤）に合わせている。休日の区別は色以外に置き換えが効かないので、
    * 意味のある色として通す。使うのは曜日の 1 文字だけに限る。
@@ -161,6 +170,9 @@
     --accent-text: #b3241a;
     --accent-soft: rgb(196 39 28 / 0.09);
     --accent-fg: #fff;
+
+    --gold: #c08a10;
+    --gold-text: #8f660a;
 
     --sat: #1f6d92;
 
@@ -1198,12 +1210,30 @@ button {
   animation: check-slam 480ms var(--spring);
 }
 
+/* 記録更新（レップ以上）の破裂は、ふくらみも一段大きい */
+.check.is-burst-epic,
+.check.is-burst-legend {
+  animation: check-slam-big 560ms var(--spring);
+}
+
 @keyframes check-slam {
   0% {
     transform: scale(0.88);
   }
   30% {
     transform: scale(1.26);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes check-slam-big {
+  0% {
+    transform: scale(0.82);
+  }
+  30% {
+    transform: scale(1.42);
   }
   100% {
     transform: scale(1);
@@ -1289,6 +1319,59 @@ button {
     opacity: 0;
     transform: translate(-50%, -50%) rotate(var(--sa)) translateX(var(--sd)) rotate(var(--sr));
   }
+}
+
+/*
+ * 破裂の格（burst-rare / epic / legend）。記録更新と一緒に入った ✓ は派手に割れる。
+ * 数と飛距離は PowerCheck が持ち、色と輪の本数をここで変える。
+ * 最上位（legend = 到達点・重量の更新）だけが金——出た瞬間に「いつもと違う」と分かる。
+ */
+.burst-ring.is-second {
+  animation-delay: 90ms;
+  animation-duration: 640ms;
+  border-width: 1px;
+}
+
+/* 上へ舞う火花。破片（外へ飛ぶ）との対比で、弾けたあとの余韻を受け持つ */
+.burst-spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: burst-spark 700ms var(--ease-out) var(--d) both;
+}
+
+@keyframes burst-spark {
+  0% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--px) * 0.3), -50%) scale(0.4) rotate(0deg);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--px)), calc(-50% + var(--py) - 22px)) scale(1) rotate(90deg);
+  }
+}
+
+.burst-legend .burst-flash {
+  background: radial-gradient(circle, #fff 0%, color-mix(in srgb, var(--gold) 80%, transparent) 45%, transparent 70%);
+}
+
+.burst-legend .burst-ring {
+  border-color: var(--gold);
+}
+
+.burst-legend .burst-shard:nth-child(odd) {
+  background: var(--gold);
+}
+
+.burst-legend .burst-spark {
+  background: var(--gold);
 }
 
 .set-extra {
@@ -2574,6 +2657,8 @@ button {
   background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(3px);
   animation: fade-in 180ms ease-out;
+  /* カードが起き上がる（rotateY）ときの奥行き。無いと回転がただの伸縮に見える */
+  perspective: 900px;
 }
 
 @keyframes fade-in {
@@ -2615,6 +2700,10 @@ button {
   }
 }
 
+/*
+ * カード。引き当てた 1 枚として披露する——伏せられていた札が起き上がるように
+ * 現れ（card-reveal）、面を光が一度だけ走る（celebrate-shine）。
+ */
 .celebrate-card {
   position: relative;
   display: flex;
@@ -2630,14 +2719,121 @@ button {
   padding: 1.5rem 1.75rem;
   min-width: 14rem;
   text-align: center;
-  animation: pop 420ms var(--spring) both;
+  /* 走る光をカードの縁で切る */
+  overflow: hidden;
+  animation: card-reveal 560ms var(--spring) both;
 }
 
-@keyframes pop {
-  from {
-    transform: scale(0.92);
+@keyframes card-reveal {
+  0% {
+    transform: rotateY(65deg) scale(0.8);
     opacity: 0;
   }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotateY(0deg) scale(1);
+  }
+}
+
+/*
+ * 面を斜めに走る光。ホログラフィックカードの照り返し。
+ * 一度きり——繰り返すと「光っている画面」になり、数字が読めなくなる。
+ * 色は格ごとの --shine で変える（rare は無彩色、epic は赤、legend は金）。
+ */
+.celebrate-shine {
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(115deg, transparent 40%, var(--shine, rgb(255 255 255 / 0.25)) 50%, transparent 60%);
+  transform: translateX(-130%);
+  animation: card-shine 900ms var(--ease-out) 450ms both;
+  pointer-events: none;
+}
+
+@keyframes card-shine {
+  to {
+    transform: translateX(130%);
+  }
+}
+
+/* カードの周りで瞬く星。位置は Celebration が渡す。格が上がるほど数が増える */
+.celebrate-sparkles {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.celebrate-sparkles span {
+  position: absolute;
+  width: 0.5625rem;
+  height: 0.5625rem;
+  background: var(--accent);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  transform: translate(var(--tx), var(--ty)) scale(0);
+  animation: sparkle 1500ms ease-in-out var(--d) infinite;
+}
+
+@keyframes sparkle {
+  0%,
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  40% {
+    transform: translate(var(--tx), var(--ty)) scale(var(--s)) rotate(45deg);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.4;
+  }
+}
+
+/* ── 格ごとの色。rare は無彩色の照りだけ、epic は赤、legend だけが金 ── */
+
+.tier-rare {
+  --shine: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+
+.tier-rare .celebrate-sparkles span {
+  background: var(--fg-dim);
+}
+
+.tier-epic {
+  --shine: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.tier-legend {
+  --shine: color-mix(in srgb, var(--gold) 40%, transparent);
+}
+
+.tier-legend .celebrate-card {
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--sheen),
+    0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent),
+    0 0 42px color-mix(in srgb, var(--gold) 28%, transparent),
+    var(--shadow-3);
+}
+
+.tier-legend .celebrate-icon {
+  color: var(--gold);
+}
+
+.tier-legend .celebrate-title,
+.tier-legend .celebrate-gain,
+.tier-legend .celebrate-more-gain {
+  color: var(--gold-text);
+}
+
+.tier-legend .celebrate-rays span {
+  background: linear-gradient(to top, var(--gold), transparent);
+}
+
+.tier-legend .celebrate-sparkles span {
+  background: var(--gold);
 }
 
 .celebrate-icon {
@@ -2728,10 +2924,14 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .celebrate,
   .celebrate-card,
-  .celebrate-rays span {
+  .celebrate-rays span,
+  .celebrate-shine,
+  .celebrate-sparkles span {
     animation: none;
   }
-  .celebrate-rays {
+  .celebrate-rays,
+  .celebrate-shine,
+  .celebrate-sparkles {
     display: none;
   }
 }
@@ -3528,6 +3728,13 @@ button {
     var(--shadow-3);
   padding: 1.25rem;
   animation: pop 240ms var(--spring) both;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
 }
 
 .confirm-title {

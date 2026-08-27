@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
-import type { Achievement } from '../lib/records.ts';
+import { recordTier, type Achievement, type RecordTier } from '../lib/records.ts';
 import { Icon } from './Icon.tsx';
 import { Overlay } from './Overlay.tsx';
 
 /**
- * 記録を更新したときに出す祝福。
+ * 記録を更新したときに出す祝福。**引き当てたカードの披露**として作ってある。
  *
- * 紙吹雪のような賑やかな演出は、このアプリの静かな見た目から浮く。細い線が外へ
- * 走って消えるだけにして、祝いの一瞬と落ち着きを両立させている。
+ * カードが起き上がりながら現れ、面を光が一度だけ走り、周りに星が瞬く。
+ * 派手さは記録の格（recordTier）で 3 段に変わる——最上位（到達点・重量の更新）
+ * だけが金で、それ以外は赤のまま。金は祝福のここ以外では使わない。
+ * 紙吹雪のような画面全体の賑やかしはやらず、光はカードの周りに集める。
  * 自動で閉じるのは、ジムで画面を閉じる操作を増やしたくないため。
  *
  * ## 何を出すか
@@ -20,12 +22,30 @@ import { Overlay } from './Overlay.tsx';
  * どれだけ進んだかはその場で引き算しないと出てこない。祝う場面で計算をさせない。
  */
 
-/** 自動で閉じるまで。読み切れて、次のセットの邪魔にならない長さ。 */
-const AUTO_CLOSE_MS = 3200;
+/** 自動で閉じるまで。カードの披露（起き上がり・光走り）のぶん、読み切りより少し長め。 */
+const AUTO_CLOSE_MS = 3800;
 /** 添える行の上限。これ以上並べると、次のセットに戻るまでが長くなる。 */
 const MAX_EXTRA = 3;
 
 const RAYS = 12;
+
+/** カードの周りで瞬く星の数。格が上がるほど増える。 */
+const SPARKLES: Record<RecordTier, number> = { rare: 6, epic: 10, legend: 14 };
+
+/**
+ * 星の置き場所。乱数は使わない（再描画で星が飛び直さないように）。
+ * カードを囲む楕円の上に、素数でずらしながら散らす。
+ */
+function sparkleStyle(i: number, count: number): React.CSSProperties {
+  const angle = ((i * (360 / count) + (i % 3) * 14) * Math.PI) / 180;
+  const dist = 8 + ((i * 37) % 4);
+  return {
+    '--tx': `${Math.cos(angle) * dist}rem`,
+    '--ty': `${Math.sin(angle) * dist * 0.62}rem`,
+    '--d': `${(i * 131) % 1100}ms`,
+    '--s': `${0.6 + ((i * 29) % 5) / 6}`,
+  } as React.CSSProperties;
+}
 
 export function Celebration({
   achievements,
@@ -55,16 +75,25 @@ export function Celebration({
   const [lead, ...rest] = achievements;
   if (!lead) return null;
   const extra = rest.slice(0, MAX_EXTRA);
+  // カードの格は主役（一番強い更新）で決まる
+  const tier = recordTier(lead.kind);
+  const sparkles = SPARKLES[tier];
 
   return (
     <Overlay>
-      <div className="celebrate" onClick={onClose} role="status" aria-live="polite">
+      <div className={`celebrate tier-${tier}`} onClick={onClose} role="status" aria-live="polite">
         <div className="celebrate-rays" aria-hidden="true">
           {Array.from({ length: RAYS }, (_, i) => (
             <span key={i} style={{ '--angle': `${(360 / RAYS) * i}deg` } as React.CSSProperties} />
           ))}
         </div>
+        <div className="celebrate-sparkles" aria-hidden="true">
+          {Array.from({ length: sparkles }, (_, i) => (
+            <span key={i} style={sparkleStyle(i, sparkles)} />
+          ))}
+        </div>
         <div className="celebrate-card">
+          <span className="celebrate-shine" aria-hidden="true" />
           <Icon name="rise" className="celebrate-icon" />
           <strong className="celebrate-title">{lead.title}</strong>
           <span className="celebrate-exercise">{exerciseName}</span>

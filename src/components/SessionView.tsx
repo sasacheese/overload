@@ -21,7 +21,7 @@ import {
 } from '../lib/query.ts';
 
 import { recordFeedback } from '../lib/haptics.ts';
-import { findRecords, type Achievement, type RecordKind } from '../lib/records.ts';
+import { findRecords, recordTier, type Achievement, type RecordKind, type RecordTier } from '../lib/records.ts';
 import type { Exercise, IsoDate, Session, SessionEntry } from '../lib/types.ts';
 import { canFinish, wrapUp } from '../lib/wrapup.ts';
 import { useSession, useStore } from '../store.tsx';
@@ -50,6 +50,14 @@ const FOLD_KEY = 'overload:folded';
 
 /** どのセットが始めた休憩かを覚えておく。✓ を外したときに畳むため。 */
 type Rest = { at: number; targetSec: number; exerciseId: string; index: number };
+
+/**
+ * ✓ が入ってから祝福を出すまでの間。
+ *
+ * ✓ には弾ける演出（PowerCheck、破裂 700ms）があり、その最中に画面全体を覆うと
+ * せっかくの破裂が祝福の下に隠れる。破片が散り終わる頃合いまで待ってから出す。
+ */
+const CELEBRATE_DELAY_MS = 800;
 
 function readRest(): Rest | null {
   try {
@@ -181,14 +189,22 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     }
   };
 
+  /** まだ出していない祝福。破裂が終わるのを待っているあいだの予約。 */
+  const celebrationTimer = useRef(0);
+  useEffect(() => () => clearTimeout(celebrationTimer.current), []);
+
   /**
    * ✓ を付けた直後に記録の更新を探す。
    *
-   * 更新した瞬間に出したいので、保存された state を待たず、渡された entry で判定する。
+   * 判定は保存された state を待たず、渡された entry でその場で行う——✓ の破裂を
+   * 更新の格に合わせて描き分けるため、付けた瞬間に格（戻り値）が要る。
+   * 一方**祝福の画面はすぐ出さない**。破裂の最中に画面全体を覆うと、せっかくの
+   * 破裂が祝福の下に隠れるので、散り終わる頃合い（CELEBRATE_DELAY_MS）まで待つ。
+   *
    * 当たったもののうち**まだ出していない種類を全部**渡し、祝福の側で一番強いものを
    * 主役に、残りを添えて出す。同じ種類はこのセッションで繰り返さない。
    */
-  const celebrate = (exercise: Exercise, entry: SessionEntry) => {
+  const celebrate = (exercise: Exercise, entry: SessionEntry): RecordTier | null => {
     const shown = readShown();
     const merged: Session = {
       ...session,
@@ -226,15 +242,19 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
       // 覚えられなければ同じ祝福がもう一度出るだけ
     }
 
-    if (fresh.length === 0) return;
-    // 目で見る前に指へ返す。祝福の絵が出るより先に「動いた」ことが分かる
-    recordFeedback();
-    setCelebration({ achievements: fresh, exerciseName: exercise.name });
+    if (fresh.length === 0) return null;
+    clearTimeout(celebrationTimer.current);
+    celebrationTimer.current = window.setTimeout(() => {
+      // 目で見る前に指へ返す。祝福の絵が出るより先に「動いた」ことが分かる
+      recordFeedback();
+      setCelebration({ achievements: fresh, exerciseName: exercise.name });
+    }, CELEBRATE_DELAY_MS);
+    return recordTier(fresh[0]!.kind);
   };
 
-  const onSetCompleted = (exercise: Exercise, entry: SessionEntry, index: number) => {
+  const onSetCompleted = (exercise: Exercise, entry: SessionEntry, index: number): RecordTier | null => {
     startRest(exercise, index);
-    celebrate(exercise, entry);
+    return celebrate(exercise, entry);
   };
 
   /*
@@ -244,6 +264,11 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
    * 別のセットが始めた休憩は消さない（3 セット目の休憩中に 1 セット目を直すことがある）。
    */
   const onSetUndone = (exercise: Exercise, index: number) => {
+    /*
+     * 出る前の祝福も取り下げる。✓ を外した直後にその祝福が出ると、
+     * 取り消したものを祝っているように見える。
+     */
+    clearTimeout(celebrationTimer.current);
     setRest((prev) => {
       if (!prev || prev.exerciseId !== exercise.id || prev.index !== index) return prev;
       try {
@@ -385,7 +410,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
       })}
 
       {session.entries.length === 0 ? (
-        <p className="empty">種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して ✓ を押す。</p>
+        <p className="empty">種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して、✓ を長押しで溜め切る。</p>
       ) : null}
 
       {/*

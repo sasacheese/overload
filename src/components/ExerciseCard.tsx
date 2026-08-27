@@ -32,6 +32,7 @@ import {
   trendLabel,
 } from '../lib/progression.ts';
 import { bestSeries, exerciseHistory, previousEntry } from '../lib/query.ts';
+import type { RecordTier } from '../lib/records.ts';
 import {
   LOAD_MODES,
   MUSCLES,
@@ -62,7 +63,8 @@ type Props = {
   onToggleFold: () => void;
   onChange: (entry: SessionEntry) => void;
   onRemove: () => void;
-  onSetCompleted: (exercise: Exercise, entry: SessionEntry, index: number) => void;
+  /** ✓ が付いた。記録更新ならその格を返す（✓ の破裂の派手さに使う）。 */
+  onSetCompleted: (exercise: Exercise, entry: SessionEntry, index: number) => RecordTier | null;
   onSetUndone: (exercise: Exercise, index: number) => void;
 };
 
@@ -273,9 +275,9 @@ export function ExerciseCard({
     else (document.activeElement as HTMLElement | null)?.blur();
   };
 
-  const toggleDone = (index: number) => {
+  const toggleDone = (index: number): RecordTier | null => {
     const set = entry.sets[index];
-    if (!set) return;
+    if (!set) return null;
     // 画面を見ずに押すことがあるので、入ったことを指に返す
     tapFeedback();
     const nextEntry: SessionEntry = {
@@ -283,8 +285,11 @@ export function ExerciseCard({
       sets: entry.sets.map((s, i) => (i === index ? { ...s, done: !s.done } : s)),
     };
     onChange(nextEntry);
-    if (set.done) onSetUndone(exercise, index);
-    else onSetCompleted(exercise, nextEntry, index);
+    if (set.done) {
+      onSetUndone(exercise, index);
+      return null;
+    }
+    return onSetCompleted(exercise, nextEntry, index);
   };
 
   const toggleNote = (index: number) => {
