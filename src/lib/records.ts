@@ -48,6 +48,7 @@ import {
   format,
   formatEstimate,
   loadOf,
+  loadRank,
   loadWord,
   metrics,
   peakName,
@@ -157,16 +158,6 @@ function bestTotalRepsAt(history: ExerciseHistory, weight: number): number | und
     .map((h) => doneSets(h.entry).filter((s) => s.weight === weight).reduce((n, s) => n + s.reps, 0))
     .filter((n) => n > 0);
   return totals.length === 0 ? undefined : Math.max(...totals);
-}
-
-/**
- * 負荷の強さの順位。アシストは数字が小さいほど強いので符号を反転する。
- *
- * 実効負荷（体重 − 補助）ではなく入力どおりの数字で比べているのは、体重を
- * 入れ忘れた日にも「補助を減らした」ことは判定できるようにするため。
- */
-function loadRank(ex: Exercise, weight: number): number {
-  return ex.loadMode === 'assist' ? -weight : weight;
 }
 
 /** 一番強い負荷を扱ったセットの、入力どおりの数字。 */

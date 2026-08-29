@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  comebackCount,
   dateLabel,
   dateParts,
   dayKind,
   dayKindOfIndex,
   daysBetween,
   inMonth,
+  isComebackWeek,
   monthGrid,
   relativeLabel,
   shiftDays,
@@ -86,6 +88,28 @@ test('weekStreak: 1 週空くと切れる', () => {
   const today = d('2026-08-19');
   assert.equal(weekStreak([d('2026-08-17'), d('2026-08-03')], today), 1);
   assert.equal(weekStreak([], today), 0);
+});
+
+test('comebackCount: 空いた週のあとに戻った回数。何週空けても戻れば 1 回', () => {
+  // 8/3 週 →（8/10 週空き）→ 8/17 週 →（2 週空き）→ 9/7 週
+  const dates = [d('2026-08-04'), d('2026-08-18'), d('2026-08-20'), d('2026-09-08')];
+  assert.equal(comebackCount(dates), 2);
+});
+
+test('comebackCount: 続いているだけなら 0。同じ週に何回やっても増えない', () => {
+  assert.equal(comebackCount([d('2026-08-04'), d('2026-08-11'), d('2026-08-12')]), 0);
+  assert.equal(comebackCount([d('2026-08-04')]), 0);
+  assert.equal(comebackCount([]), 0);
+});
+
+test('isComebackWeek: 先週が空いていて、それより前にやった週があるときだけ真', () => {
+  // 8/3 週にやって、8/10 週が空き、8/17 週に戻った
+  const dates = [d('2026-08-04'), d('2026-08-18')];
+  assert.ok(isComebackWeek(dates, d('2026-08-18')));
+  // 先週もやっていれば復帰ではない
+  assert.ok(!isComebackWeek([d('2026-08-12'), d('2026-08-18')], d('2026-08-18')));
+  // 初回の週は復帰ではない（戻る元が無い）
+  assert.ok(!isComebackWeek([d('2026-08-18')], d('2026-08-18')));
 });
 
 test('dateLabel / relativeLabel', () => {

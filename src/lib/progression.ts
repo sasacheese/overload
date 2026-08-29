@@ -32,6 +32,16 @@ export function loadOf(ex: Exercise, set: SetRecord, bodyWeight: number): number
   return set.weight;
 }
 
+/**
+ * 負荷の強さの順位。アシストは数字が小さいほど強いので符号を反転する。
+ *
+ * 実効負荷（体重 − 補助）ではなく入力どおりの数字で比べているのは、体重を
+ * 入れ忘れた日にも「補助を減らした」ことは判定できるようにするため。
+ */
+export function loadRank(ex: Exercise, weight: number): number {
+  return ex.loadMode === 'assist' ? -weight : weight;
+}
+
 /** 記録 1 件ぶんの文脈。アシスト種目の実効負荷は当時の体重で決まる。 */
 export type Performance = { entry: SessionEntry; bodyWeight: number };
 
@@ -120,6 +130,15 @@ export function compareToPrev(ex: Exercise, now: SetRecord, prev: SetRecord | un
   }
   if (dr !== 0) parts.push(`${dr > 0 ? '+' : '−'}${Math.abs(dr)}レップ`);
 
+  /*
+   * 負荷を上げた直後はレップが下限へ落ちるので、重量とレップを 1 つの数に
+   * 畳んだ比較では「下がった」に見える。だがこれは後退ではなくサイクルの起点で、
+   * これまでより強い負荷を扱ったこと自体が前進なので、負荷が上がっていれば
+   * レップに依らず前進として扱う。
+   */
+  if (loadRank(ex, now.weight) > loadRank(ex, prev.weight)) {
+    return { kind: 'up', label: parts.join(' ') };
+  }
   const after = comparable(ex, now);
   const before = comparable(ex, prev);
   return { kind: after > before ? 'up' : after < before ? 'down' : 'same', label: parts.join(' ') };

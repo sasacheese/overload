@@ -104,6 +104,34 @@ export function weekStreak(dates: readonly IsoDate[], today: IsoDate): number {
   return count;
 }
 
+/**
+ * 空いた週のあとに戻ってきた回数。
+ *
+ * 連続記録（weekStreak）は切れた瞬間に 0 へ戻る指標で、切れたあとの行動を映さない。
+ * 定着は「途切れないこと」ではなく「途切れても戻れること」なので、戻った回数を
+ * 別に数える。これは頭打ちも後退もしない——1 週空けても 3 週空けても、戻れば 1 増える。
+ */
+export function comebackCount(dates: readonly IsoDate[]): number {
+  const weeks = [...new Set(dates.map(weekStart))].sort();
+  let count = 0;
+  for (let i = 1; i < weeks.length; i++) {
+    if (daysBetween(weeks[i - 1]!, weeks[i]!) >= 14) count += 1;
+  }
+  return count;
+}
+
+/**
+ * その日を含む週が「復帰の週」か。先週が空いていて、それより前にやった週がある。
+ *
+ * 初回の週は復帰ではない（戻る元が無い）。何週空いていても、戻ればその週が復帰。
+ */
+export function isComebackWeek(dates: readonly IsoDate[], date: IsoDate): boolean {
+  const lastWeek = shiftDays(weekStart(date), -7);
+  const weeks = new Set(dates.map(weekStart));
+  if (weeks.has(lastWeek)) return false;
+  return [...weeks].some((week) => week < lastWeek);
+}
+
 /** 'YYYY-MM-DD' → '8月18日(月)' */
 export function dateLabel(iso: IsoDate): string {
   const { month, day } = parseIso(iso);

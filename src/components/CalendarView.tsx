@@ -5,8 +5,10 @@
  */
 
 import { useMemo, useState } from 'react';
+import { BALANCE_WEEKS, balanceOf, skewLines } from '../lib/balance.ts';
 import {
   WEEKDAY_LABELS,
+  comebackCount,
   dateLabel,
   dayKindOfIndex,
   inMonth,
@@ -17,7 +19,7 @@ import {
   type YearMonth,
 } from '../lib/calendar.ts';
 import { bodyWeightOn, countedSets, sessionGroups, sessionVolume, sortedSessions } from '../lib/query.ts';
-import { MUSCLE_GROUPS, type IsoDate, type MuscleGroup } from '../lib/types.ts';
+import { MUSCLE_GROUPS, MUSCLE_GROUP_KEYS, type IsoDate, type MuscleGroup } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
 import { AskClaudeButton } from './AskClaudeButton.tsx';
 import { Icon } from './Icon.tsx';
@@ -48,6 +50,16 @@ export function CalendarView({ today, onPickDate }: Props) {
   const monthDates = useMemo(() => [...recorded.keys()].filter((d) => inMonth(d, month)), [recorded, month]);
   const monthVolume = monthDates.reduce((n, d) => n + (recorded.get(d)?.volume ?? 0), 0);
   const streak = weekStreak([...recorded.keys()], today);
+  /*
+   * 通算と復帰。どちらも頭打ちしない・後退しない数字で、月をめくっても変わらない。
+   * 連続（streak）は切れると 0 に戻るが、復帰は切れたあとに戻るたび増える
+   * ——皆勤ではなく、戻れることを数える。
+   */
+  const totalDays = recorded.size;
+  const comebacks = comebackCount([...recorded.keys()]);
+  const bal = useMemo(() => balanceOf(sessions, exercises, today), [sessions, exercises, today]);
+  const skews = skewLines(bal);
+  const peakGroup = Math.max(1, ...MUSCLE_GROUP_KEYS.map((g) => bal.groups[g]));
   // 濃さの基準はその月の最大ボリューム。月によって上限が違っても比較が効くようにする
   const peak = Math.max(1, ...monthDates.map((d) => recorded.get(d)?.volume ?? 0));
 
@@ -82,10 +94,22 @@ export function CalendarView({ today, onPickDate }: Props) {
           <strong>{Math.round(monthVolume).toLocaleString('ja-JP')}</strong>
           <span className="unit">kg</span>
         </span>
+        {/* 通算は最重要の指標。伸びが停滞している月も、これだけは必ず増えている */}
+        <span>
+          <strong>{totalDays}</strong>
+          <span className="unit">通算</span>
+        </span>
         <span className={streak >= 2 ? 'hit' : ''}>
           <strong>{streak}</strong>
           <span className="unit">週連続</span>
         </span>
+        {/* 空いた週から戻った回数。1 回もサボっていない人には出ない（0 を見せない） */}
+        {comebacks > 0 ? (
+          <span>
+            <strong>{comebacks}</strong>
+            <span className="unit">復帰</span>
+          </span>
+        ) : null}
       </div>
 
       <div className="calendar">
@@ -155,7 +179,65 @@ export function CalendarView({ today, onPickDate }: Props) {
           })}
         </ul>
       )}
+
+      {/*
+        直近のバランス。部位・押す/引く・前面/背面の 3 軸を、セット数の比で見せる。
+        0 セットの部位も行ごと出す——やっていないことは、行が無いと気づけない。
+        偏りの指摘は事実だけで、直せとは言わない（あえて寄せている期間もある）。
+      */}
+      <h2 className="section-title with-icon">
+        <Icon name="balance" />
+        直近 {BALANCE_WEEKS} 週のバランス
+      </h2>
+      {bal.totalSets === 0 ? (
+        <p className="empty">直近 {BALANCE_WEEKS} 週間の記録がまだない。</p>
+      ) : (
+        <div className="balance">
+          <div className="bal-groups">
+            {MUSCLE_GROUP_KEYS.map((g) => {
+              const count = bal.groups[g];
+              return (
+                <div key={g} className="bal-row">
+                  <span className="bal-label">{MUSCLE_GROUPS[g].label}</span>
+                  <span className="bal-bar" aria-hidden="true">
+                    <span style={{ width: `${(count / peakGroup) * 100}%` }} />
+                  </span>
+                  <span className={`bal-count ${count === 0 ? 'is-zero' : ''}`}>{count}</span>
+                </div>
+              );
+            })}
+          </div>
+          <AxisBar nameA="押す" nameB="引く" a={bal.motion.push} b={bal.motion.pull} />
+          <AxisBar nameA="前面" nameB="背面" a={bal.plane.front} b={bal.plane.back} />
+          {skews.map((line) => (
+            <p key={line} className="footnote">
+              {line}
+            </p>
+          ))}
+          {bal.motion.other > 0 ? (
+            <p className="footnote">体幹など押す/引くに分けない {bal.motion.other} セットは、比率に入れていない。</p>
+          ) : null}
+        </div>
+      )}
     </div>
     </>
+  );
+}
+
+/** 2 択の軸を 1 本の棒で。左右のどちらが多いかが、数字を読まなくても分かる。 */
+function AxisBar({ nameA, nameB, a, b }: { nameA: string; nameB: string; a: number; b: number }) {
+  const total = a + b;
+  return (
+    <div className="bal-axis" role="img" aria-label={`${nameA} ${a}セット、${nameB} ${b}セット`}>
+      <span className="bal-axis-name">
+        {nameA} <strong>{a}</strong>
+      </span>
+      <span className="bal-axis-bar">
+        <span style={{ width: `${total === 0 ? 50 : (a / total) * 100}%` }} />
+      </span>
+      <span className="bal-axis-name">
+        {nameB} <strong>{b}</strong>
+      </span>
+    </div>
   );
 }
