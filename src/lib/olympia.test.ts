@@ -11,6 +11,20 @@ test('CHAMPIONS: 1965 年からの 19 人。名前と回数が埋まっている
     assert.ok(c.wins >= 1);
     assert.ok(c.reign.length > 0);
     assert.ok(c.note.length > 0);
+    assert.ok(c.flavor.ja.length > 0);
+  }
+});
+
+test('CHAMPIONS: 本人の言葉（quote）は出典の確かな 3 つだけに絞る', () => {
+  // ここが増えるときは、出典を確かめてから足すこと（olympia.ts の冒頭に方針）
+  const quoted = CHAMPIONS.filter((c) => c.flavor.kind === 'quote').map((c) => c.name);
+  assert.deepEqual(quoted, ['Arnold Schwarzenegger', 'Lee Haney', 'Ronnie Coleman']);
+  for (const c of CHAMPIONS) {
+    if (c.flavor.kind === 'quote') {
+      assert.ok(c.flavor.original.length > 0);
+      // 引用は短い言い回しに留める（長い引用は著作権の問題を持つ）
+      assert.ok(c.flavor.original.split(' ').length <= 15);
+    }
   }
 });
 

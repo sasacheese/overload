@@ -4639,6 +4639,33 @@ button {
   letter-spacing: 0.04em;
 }
 
+/* 銘。本人の言葉は原語 + 訳の 2 段、こちらで書いた銘は日本語 1 行 */
+.olympia-quote,
+.olympia-credo {
+  margin: 0.5rem 0 0;
+  font-size: var(--fs-sm);
+  line-height: 1.65;
+  color: #e6d4a3;
+  /* 2 行に折れるとき、行末に 1 文字だけ残さない */
+  text-wrap: balance;
+}
+
+.olympia-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.olympia-quote-original {
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+.olympia-quote-ja {
+  font-size: var(--fs-2xs);
+  color: rgb(230 212 163 / 0.65);
+}
+
 .olympia-foot {
   width: 100%;
   display: flex;
