@@ -4600,22 +4600,30 @@ button {
   color: rgb(230 212 163 / 0.7);
 }
 
-/* シルエット。面の高さに合わせて伸び縮みする（裏面は表と同じ高さになるため） */
+/*
+ * シルエット。面の高さに合わせて伸び縮みする（裏面は表と同じ高さになるため）。
+ *
+ * svg は絶対配置で枠いっぱいに置く。height: 100% で置いていたときは、伸縮する
+ * 親（flex）の中で百分率が解決できず、svg が固有の大きさで描かれて名前の行に
+ * 重なった（実際に崩れた）。絶対配置なら枠の実寸に対して縮み、viewBox の比率
+ * 維持（既定の meet）で必ず内側に収まる。
+ */
 .olympia-figure {
+  position: relative;
   flex: 1;
-  min-height: 0;
+  min-height: 4.5rem;
   width: 100%;
-  display: grid;
-  place-items: center;
-  padding: 0.375rem 0;
+  margin: 0.375rem 0;
   color: var(--card-gold);
 }
 
 .olympia-figure svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   height: 100%;
   max-height: 11rem;
-  min-height: 5.5rem;
-  width: auto;
+  margin: 0 auto;
   filter: drop-shadow(0 0 18px rgb(217 166 46 / 0.3));
 }
 
