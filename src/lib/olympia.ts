@@ -16,13 +16,16 @@
  *
  * ## 銘（カードの下段の一行）
  *
- * 本人の言葉（quote）は、**出典が確かな短い言い回しだけ**に絞ってある。
+ * 本人の言葉は、**出典が確かな短い言い回しだけ**に絞ってある（by が null の 3 人）。
  * 真偽の怪しい「名言」を実在の人物の発言としてカードに刻むのは捏造になるし、
  * 長い引用は著作権の問題も持つ。載せる言語は**実際に発せられた言語**
  * （Arnold の母語はドイツ語だが、この言葉は英語で残っている）。
  *
- * それ以外の王者には、記録に残る事実（経歴・逸話）を下敷きに**こちらで書いた銘**
- * （credo）を添える。引用符を付けないのは、本人の発言と誤読させないため。
+ * 確かな本人の言葉が残っていない王者には、**古典から名言を借りる**。選ぶ基準は
+ * 3 つ——出典が確か・短い・パブリックドメイン（著作権が切れた時代のもの）。
+ * 借り物には必ず著者名（by）を出し、本人の言葉と混ざらないようにする。
+ * どの言葉を誰に貼るかは、王者の逸話に響き合うものを選んである
+ * （雨だれ石を穿つ → 彫りの Bannout、舞台の初心 → ポージングの Dickerson など）。
  *
  * ## 割り当て
  *
@@ -35,14 +38,16 @@
 export type PoseId = 'doubleBiceps' | 'crab' | 'victory' | 'absThigh';
 
 /**
- * カード下段の一行。
+ * カード下段の名言。原語のまま + 日本語訳。
  *
- * quote は本人の言葉（原語のまま + 日本語訳）。credo はこちらで書いた銘で、
- * 引用符を付けずに出す——どちらなのかが見た目で分かるようにする。
+ * by が null なら王者本人の言葉（カードの名前がそのまま出典）。
+ * それ以外は古典からの借り物で、著者名を必ず添えて出す。
  */
-export type Flavor =
-  | { kind: 'quote'; original: string; ja: string }
-  | { kind: 'credo'; ja: string };
+export type Flavor = {
+  original: string;
+  ja: string;
+  by: string | null;
+};
 
 export type Champion = {
   name: string;
@@ -56,8 +61,10 @@ export type Champion = {
   pose: PoseId;
 };
 
-const quote = (original: string, ja: string): Flavor => ({ kind: 'quote', original, ja });
-const credo = (ja: string): Flavor => ({ kind: 'credo', ja });
+/** 本人の言葉。 */
+const own = (original: string, ja: string): Flavor => ({ original, ja, by: null });
+/** 古典からの借り物。著者名を必ず持つ。 */
+const borrowed = (by: string, original: string, ja: string): Flavor => ({ original, ja, by });
 
 /** 年代順。並びがそのままコレクションの並びになる。2024 年までの 19 人。 */
 export const CHAMPIONS: readonly Champion[] = [
@@ -66,7 +73,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1965–66',
     wins: 2,
     note: '初代王者',
-    flavor: credo('狭い骨格を言い訳にせず、伝説の肩を作った初代。'),
+    // 最初に王座へ挑んだ男に、アエネーイスの一句（漕ぎ手たちが奮い立つ場面）
+    flavor: borrowed('ウェルギリウス', 'Possunt, quia posse videntur.', 'できると信じる者が、できる。'),
     pose: 'doubleBiceps',
   },
   {
@@ -74,7 +82,12 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1967–69',
     wins: 3,
     note: '“The Myth”',
-    flavor: credo('昼は製鉄所で働き、夜に鍛えた。神話はその往復から生まれた。'),
+    // 昼は製鉄所、夜はジム。汗の割合なら誰にも負けない
+    flavor: borrowed(
+      'エジソン',
+      'Genius is one percent inspiration, ninety-nine percent perspiration.',
+      '天才とは 1% のひらめきと、99% の汗である。',
+    ),
     pose: 'victory',
   },
   {
@@ -82,7 +95,7 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1970–75 · 80',
     wins: 7,
     note: '“The Austrian Oak”',
-    flavor: quote(
+    flavor: own(
       'The last three or four reps is what makes the muscle grow.',
       '最後の 3、4 レップこそが、筋肉を育てる。',
     ),
@@ -93,7 +106,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1976 · 81',
     wins: 2,
     note: '“The Sardinian Strongman”',
-    flavor: credo('165cm の体に、会場でいちばんの力が入っていた。'),
+    // 165cm の体で会場一の力。強さは負荷から生まれる
+    flavor: borrowed('ニーチェ', 'Was mich nicht umbringt, macht mich stärker.', '私を殺さないものは、私を強くする。'),
     pose: 'crab',
   },
   {
@@ -101,7 +115,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1977–79',
     wins: 3,
     note: '“The Chemist”',
-    flavor: credo('筋量の時代に、線の美しさで 3 度勝った。'),
+    // 線の美しさは千日万日の稽古から。五輪書・水の巻
+    flavor: borrowed('宮本武蔵', '千日の稽古を鍛とし、万日の稽古を錬とす', '千日の稽古で鍛え、万日の稽古で錬る。'),
     pose: 'absThigh',
   },
   {
@@ -109,7 +124,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1982',
     wins: 1,
     note: '屈指のポージングの名手',
-    flavor: credo('彫刻のようなポージングが、審査員の目を変えた。'),
+    // 舞台の芸の言葉を、ポージングの名手に
+    flavor: borrowed('世阿弥', '初心忘るべからず', '始めたころの心を、忘れてはならない。'),
     pose: 'victory',
   },
   {
@@ -117,7 +133,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1983',
     wins: 1,
     note: '“The Lion of Lebanon”',
-    flavor: credo('腰に浮かぶ“木”の彫りが、背中の基準を変えた。'),
+    // 腰に「木」を彫り込んだ背中に、水が石を彫る一句を
+    flavor: borrowed('オウィディウス', 'Gutta cavat lapidem.', '雨だれが、石を穿つ。'),
     pose: 'doubleBiceps',
   },
   {
@@ -125,7 +142,7 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1984–91',
     wins: 8,
     note: '8 連覇（歴代最多タイ）',
-    flavor: quote('Stimulate, don’t annihilate.', '破壊するな、刺激せよ。'),
+    flavor: own('Stimulate, don’t annihilate.', '破壊するな、刺激せよ。'),
     pose: 'crab',
   },
   {
@@ -133,7 +150,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1992–97',
     wins: 6,
     note: '“The Shadow”',
-    flavor: credo('地下のジムで短く、深く。年に一度だけ影のように現れて勝った。'),
+    // 地下のジムで短く深く。ストア派の律に一番近い王者
+    flavor: borrowed('エピクテトス', 'ἀνέχου καὶ ἀπέχου.', '耐えよ、そして己を律せよ。'),
     pose: 'absThigh',
   },
   {
@@ -141,7 +159,7 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '1998–2005',
     wins: 8,
     note: '“The King”・8 連覇',
-    flavor: quote('Yeah buddy! Light weight, baby!', 'よっしゃ！ 軽い軽い！'),
+    flavor: own('Yeah buddy! Light weight, baby!', 'よっしゃ！ 軽い軽い！'),
     pose: 'crab',
   },
   {
@@ -149,7 +167,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2006–07 · 09–10',
     wins: 4,
     note: '唯一、王座を奪還した男',
-    flavor: credo('王座を失った翌日から、奪還の準備を始めていた。'),
+    // 王座奪還は一歩の積み重ねから。勧学篇
+    flavor: borrowed('荀子', '不積跬步、無以至千里', '半歩を積まねば、千里には至れない。'),
     pose: 'doubleBiceps',
   },
   {
@@ -157,7 +176,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2008',
     wins: 1,
     note: '“The Blade”',
-    flavor: credo('プロ最多勝。刃は 20 年間、錆びなかった。'),
+    // 20 年錆びなかった刃に、反復の諺を
+    flavor: borrowed('ラテンの諺', 'Repetitio est mater studiorum.', '反復は、学びの母である。'),
     pose: 'absThigh',
   },
   {
@@ -165,7 +185,12 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2011–17',
     wins: 7,
     note: '“The Gift”・7 連覇',
-    flavor: credo('「才能」と呼ばれるたび、練習量で答えた 7 年間。'),
+    // 7 年守り続けられたのは、楽しんでいたから。雍也篇
+    flavor: borrowed(
+      '孔子',
+      '知之者不如好之者、好之者不如樂之者',
+      '知る者は好む者に及ばず、好む者は楽しむ者に及ばない。',
+    ),
     pose: 'victory',
   },
   {
@@ -173,7 +198,12 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2018',
     wins: 1,
     note: '“Flexatron”',
-    flavor: credo('43 歳、史上最年長の戴冠で 7 年の王朝を終わらせた。'),
+    // 43 歳・史上最年長の戴冠。挑んだから難しくなくなった
+    flavor: borrowed(
+      'セネカ',
+      'Non quia difficilia sunt non audemus, sed quia non audemus difficilia sunt.',
+      '難しいから挑めないのではない。挑まないから難しくなるのだ。',
+    ),
     pose: 'doubleBiceps',
   },
   {
@@ -181,7 +211,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2019',
     wins: 1,
     note: '“The Prodigy”',
-    flavor: credo('回り道の 10 年が、頂上への最短距離だった。'),
+    // 回り道の 10 年も、一歩ずつだった
+    flavor: borrowed('老子', '千里之行、始於足下', '千里の道も、足もとの一歩から。'),
     pose: 'crab',
   },
   {
@@ -189,7 +220,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2020–21',
     wins: 2,
     note: 'Mamdouh Elssbiay',
-    flavor: credo('漁師だった手で、世界でいちばん重い称号を掴んだ。'),
+    // 漁師から世界一へ。小さな積み重ねの人に、積小為大を
+    flavor: borrowed('二宮尊徳', '積小為大', '小さな積み重ねが、やがて大きなものになる。'),
     pose: 'crab',
   },
   {
@@ -197,7 +229,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2022',
     wins: 1,
     note: '“The Persian Wolf”',
-    flavor: credo('ビザは何年も止められた。体は一日も止まらなかった。'),
+    // ペルシャの狼には、ペルシャの詩人の一句を（ゴレスターン）
+    flavor: borrowed('サアディー', 'نابرده رنج گنج میسر نمی‌شود', '苦労なくして、宝は手に入らない。'),
     pose: 'absThigh',
   },
   {
@@ -205,7 +238,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2023',
     wins: 1,
     note: '史上初、2 階級での王者',
-    flavor: credo('212 の頂を取り、まだ誰も知らない二つ目の頂へ。'),
+    // 一つ目の頂で満足しなかった男に
+    flavor: borrowed('ゲーテ', 'Es ist nicht genug zu wissen, man muß auch anwenden.', '知るだけでは足りない。使わなければ。'),
     pose: 'victory',
   },
   {
@@ -213,7 +247,8 @@ export const CHAMPIONS: readonly Champion[] = [
     reign: '2024',
     wins: 1,
     note: '“The Nigerian Lion”',
-    flavor: credo('ラグビーのピッチから、オリンピアの頂へ。'),
+    // ラグビーのピッチからオリンピアの頂へ。険しい道を越えて
+    flavor: borrowed('ラテンの成句', 'Per aspera ad astra.', '困難を越えて、星々へ。'),
     pose: 'doubleBiceps',
   },
 ];

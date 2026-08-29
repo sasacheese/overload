@@ -15,16 +15,20 @@ test('CHAMPIONS: 1965 年からの 19 人。名前と回数が埋まっている
   }
 });
 
-test('CHAMPIONS: 本人の言葉（quote）は出典の確かな 3 つだけに絞る', () => {
+test('CHAMPIONS: 本人の言葉（by が null）は出典の確かな 3 人だけに絞る', () => {
   // ここが増えるときは、出典を確かめてから足すこと（olympia.ts の冒頭に方針）
-  const quoted = CHAMPIONS.filter((c) => c.flavor.kind === 'quote').map((c) => c.name);
-  assert.deepEqual(quoted, ['Arnold Schwarzenegger', 'Lee Haney', 'Ronnie Coleman']);
+  const ownWords = CHAMPIONS.filter((c) => c.flavor.by === null).map((c) => c.name);
+  assert.deepEqual(ownWords, ['Arnold Schwarzenegger', 'Lee Haney', 'Ronnie Coleman']);
+});
+
+test('CHAMPIONS: 名言は全員ぶん。原語 + 訳が埋まり、短い言い回しに留まる', () => {
   for (const c of CHAMPIONS) {
-    if (c.flavor.kind === 'quote') {
-      assert.ok(c.flavor.original.length > 0);
-      // 引用は短い言い回しに留める（長い引用は著作権の問題を持つ）
-      assert.ok(c.flavor.original.split(' ').length <= 15);
-    }
+    assert.ok(c.flavor.original.length > 0, c.name);
+    assert.ok(c.flavor.ja.length > 0, c.name);
+    // 引用は短い言い回しに留める（長い引用は著作権の問題を持つ）
+    assert.ok(c.flavor.original.split(' ').length <= 15, c.name);
+    // 借り物には必ず著者名が付く（本人の言葉と混ざらないようにする）
+    if (c.flavor.by !== null) assert.ok(c.flavor.by.length > 0, c.name);
   }
 });
 

@@ -4647,21 +4647,17 @@ button {
   letter-spacing: 0.04em;
 }
 
-/* 銘。本人の言葉は原語 + 訳の 2 段、こちらで書いた銘は日本語 1 行 */
-.olympia-quote,
-.olympia-credo {
+/* 名言。原語 + 訳の 2 段。借り物には著者名が付く */
+.olympia-quote {
   margin: 0.5rem 0 0;
   font-size: var(--fs-sm);
   line-height: 1.65;
   color: #e6d4a3;
-  /* 2 行に折れるとき、行末に 1 文字だけ残さない */
-  text-wrap: balance;
-}
-
-.olympia-quote {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
+  /* 2 行に折れるとき、行末に 1 文字だけ残さない */
+  text-wrap: balance;
 }
 
 .olympia-quote-original {
@@ -4672,6 +4668,12 @@ button {
 .olympia-quote-ja {
   font-size: var(--fs-2xs);
   color: rgb(230 212 163 / 0.65);
+}
+
+/* 著者名。訳と同じ行の末尾に置く（行を増やさない） */
+.olympia-quote-by {
+  color: rgb(230 212 163 / 0.45);
+  letter-spacing: 0.06em;
 }
 
 .olympia-foot {

@@ -88,18 +88,16 @@ export function OlympiaCard({ number }: { number: number }) {
       <span className="olympia-note">{champion.note}</span>
 
       {/*
-        銘。本人の言葉（quote）は原語 + 引用符 + 日本語訳で、こちらで書いた銘
-        （credo）は引用符なしの日本語だけ——どちらなのかが見た目で分かるようにする
-        （出典の確かな言葉しか quote にしない。lib/olympia.ts の冒頭に理由）。
+        名言。原語のまま + 日本語訳。本人の言葉でなければ著者名を添える
+        （出典の確かな短い言葉しか載せない。lib/olympia.ts の冒頭に方針）。
       */}
-      {champion.flavor.kind === 'quote' ? (
-        <p className="olympia-quote">
-          <span className="olympia-quote-original">“{champion.flavor.original}”</span>
-          <span className="olympia-quote-ja">{champion.flavor.ja}</span>
-        </p>
-      ) : (
-        <p className="olympia-credo">{champion.flavor.ja}</p>
-      )}
+      <p className="olympia-quote">
+        <span className="olympia-quote-original">“{champion.flavor.original}”</span>
+        <span className="olympia-quote-ja">
+          {champion.flavor.ja}
+          {champion.flavor.by !== null ? <span className="olympia-quote-by"> — {champion.flavor.by}</span> : null}
+        </span>
+      </p>
 
       <footer className="olympia-foot">
         <span>
