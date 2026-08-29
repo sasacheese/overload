@@ -1,8 +1,9 @@
 /**
- * その日に引き当てたカードの棚。「今日」タブの記録の下に置く。
+ * その日の達成の棚。「今日」タブの記録の下に置く。
  *
  * 祝福は一瞬で消えるので、その日のぶんをここで見返せるようにする。1 枚押すと
- * 祝福のカードがもう一度開く（見返し用なので自動では閉じない）。
+ * 祝福のカードがもう一度開き、めくれば裏の歴代 Mr. Olympia も見返せる
+ * （見返し用なので自動では閉じない）。
  *
  * 出すのは 1 枚でも引いた日だけ。0 枚の棚を置くと「今日はまだ何も無い」という
  * 表示になり、それは未達を見せないという方針に反する。
@@ -57,7 +58,7 @@ export function DayCards({ cards, onOpen }: { cards: readonly DayCard[]; onOpen:
     <section className="day-cards">
       <h2 className="section-title with-icon">
         <Icon name="rise" />
-        引き当てたカード
+        達成
         <span className="day-cards-count">{cards.length}</span>
       </h2>
       <ul className="card-shelf">

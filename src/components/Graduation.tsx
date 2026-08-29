@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { graduationShift, type Cycle } from '../lib/cycle.ts';
 import type { Achievement } from '../lib/records.ts';
 import type { Exercise } from '../lib/types.ts';
 import { Icon } from './Icon.tsx';
+import { OlympiaCard } from './OlympiaCard.tsx';
 import { Overlay } from './Overlay.tsx';
 
 /**
@@ -29,8 +30,10 @@ import { Overlay } from './Overlay.tsx';
  * 記録更新を小さく添えて 1 枚にする（呼び分けは SessionView が行う）。
  */
 
-/** 自動で閉じるまで。絵の動き（〜1.5 秒）と文 3 つを読み切れる長さ。 */
+/** 自動でめくれるまで。絵の動き（〜1.5 秒）と文 3 つを読み切れる長さ。 */
 const AUTO_CLOSE_MS = 7000;
+/** 裏面（歴代 Mr. Olympia のトレカ）を見せる長さ。Celebration と同じ理由で表より短い。 */
+const BACK_MS = 5200;
 /** 添える記録更新の上限。祝福（Celebration）と同じ数。 */
 const MAX_EXTRA = 3;
 const RAYS = 12;
@@ -98,6 +101,7 @@ export function Graduation({
   exercise,
   cycle,
   records,
+  cardNo,
   autoClose = true,
   onClose,
 }: {
@@ -105,19 +109,35 @@ export function Graduation({
   cycle: Cycle;
   /** 同じ ✓ で立った記録更新。カードの下に小さく添える（強い順）。 */
   records: readonly Achievement[];
+  /** このカードが通算何枚目か。裏面（歴代 Mr. Olympia）の割り当て。null なら裏なし。 */
+  cardNo: number | null;
   /** 自分で閉じるか。カードの棚から見返しに来たときは読み終わるまで残す。 */
   autoClose?: boolean;
   onClose: () => void;
 }) {
+  /** どちらの面か。表で触れたらめくれ、裏で触れたら閉じる（Celebration と同じ約束）。 */
+  const [side, setSide] = useState<'front' | 'back'>('front');
+
   // Celebration と同じ理由（親の再描画でタイマーを張り直さない）で ref 経由にする
   const close = useRef(onClose);
   close.current = onClose;
 
+  useEffect(() => setSide('front'), [cycle]);
+
   useEffect(() => {
     if (!autoClose) return;
-    const id = setTimeout(() => close.current(), AUTO_CLOSE_MS);
+    if (side === 'back') {
+      const id = setTimeout(() => close.current(), BACK_MS);
+      return () => clearTimeout(id);
+    }
+    const id = setTimeout(() => (cardNo === null ? close.current() : setSide('back')), AUTO_CLOSE_MS);
     return () => clearTimeout(id);
-  }, [cycle, autoClose]);
+  }, [cycle, autoClose, side, cardNo]);
+
+  const advance = () => {
+    if (side === 'front' && cardNo !== null) setSide('back');
+    else onClose();
+  };
 
   const shift = graduationShift(exercise, cycle);
   const extra = records.slice(0, MAX_EXTRA);
@@ -126,7 +146,7 @@ export function Graduation({
     <Overlay>
       <div
         className={`celebrate tier-legend graduation graduation-${modeOf(exercise, cycle)}`}
-        onClick={onClose}
+        onClick={advance}
         role="status"
         aria-live="polite"
       >
@@ -140,7 +160,8 @@ export function Graduation({
             <span key={i} style={sparkleStyle(i, SPARKLES)} />
           ))}
         </div>
-        <div className="celebrate-card">
+        <div className={`flip ${side === 'back' ? 'is-back' : ''}`}>
+        <div className="flip-front celebrate-card">
           <span className="celebrate-shine" aria-hidden="true" />
 
           <span className="celebrate-crest">
@@ -200,6 +221,13 @@ export function Graduation({
               aria-hidden="true"
             />
           ) : null}
+        </div>
+        {/* 裏面。卒業のカードにも歴代王者が居る（通し番号は達成と共通） */}
+        {cardNo !== null ? (
+          <div className="flip-back">
+            <OlympiaCard number={cardNo} />
+          </div>
+        ) : null}
         </div>
       </div>
     </Overlay>

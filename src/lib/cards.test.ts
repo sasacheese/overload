@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cardKey, dayCards } from './cards.ts';
+import { cardKey, cardNumber, dayCards } from './cards.ts';
 import { presetExercises } from './presets.ts';
 import { isoDate, type Exercise, type Session } from './types.ts';
 
@@ -61,6 +61,32 @@ test('dayCards: 過去の日を開いても当時のカードのまま（あと�
   // 8/21 を開く。8/23 に 65kg を挙げていても、8/21 の重量更新カードは残る
   const cards = dayCards(mid, exercises, [past, mid, later]);
   assert.ok(cards.some((c) => c.kind === 'record' && c.achievement.kind === 'top-load'));
+});
+
+test('cardNumber: 日付順 → 棚の並び順の通し番号。日をまたいで続く', () => {
+  const day1 = session('2026-08-19', [{ id: bench.id, sets: [[60, 8]] }]);
+  const day2 = session('2026-08-21', [{ id: bench.id, sets: [[62.5, 8]] }]);
+  const all = [day1, day2];
+
+  const cards1 = dayCards(day1, exercises, all);
+  const cards2 = dayCards(day2, exercises, all);
+  assert.ok(cards1.length > 0 && cards2.length > 0);
+
+  // 初日の 1 枚目は通算 1 枚目
+  assert.equal(cardNumber(day1, exercises, all, cardKey(cards1[0]!)), 1);
+  // 2 日目の 1 枚目は、初日の枚数の続きから
+  assert.equal(cardNumber(day2, exercises, all, cardKey(cards2[0]!)), cards1.length + 1);
+  // 棚に無いカードは番号を持たない
+  assert.equal(cardNumber(day2, exercises, all, 'record:ghost:e1rm'), null);
+});
+
+test('cardNumber: まだ保存されていない日（今日の 1 枚目の直後）でも続きの番号になる', () => {
+  const day1 = session('2026-08-19', [{ id: bench.id, sets: [[60, 8]] }]);
+  const today = session('2026-08-21', [{ id: bench.id, sets: [[62.5, 8]] }]);
+  // sessions に今日がまだ入っていない状態で、今日のカードの番号を引く
+  const cards1 = dayCards(day1, exercises, [day1]);
+  const cardsToday = dayCards(today, exercises, [day1]);
+  assert.equal(cardNumber(today, exercises, [day1], cardKey(cardsToday[0]!)), cards1.length + 1);
 });
 
 test('cardKey: 同じ日の中で一意になる', () => {

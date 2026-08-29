@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { recordTier, type Achievement, type RecordTier } from '../lib/records.ts';
 import { Icon } from './Icon.tsx';
+import { OlympiaCard } from './OlympiaCard.tsx';
 import { Overlay } from './Overlay.tsx';
 
 /**
@@ -38,6 +39,13 @@ import { Overlay } from './Overlay.tsx';
  * 残り時間はカードの下端の線で見えるようにしてあり、待ちたくなければ触れば閉じる。
  */
 const AUTO_CLOSE_MS = 6200;
+/**
+ * 裏面（歴代 Mr. Olympia のトレカ）を見せる長さ。
+ *
+ * 表を読み切ったあとに一度めくって、名前と年が読めるだけの時間。表より短いのは、
+ * 裏は毎回違う文ではなく「誰が出たか」の 1 点だけを見る面だから。
+ */
+const BACK_MS = 5200;
 /** 添える行の上限。これ以上並べると、次のセットに戻るまでが長くなる。 */
 const MAX_EXTRA = 3;
 
@@ -64,6 +72,7 @@ function sparkleStyle(i: number, count: number): React.CSSProperties {
 export function Celebration({
   achievements,
   exerciseName,
+  cardNo,
   autoClose = true,
   onClose,
 }: {
@@ -71,12 +80,24 @@ export function Celebration({
   achievements: readonly Achievement[];
   exerciseName: string;
   /**
+   * このカードが通算何枚目か（lib/cards.ts）。裏面（歴代 Mr. Olympia のトレカ）の
+   * 割り当てに使う。null なら裏面なしで、触れたらそのまま閉じる。
+   */
+  cardNo: number | null;
+  /**
    * 自分で閉じるか。✓ の直後の祝福は次のセットの邪魔をしないよう時間で消えるが、
-   * カードの棚から**見返しに来た**ときは読み終わるまで残す（触れば閉じるのは同じ）。
+   * カードの棚から**見返しに来た**ときは読み終わるまで残す（触れば進むのは同じ）。
    */
   autoClose?: boolean;
   onClose: () => void;
 }) {
+  /*
+   * どちらの面か。表（祝福）を読み切ったら裏（トレカ）へめくれて、それから閉じる。
+   * 触れたときも同じ順で進む——表で触れたらめくれ、裏で触れたら閉じる。
+   * 裏があることで、閉じる操作が「1 枚めくって仕舞う」になる。
+   */
+  const [side, setSide] = useState<'front' | 'back'>('front');
+
   /*
    * onClose を ref 経由で呼ぶ。
    *
@@ -87,11 +108,23 @@ export function Celebration({
   const close = useRef(onClose);
   close.current = onClose;
 
+  // 別の祝福に切り替わったら表から
+  useEffect(() => setSide('front'), [achievements]);
+
   useEffect(() => {
     if (!autoClose) return;
-    const id = setTimeout(() => close.current(), AUTO_CLOSE_MS);
+    if (side === 'back') {
+      const id = setTimeout(() => close.current(), BACK_MS);
+      return () => clearTimeout(id);
+    }
+    const id = setTimeout(() => (cardNo === null ? close.current() : setSide('back')), AUTO_CLOSE_MS);
     return () => clearTimeout(id);
-  }, [achievements, autoClose]);
+  }, [achievements, autoClose, side, cardNo]);
+
+  const advance = () => {
+    if (side === 'front' && cardNo !== null) setSide('back');
+    else onClose();
+  };
 
   const [lead, ...rest] = achievements;
   if (!lead) return null;
@@ -102,7 +135,7 @@ export function Celebration({
 
   return (
     <Overlay>
-      <div className={`celebrate tier-${tier}`} onClick={onClose} role="status" aria-live="polite">
+      <div className={`celebrate tier-${tier}`} onClick={advance} role="status" aria-live="polite">
         <div className="celebrate-rays" aria-hidden="true">
           {Array.from({ length: RAYS }, (_, i) => (
             <span key={i} style={{ '--angle': `${(360 / RAYS) * i}deg` } as React.CSSProperties} />
@@ -113,7 +146,8 @@ export function Celebration({
             <span key={i} style={sparkleStyle(i, sparkles)} />
           ))}
         </div>
-        <div className="celebrate-card">
+        <div className={`flip ${side === 'back' ? 'is-back' : ''}`}>
+        <div className="flip-front celebrate-card">
           <span className="celebrate-shine" aria-hidden="true" />
 
           <span className="celebrate-crest">
@@ -183,6 +217,13 @@ export function Celebration({
               aria-hidden="true"
             />
           ) : null}
+        </div>
+        {/* 裏面。歴代 Mr. Olympia のトレカ。表を読み切るとめくれる */}
+        {cardNo !== null ? (
+          <div className="flip-back">
+            <OlympiaCard number={cardNo} />
+          </div>
+        ) : null}
         </div>
       </div>
     </Overlay>
