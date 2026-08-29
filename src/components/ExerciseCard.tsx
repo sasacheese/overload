@@ -468,8 +468,6 @@ export function ExerciseCard({
                       */
                       suffix={exercise.loadMode === 'bodyweight' ? '+kg' : 'kg'}
                       zeroLabel={exercise.loadMode === 'bodyweight' ? '自重' : undefined}
-                      /* マシンごとに刻みが違うので、決まった量ずつ動かすボタンは役に立たない */
-                      showSteps={false}
                       dial
                       onNext={focusNextField}
                       onChange={(weight) => patchSet(i, { weight })}
