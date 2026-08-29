@@ -98,12 +98,15 @@ export function Graduation({
   exercise,
   cycle,
   records,
+  autoClose = true,
   onClose,
 }: {
   exercise: Exercise;
   cycle: Cycle;
   /** 同じ ✓ で立った記録更新。カードの下に小さく添える（強い順）。 */
   records: readonly Achievement[];
+  /** 自分で閉じるか。カードの棚から見返しに来たときは読み終わるまで残す。 */
+  autoClose?: boolean;
   onClose: () => void;
 }) {
   // Celebration と同じ理由（親の再描画でタイマーを張り直さない）で ref 経由にする
@@ -111,9 +114,10 @@ export function Graduation({
   close.current = onClose;
 
   useEffect(() => {
+    if (!autoClose) return;
     const id = setTimeout(() => close.current(), AUTO_CLOSE_MS);
     return () => clearTimeout(id);
-  }, [cycle]);
+  }, [cycle, autoClose]);
 
   const shift = graduationShift(exercise, cycle);
   const extra = records.slice(0, MAX_EXTRA);
@@ -189,11 +193,13 @@ export function Graduation({
             </ul>
           ) : null}
 
-          <span
-            className="celebrate-timer"
-            style={{ '--close-ms': `${AUTO_CLOSE_MS}ms` } as React.CSSProperties}
-            aria-hidden="true"
-          />
+          {autoClose ? (
+            <span
+              className="celebrate-timer"
+              style={{ '--close-ms': `${AUTO_CLOSE_MS}ms` } as React.CSSProperties}
+              aria-hidden="true"
+            />
+          ) : null}
         </div>
       </div>
     </Overlay>

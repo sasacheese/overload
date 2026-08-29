@@ -155,8 +155,11 @@ function entriesOfDay(session: Session, exercises: readonly Exercise[], sessions
   return out;
 }
 
-/** セッション全体の総量の更新。種目に属さないので 1 回だけ見る。 */
-function wholeDayRecord(
+/**
+ * セッション全体の総量の更新。種目に属さないので 1 回だけ見る。
+ * 締め（この下）と、その日のカードの棚（lib/cards.ts）の両方が使う。
+ */
+export function wholeDayRecord(
   session: Session,
   exercises: readonly Exercise[],
   sessions: readonly Session[],

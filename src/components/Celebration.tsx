@@ -64,11 +64,17 @@ function sparkleStyle(i: number, count: number): React.CSSProperties {
 export function Celebration({
   achievements,
   exerciseName,
+  autoClose = true,
   onClose,
 }: {
   /** 当たった更新。強い順（先頭が主役）。 */
   achievements: readonly Achievement[];
   exerciseName: string;
+  /**
+   * 自分で閉じるか。✓ の直後の祝福は次のセットの邪魔をしないよう時間で消えるが、
+   * カードの棚から**見返しに来た**ときは読み終わるまで残す（触れば閉じるのは同じ）。
+   */
+  autoClose?: boolean;
   onClose: () => void;
 }) {
   /*
@@ -82,9 +88,10 @@ export function Celebration({
   close.current = onClose;
 
   useEffect(() => {
+    if (!autoClose) return;
     const id = setTimeout(() => close.current(), AUTO_CLOSE_MS);
     return () => clearTimeout(id);
-  }, [achievements]);
+  }, [achievements, autoClose]);
 
   const [lead, ...rest] = achievements;
   if (!lead) return null;
@@ -163,16 +170,19 @@ export function Celebration({
           {/*
             自分で消えるまでの残り。黙って消えるより、線が尽きるのが見えるほうが
             「読み切れなかった」にならない。待たずに触れば閉じる。
+            見返し（autoClose なし）では消えないので、線も出さない。
           */}
           {/*
             長さは CSS に書かず、ここから渡す。同じ秒数を 2 か所に書くと、片方だけ
             直したときに線と実際の消える時刻がずれる（実際にずれた）。
           */}
-          <span
-            className="celebrate-timer"
-            style={{ '--close-ms': `${AUTO_CLOSE_MS}ms` } as React.CSSProperties}
-            aria-hidden="true"
-          />
+          {autoClose ? (
+            <span
+              className="celebrate-timer"
+              style={{ '--close-ms': `${AUTO_CLOSE_MS}ms` } as React.CSSProperties}
+              aria-hidden="true"
+            />
+          ) : null}
         </div>
       </div>
     </Overlay>

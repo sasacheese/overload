@@ -23,6 +23,7 @@ import {
   sortedSessions,
 } from '../lib/query.ts';
 
+import { dayCards, type DayCard } from '../lib/cards.ts';
 import { cycleOf, type Cycle } from '../lib/cycle.ts';
 import { recordFeedback } from '../lib/haptics.ts';
 import { findRecords, recordTier, type Achievement, type RecordKind, type RecordTier } from '../lib/records.ts';
@@ -30,6 +31,7 @@ import { startedAt, type Exercise, type IsoDate, type Session, type SessionEntry
 import { canFinish, wrapUp } from '../lib/wrapup.ts';
 import { useSession, useStore } from '../store.tsx';
 import { Celebration } from './Celebration.tsx';
+import { DayCards } from './DayCards.tsx';
 import { Graduation } from './Graduation.tsx';
 import { Wrapup } from './Wrapup.tsx';
 import { EmptyDay, type LastDay } from './EmptyDay.tsx';
@@ -177,11 +179,19 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
   const [folded, setFolded] = useState<ReadonlySet<string>>(() =>
     initialFolded(date, session.entries, wide),
   );
-  const [celebration, setCelebration] = useState<{ achievements: Achievement[]; exerciseName: string } | null>(null);
+  /** autoClose が false のものは、カードの棚からの見返し（読み終わるまで残す）。 */
+  const [celebration, setCelebration] = useState<{
+    achievements: Achievement[];
+    exerciseName: string;
+    autoClose?: boolean;
+  } | null>(null);
   /** 卒業の祝福。記録更新のカードより優先して 1 枚だけ出す。 */
-  const [graduation, setGraduation] = useState<{ exercise: Exercise; cycle: Cycle; records: Achievement[] } | null>(
-    null,
-  );
+  const [graduation, setGraduation] = useState<{
+    exercise: Exercise;
+    cycle: Cycle;
+    records: Achievement[];
+    autoClose?: boolean;
+  } | null>(null);
   /** 締めの画面。fresh は「いま押して締めた」——あとから見直したときは光を出さない。 */
   const [wrap, setWrap] = useState<{ fresh: boolean } | null>(null);
 
@@ -436,6 +446,26 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     [wrap, session, exercises, sessions],
   );
 
+  /*
+   * その日に引き当てたカード。記録から毎回引き直すので、✓ を付けるたびにその場で
+   * 増え、過去の日を開けば当時のまま並ぶ（祝福の重複防止の印には頼らない）。
+   */
+  const cards = useMemo(() => dayCards(session, exercises, sessions), [session, exercises, sessions]);
+
+  /** 棚の 1 枚を開き直す。見返しなので自動では閉じない（触れば閉じるのは同じ）。 */
+  const openCard = (card: DayCard) => {
+    if (card.kind === 'graduation') {
+      // 添える記録は付けない。棚では記録更新がそれぞれ自分のカードとして並んでいる
+      setGraduation({ exercise: card.exercise, cycle: card.cycle, records: [], autoClose: false });
+    } else {
+      setCelebration({
+        achievements: [card.achievement],
+        exerciseName: card.exercise?.name ?? 'この日ぜんぶ',
+        autoClose: false,
+      });
+    }
+  };
+
   const finishable = canFinish(session, exercises);
   const finished = session.finishedAt > 0;
   const isToday = date === today;
@@ -569,6 +599,9 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
 
       {session.entries.length === 0 ? <EmptyDay date={date} today={today} last={previousDay} /> : null}
 
+      {/* その日に引き当てたカード。1 枚も無い日は棚ごと出ない（0 枚を見せない） */}
+      <DayCards cards={cards} onOpen={openCard} />
+
       {/*
         面のいちばん下。浮いているもの（追加ボタン・休憩タイマー）は画面に貼り付いて
         いるので、ここに置いたボタンはスクロールしきった位置でその下に潜る。
@@ -649,6 +682,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         <Celebration
           achievements={celebration.achievements}
           exerciseName={celebration.exerciseName}
+          autoClose={celebration.autoClose ?? true}
           onClose={() => setCelebration(null)}
         />
       ) : null}
@@ -658,6 +692,7 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
           exercise={graduation.exercise}
           cycle={graduation.cycle}
           records={graduation.records}
+          autoClose={graduation.autoClose ?? true}
           onClose={() => setGraduation(null)}
         />
       ) : null}
