@@ -319,7 +319,7 @@ function renderBody(ctx: CanvasRenderingContext2D, card: ShareCard, draw: boolea
   if (card.volume > 0) {
     drawStatIf(ctx, PAD, y, Math.round(card.volume).toLocaleString('ja-JP'), 'kg', draw);
   } else {
-    drawStatIf(ctx, PAD, y, String(card.reps), 'レップ', draw);
+    drawStatIf(ctx, PAD, y, String(card.reps), '回', draw);
   }
 
   // ── 部位。色の点ではなく漢字で示す（画面のカレンダーと同じ）

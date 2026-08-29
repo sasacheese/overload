@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { relativeLabel } from '../lib/calendar.ts';
 import { cycleLine, cycleOf, stallOf } from '../lib/cycle.ts';
 import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
+import { journeyOf } from '../lib/milestones.ts';
 import { tapFeedback } from '../lib/haptics.ts';
 import { bodyweightCap, guideFor } from '../lib/presets.ts';
 import {
@@ -33,12 +34,14 @@ import {
   sessionsSinceBest,
   trendLabel,
 } from '../lib/progression.ts';
-import { bestSeries, exerciseHistory, previousEntry } from '../lib/query.ts';
+import { bestSeries, exerciseHistory, orderInDay, previousEntry, sessionOn } from '../lib/query.ts';
+import type { RecordTier } from '../lib/records.ts';
 import {
   LOAD_MODES,
   MUSCLES,
   MUSCLE_GROUPS,
   doneSets,
+  startedAt,
   type Exercise,
   type IsoDate,
   type SessionEntry,
@@ -48,6 +51,7 @@ import { useStore } from '../store.tsx';
 import { BodyMap } from './BodyMap.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { Icon, type IconName } from './Icon.tsx';
+import { PowerCheck } from './PowerCheck.tsx';
 import { Stepper } from './Stepper.tsx';
 import { ForecastNote, TrendChart } from './TrendChart.tsx';
 
@@ -58,12 +62,15 @@ type Props = {
   entry: SessionEntry;
   /** その日の体重。アシスト種目の実効負荷に使う。0 は未記録。 */
   bodyWeight: number;
+  /** その日の何種目目に実施したか。1 始まり。0 はまだ ✓ が無い（順番が決まっていない）。 */
+  order: number;
   /** 畳んでいるか。何種目も並ぶ日に、終えたものを閉じて縦を詰められるようにしてある。 */
   folded: boolean;
   onToggleFold: () => void;
   onChange: (entry: SessionEntry) => void;
   onRemove: () => void;
-  onSetCompleted: (exercise: Exercise, entry: SessionEntry, index: number) => void;
+  /** ✓ が付いた。記録更新ならその格を返す（✓ の破裂の派手さに使う）。 */
+  onSetCompleted: (exercise: Exercise, entry: SessionEntry, index: number) => RecordTier | null;
   onSetUndone: (exercise: Exercise, index: number) => void;
 };
 
@@ -127,7 +134,7 @@ function Disclosure({
 function setsLabel(ex: Exercise, sets: readonly SetRecord[]): string {
   if (sets.length === 0) return '記録なし';
   const reps = sets.map((s) => s.reps).join('・');
-  if (ex.loadMode === 'bodyweight' && sets.every((s) => s.weight === 0)) return `${reps} レップ`;
+  if (ex.loadMode === 'bodyweight' && sets.every((s) => s.weight === 0)) return `${reps} 回`;
   /*
    * 数字の意味を必ず言う。アシストは「補助」、自重に足したぶんは「加重」。
    * 裸の kg にすると、あとで読み返したときに持ち上げた重量と区別が付かない。
@@ -148,6 +155,7 @@ export function ExerciseCard({
   today,
   entry,
   bodyWeight,
+  order,
   folded,
   onToggleFold,
   onChange,
@@ -201,7 +209,15 @@ export function ExerciseCard({
   const performance = useMemo(() => ({ entry, bodyWeight }), [entry, bodyWeight]);
 
   const history = useMemo(() => exerciseHistory(sessions, exercise.id), [sessions, exercise.id]);
-  const past = useMemo(() => history.filter((h) => h.date < date).slice(0, HISTORY_ROWS), [history, date]);
+  /** これまでの記録。1 行ごとに、その日の何種目目だったかを添える（0 は分からない）。 */
+  const past = useMemo(
+    () =>
+      history
+        .filter((h) => h.date < date)
+        .slice(0, HISTORY_ROWS)
+        .map((h) => ({ ...h, order: orderInDay(sessionOn(sessions, h.date), exercise.id) })),
+    [history, date, sessions, exercise.id],
+  );
   /*
    * サイクルの現在地。見ている日までの記録で出す（今日のセットに ✓ を付けると
    * その場で進む）。まだ何もやっていない朝は前回までの状態——前回卒業していれば
@@ -211,6 +227,11 @@ export function ExerciseCard({
   const cycle = useMemo(() => cycleOf(exercise, upToDate), [exercise, upToDate]);
   const stall = useMemo(() => stallOf(exercise, upToDate), [exercise, upToDate]);
   const series = useMemo(() => bestSeries(exercise, history), [exercise, history]);
+  /*
+   * 初日から直近まで。これから担ぐ直前に「あの日の自分」と並べる。
+   * 目標ではなく過去の事実なので外れようがない。2 日ぶん無ければ出ない。
+   */
+  const journey = useMemo(() => journeyOf(exercise, history), [exercise, history]);
   const bestsNewestFirst = useMemo(() => [...series].reverse().map((s) => s.best), [series]);
   const trendPoints = useMemo(() => series.map((s) => ({ date: s.date, value: s.best })), [series]);
 
@@ -220,7 +241,7 @@ export function ExerciseCard({
    *
    * 今日の記録から決めると、まだ ✓ を 1 つも付けていない朝のあいだは常に
    * 「測れていない」になり、推移の見出しが「最高レップ」に化けて、そこに推定 1RM の
-   * 数字がレップとして出る（`直近 200.66666 レップ`）。推移が見ているのは履歴なので、
+   * 数字が回数として出る（`直近 200.66666 回`）。推移が見ているのは履歴なので、
    * 測り方も履歴から決める。履歴も無ければ種目の設定に従う。
    */
   const historyByLoad = history[0] ? metrics(exercise, history[0]).byLoad : exercise.loadMode !== 'bodyweight';
@@ -282,18 +303,29 @@ export function ExerciseCard({
     else (document.activeElement as HTMLElement | null)?.blur();
   };
 
-  const toggleDone = (index: number) => {
+  const toggleDone = (index: number): RecordTier | null => {
     const set = entry.sets[index];
-    if (!set) return;
+    if (!set) return null;
     // 画面を見ずに押すことがあるので、入ったことを指に返す
     tapFeedback();
     const nextEntry: SessionEntry = {
       ...entry,
+      /*
+       * 初めて ✓ を付けた時刻を残す。その日の何種目目に実施したかは、これを
+       * 並べて出す（`query.ts` の orderInDay）。
+       *
+       * 一度入れたら動かさない。✓ を外して入れ直すたびに時刻が後ろへ動くと、
+       * 途中で戻って直した種目が、その日の最後にやったことになってしまう。
+       */
+      startedAt: startedAt(entry) > 0 ? startedAt(entry) : Date.now(),
       sets: entry.sets.map((s, i) => (i === index ? { ...s, done: !s.done } : s)),
     };
     onChange(nextEntry);
-    if (set.done) onSetUndone(exercise, index);
-    else onSetCompleted(exercise, nextEntry, index);
+    if (set.done) {
+      onSetUndone(exercise, index);
+      return null;
+    }
+    return onSetCompleted(exercise, nextEntry, index);
   };
 
   const toggleNote = (index: number) => {
@@ -326,6 +358,11 @@ export function ExerciseCard({
             {group.short}
           </span>
           <span className="card-name">{exercise.name}</span>
+          {/*
+            その日の何種目目か。✓ を 1 つ付けた時点で決まる。同じ部位でも
+            1 種目目と 3 種目目では出る数字が違うので、記録と一緒に見えるところに置く。
+          */}
+          {order > 0 ? <OrderChip order={order} /> : null}
           <Icon name="down" className="card-chevron" />
         </button>
         <button
@@ -433,6 +470,7 @@ export function ExerciseCard({
                       zeroLabel={exercise.loadMode === 'bodyweight' ? '自重' : undefined}
                       /* マシンごとに刻みが違うので、決まった量ずつ動かすボタンは役に立たない */
                       showSteps={false}
+                      dial
                       onNext={focusNextField}
                       onChange={(weight) => patchSet(i, { weight })}
                     />
@@ -440,20 +478,17 @@ export function ExerciseCard({
                       value={set.reps}
                       step={1}
                       min={0}
-                      label={`${i + 1}セット目のレップ`}
+                      label={`${i + 1}セット目の回数`}
                       suffix="回"
+                      dial
                       onNext={focusNextField}
                       onChange={(reps) => patchSet(i, { reps })}
                     />
-                    <button
-                      type="button"
-                      className={`check ${set.done ? 'is-on' : ''}`}
-                      aria-label={`${i + 1}セット目を${set.done ? '未実施に戻す' : '実施済みにする'}`}
-                      aria-pressed={set.done}
-                      onClick={() => toggleDone(i)}
-                    >
-                      <Icon name="check" />
-                    </button>
+                    <PowerCheck
+                      done={set.done}
+                      label={`${i + 1}セット目を${set.done ? '未実施に戻す' : '実施済みにする'}`}
+                      onToggle={() => toggleDone(i)}
+                    />
                   </div>
 
                   {isAssist && bodyWeight > 0 ? (
@@ -522,9 +557,9 @@ export function ExerciseCard({
           */}
           {stall ? (
             <p className="hint">
-              {loadWord(exercise, stall.weight)}のまま {stall.sessions} 回、直近 {stall.since} 回は合計レップが
-              伸びていない。レップ範囲（いまは {exercise.repMin}〜{exercise.repMax}）かセット数を変えるか、
-              似た種目に替える——変えるのは 1 つだけにすると、何が効いたか分かる。
+              {loadWord(exercise, stall.weight)}のまま {stall.sessions} セッション、直近 {stall.since} 回は
+              合計の回数が伸びていない。回数の目安（いまは {exercise.repMin}〜{exercise.repMax}）か
+              セット数を変えるか、似た種目に替える——変えるのは 1 つだけにすると、何が効いたか分かる。
             </p>
           ) : stale >= 3 ? (
             <p className="hint">
@@ -579,6 +614,19 @@ export function ExerciseCard({
                 open={openSections.has('history')}
                 onToggle={() => toggleSection('history')}
               >
+                {journey ? (
+                  <p className="journey">
+                    <span className="journey-then">
+                      初日 <span className="muted">{relativeLabel(journey.first.date, today)}</span> {journey.first.label}
+                    </span>
+                    <span className={`journey-arrow${journey.improved ? ' is-up' : ''}`} aria-hidden="true">
+                      →
+                    </span>
+                    <span className={`journey-now${journey.improved ? ' is-up' : ''}`}>
+                      {journey.latest.label}
+                    </span>
+                  </p>
+                ) : null}
                 <ul className="past-list">
                   {past.map((h) => (
                     <li key={h.date}>
@@ -587,6 +635,8 @@ export function ExerciseCard({
                         <span className="muted"> {relativeLabel(h.date, today)}</span>
                       </span>
                       <span className="past-sets">{setsLabel(exercise, doneSets(h.entry))}</span>
+                      {/* その日の何種目目だったか。時刻を持たない古い記録には出ない */}
+                      {h.order > 0 ? <OrderChip order={h.order} className="past-order" /> : null}
                       {h.entry.note.trim() !== '' ? <span className="past-note">{h.entry.note}</span> : null}
                       {doneSets(h.entry)
                         .map((s, i) => (s.note.trim() !== '' ? `${i + 1}セット目: ${s.note}` : null))
@@ -612,7 +662,7 @@ export function ExerciseCard({
                 <div className="trend-head">
                   <span className="muted">直近</span>
                   <strong>
-                    {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} レップ`}
+                    {byLoad ? `${formatEstimate(series.at(-1)?.best ?? 0)} kg` : `${series.at(-1)?.best ?? 0} 回`}
                   </strong>
                 </div>
                 <TrendChart
@@ -628,7 +678,7 @@ export function ExerciseCard({
                   forecast={trend}
                   short={trendShort === null ? null : shortfallLabel(trendShort)}
                   today={today}
-                  unit={byLoad ? 'kg' : 'レップ'}
+                  unit={byLoad ? 'kg' : '回'}
                   fmt={formatEstimate}
                   settleName={capRatio === null ? undefined : `体重比 ${capRatio}×`}
                 />
@@ -667,6 +717,18 @@ export function ExerciseCard({
         />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * その日の何種目目か。
+ *
+ * 1 種目目だけ濃くしてある。同じ部位なら 1 種目目がいちばん重いものを扱えて、
+ * あとになるほど落ちる——数字を読み返すときの前提がここで分かる。
+ */
+function OrderChip({ order, className }: { order: number; className?: string }) {
+  return (
+    <span className={`order-chip ${order === 1 ? 'is-first' : ''} ${className ?? ''}`}>{order}種目目</span>
   );
 }
 

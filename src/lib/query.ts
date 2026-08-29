@@ -8,12 +8,13 @@
  * 中身が変われば勝手に作り直される。
  */
 
-import { doneSets, hasRecord, type Exercise, type ExerciseId, type IsoDate, type Session, type SessionEntry } from './types.ts';
+import { doneSets, hasRecord, startedAt, type Exercise, type ExerciseId, type IsoDate, type Session, type SessionEntry } from './types.ts';
 import { metrics, type ExerciseHistory, type Performance } from './progression.ts';
 import { PRESET_ORDER } from './presets.ts';
 
 const sortedCache = new WeakMap<readonly Session[], Session[]>();
 const weightCache = new WeakMap<readonly Session[], readonly WeighIn[]>();
+const byDateCache = new WeakMap<readonly Session[], Map<IsoDate, Session>>();
 
 /** 日付の新しい順。トレーニングの記録がある日だけ。 */
 export function sortedSessions(sessions: readonly Session[]): Session[] {
@@ -40,6 +41,38 @@ function weighIns(sessions: readonly Session[]): readonly WeighIn[] {
 
 export function entryOf(session: Session | undefined, id: ExerciseId): SessionEntry | undefined {
   return session?.entries.find((e) => e.exerciseId === id);
+}
+
+/** 日付で 1 日を引く。過去の記録を 1 行ずつ引き当てるので、線形探索にしない。 */
+export function sessionOn(sessions: readonly Session[], date: IsoDate): Session | undefined {
+  let index = byDateCache.get(sessions);
+  if (index === undefined) {
+    index = new Map(sessions.map((s) => [s.date, s]));
+    byDateCache.set(sessions, index);
+  }
+  return index.get(date);
+}
+
+/**
+ * その日、その種目を何種目目に実施したか。1 始まり。分からなければ 0。
+ *
+ * 同じ部位なら、1 種目目がいちばん重いものを扱えて、2 種目目 3 種目目と落ちていく。
+ * あとから数字だけを見ても「伸びなかった」のか「もう疲れていた」のかが分からないので、
+ * 記録に順番を添える。
+ *
+ * 並べるのは**最初の ✓ を押した時刻**（`SessionEntry.startedAt`）で、行の並び
+ * ——種目を足した順——ではない。先にまとめて種目を選んでから順に回ることがあり、
+ * その日は並びと実施順がずれる。
+ *
+ * 時刻を持たない記録（この仕掛けより前のもの）は数に入れず、0 を返す。並びで
+ * 代用すると、実際とは違う順番を確かなことのように出してしまう。
+ */
+export function orderInDay(session: Session | undefined, id: ExerciseId): number {
+  if (session === undefined) return 0;
+  const performed = session.entries
+    .filter((e) => startedAt(e) > 0 && doneSets(e).length > 0)
+    .sort((a, b) => startedAt(a) - startedAt(b));
+  return performed.findIndex((e) => e.exerciseId === id) + 1;
 }
 
 /**
@@ -75,6 +108,57 @@ export function exerciseHistory(sessions: readonly Session[], id: ExerciseId): E
       (h): h is { date: IsoDate; entry: SessionEntry; bodyWeight: number } =>
         h.entry !== undefined && doneSets(h.entry).length > 0,
     );
+}
+
+/**
+ * ✓ の付いたセットが 1 度でもある種目の id。
+ *
+ * 種目の一覧を「記録あり / 記録なし」で絞るために使う。種目ごとに
+ * `exerciseHistory` を引くと種目の数だけ全期間を舐めることになるので、
+ * ここは 1 回の走査で集める。
+ *
+ * 数えるのは ✓ の付いたセットだけ。並べただけで一度もやっていない種目は
+ * 「記録あり」に入れない——入れると、絞ったのに何も減らない。
+ */
+export function recordedExerciseIds(sessions: readonly Session[]): Set<ExerciseId> {
+  const found = new Set<ExerciseId>();
+  for (const session of sessions) {
+    for (const entry of session.entries) {
+      if (doneSets(entry).length > 0) found.add(entry.exerciseId);
+    }
+  }
+  return found;
+}
+
+/**
+ * 通算。**その種目をこれまでどれだけやったか**を 3 つの数で持つ。
+ *
+ * ここだけが「減らない数」で、記録の伸び（ベスト・推移）とは性格が違う。
+ * ベストは伸び悩めば何か月も動かないが、通算はやった日には必ず増える。
+ * 続けたこと自体を数として見せるために、ベストと並べて置く。
+ *
+ * 数えるのは ✓ の付いたセットだけ（`doneSets`）。入力欄に数字が入っているだけの
+ * 行はまだやっていないので、通算に混ぜると「並べただけ」で数が増えてしまう。
+ */
+export type ExerciseTotals = {
+  /** やった日数。 */
+  days: number;
+  /** ✓ の付いたセットの数。 */
+  sets: number;
+  /** その合計レップ数。 */
+  reps: number;
+};
+
+export function exerciseTotals(history: ExerciseHistory): ExerciseTotals {
+  let sets = 0;
+  let reps = 0;
+  for (const h of history) {
+    for (const set of doneSets(h.entry)) {
+      sets += 1;
+      reps += set.reps;
+    }
+  }
+  return { days: history.length, sets, reps };
 }
 
 /** 指定日より前の直近の記録。今日の入力欄の初期値の元になる。 */

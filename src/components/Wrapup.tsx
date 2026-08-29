@@ -170,7 +170,7 @@ export function Wrapup({
             {summary.volume > 0 ? (
               <Stat value={Math.round(summary.volume)} unit="kg" format={(n) => n.toLocaleString('ja-JP')} />
             ) : (
-              <Stat value={summary.reps} unit="レップ" />
+              <Stat value={summary.reps} unit="回" />
             )}
           </div>
 
@@ -202,8 +202,8 @@ export function Wrapup({
           {/*
             進んだこと。何が、どこまで、どれだけ動いたか。
 
-            見出しだけだと「更新した」しか伝わらない。到達した数字・前の記録・
-            増分の 3 つを置いて、進歩の大きさがその場で読めるようにする。
+            見出しだけだと「更新した」しか伝わらない。平たい 1 行に続けて、到達した
+            数字・前の記録・増分を置き、何がどれだけ動いたのかがその場で読めるようにする。
           */}
           {summary.records.length > 0 ? (
             <section className="wrap-section">
@@ -213,6 +213,8 @@ export function Wrapup({
                   <li key={`${r.achievement.kind}-${r.exerciseName ?? ''}-${i}`}>
                     <span className="wrap-record-title">{r.achievement.title}</span>
                     <span className="wrap-record-where">{r.exerciseName ?? WHOLE_DAY}</span>
+                    {/* 何がすごいのかを専門語なしで 1 行。祝福の主役と同じ言い方を使う */}
+                    <span className="wrap-record-plain">{r.achievement.plain}</span>
                     <span className="wrap-record-detail">{r.achievement.detail}</span>
                     {r.achievement.gain ? <span className="wrap-record-gain">{r.achievement.gain}</span> : null}
                     {r.achievement.previous ? (

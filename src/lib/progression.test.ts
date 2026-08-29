@@ -119,9 +119,9 @@ test('compareToPrev: 差だけを出す。前回が無ければ何も出さな�
 });
 
 test('compareToPrev: 伸びた/落ちたを推定 1RM の順で分ける', () => {
-  assert.deepEqual(compareToPrev(bench, set(60, 11), set(60, 10)), { kind: 'up', label: '+1レップ' });
+  assert.deepEqual(compareToPrev(bench, set(60, 11), set(60, 10)), { kind: 'up', label: '+1回' });
   assert.deepEqual(compareToPrev(bench, set(62.5, 10), set(60, 10)), { kind: 'up', label: '+2.5kg' });
-  assert.deepEqual(compareToPrev(bench, set(60, 9), set(60, 10)), { kind: 'down', label: '−1レップ' });
+  assert.deepEqual(compareToPrev(bench, set(60, 9), set(60, 10)), { kind: 'down', label: '−1回' });
 });
 
 test('compareToPrev: 重量を上げてレップが落ちても後退ではない（サイクルの起点）', () => {
@@ -129,7 +129,7 @@ test('compareToPrev: 重量を上げてレップが落ちても後退ではな�
   // 扱ったこと自体が前進。ここを down にすると、卒業して重量を上げた日が
   // 必ず無彩色になり、サイクルの起点が後退に見えてしまう
   assert.equal(compareToPrev(bench, set(62.5, 7), set(60, 10)).kind, 'up');
-  assert.equal(compareToPrev(bench, set(62.5, 7), set(60, 10)).label, '+2.5kg −3レップ');
+  assert.equal(compareToPrev(bench, set(62.5, 7), set(60, 10)).label, '+2.5kg −3回');
   // アシストは補助を減らした側が「負荷を上げた」
   assert.equal(compareToPrev(assist, set(27.5, 4), set(30, 8)).kind, 'up');
 });

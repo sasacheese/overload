@@ -18,6 +18,7 @@ import {
   weekStreak,
   type YearMonth,
 } from '../lib/calendar.ts';
+import { lifetimeTotals, volumeParts } from '../lib/milestones.ts';
 import { bodyWeightOn, countedSets, sessionGroups, sessionVolume, sortedSessions } from '../lib/query.ts';
 import { MUSCLE_GROUPS, MUSCLE_GROUP_KEYS, type IsoDate, type MuscleGroup } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
@@ -51,11 +52,10 @@ export function CalendarView({ today, onPickDate }: Props) {
   const monthVolume = monthDates.reduce((n, d) => n + (recorded.get(d)?.volume ?? 0), 0);
   const streak = weekStreak([...recorded.keys()], today);
   /*
-   * 通算と復帰。どちらも頭打ちしない・後退しない数字で、月をめくっても変わらない。
+   * 復帰。空いた週のあとに戻った回数で、頭打ちも後退もしない。
    * 連続（streak）は切れると 0 に戻るが、復帰は切れたあとに戻るたび増える
-   * ——皆勤ではなく、戻れることを数える。
+   * ——皆勤ではなく、戻れることを数える。通算は下の lifetime の行が持つ。
    */
-  const totalDays = recorded.size;
   const comebacks = comebackCount([...recorded.keys()]);
   const bal = useMemo(() => balanceOf(sessions, exercises, today), [sessions, exercises, today]);
   const skews = skewLines(bal);
@@ -64,6 +64,13 @@ export function CalendarView({ today, onPickDate }: Props) {
   const peak = Math.max(1, ...monthDates.map((d) => recorded.get(d)?.volume ?? 0));
 
   const recent = useMemo(() => sortedSessions(sessions).slice(0, 8), [sessions]);
+
+  /*
+   * 通算の積み上げ。絶対に減らない数字で、休んでも下がらない
+   * （週単位の連続記録と同じ性質を、数字の側で持つ）。
+   */
+  const lifetime = useMemo(() => lifetimeTotals(sessions, exercises), [sessions, exercises]);
+  const lifted = volumeParts(lifetime.volume);
 
   return (
     <>
@@ -94,11 +101,6 @@ export function CalendarView({ today, onPickDate }: Props) {
           <strong>{Math.round(monthVolume).toLocaleString('ja-JP')}</strong>
           <span className="unit">kg</span>
         </span>
-        {/* 通算は最重要の指標。伸びが停滞している月も、これだけは必ず増えている */}
-        <span>
-          <strong>{totalDays}</strong>
-          <span className="unit">通算</span>
-        </span>
         <span className={streak >= 2 ? 'hit' : ''}>
           <strong>{streak}</strong>
           <span className="unit">週連続</span>
@@ -111,6 +113,13 @@ export function CalendarView({ today, onPickDate }: Props) {
           </span>
         ) : null}
       </div>
+
+      {/* 月の数字の下に、全期間の積み上げを 1 行。月をめくっても変わらない基準線 */}
+      {lifetime.days > 0 ? (
+        <p className="lifetime">
+          これまでに <strong>{lifetime.days}</strong> 日 · <strong>{lifted.value}</strong> {lifted.unit} 積み上げた
+        </p>
+      ) : null}
 
       <div className="calendar">
         <div className="cal-row cal-head">

@@ -128,7 +128,7 @@ export function compareToPrev(ex: Exercise, now: SetRecord, prev: SetRecord | un
     const prefix = ex.loadMode === 'assist' ? '補助 ' : ex.loadMode === 'bodyweight' ? '加重 ' : '';
     parts.push(`${prefix}${sign}${format(Math.abs(dw))}kg`);
   }
-  if (dr !== 0) parts.push(`${dr > 0 ? '+' : '−'}${Math.abs(dr)}レップ`);
+  if (dr !== 0) parts.push(`${dr > 0 ? '+' : '−'}${Math.abs(dr)}回`);
 
   /*
    * 負荷を上げた直後はレップが下限へ落ちるので、重量とレップを 1 つの数に
@@ -151,7 +151,7 @@ export function compareToPrev(ex: Exercise, now: SetRecord, prev: SetRecord | un
  * 同じならレップが多い方が上）。レップは 1000 未満なので、補助を 1000 倍して
  * 主キーにすれば辞書順の比較になる。
  */
-function comparable(ex: Exercise, set: SetRecord): number {
+export function comparable(ex: Exercise, set: SetRecord): number {
   if (ex.loadMode === 'assist') return -set.weight * 1000 + set.reps;
   return e1rm(set.weight, set.reps) || set.reps;
 }
@@ -205,7 +205,7 @@ export function peakName(ex: Exercise): string {
  * （`推定 1RM の推移` には中黒代わりの空きが要るが、`到達点の推移` には要らない）。
  */
 export function trendLabel(ex: Exercise, byLoad: boolean): string {
-  if (!byLoad) return '最高レップの推移';
+  if (!byLoad) return '最高回数の推移';
   return ex.loadMode === 'bodyweight' ? '到達点の推移' : '推定 1RM の推移';
 }
 

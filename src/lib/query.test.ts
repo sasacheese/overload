@@ -5,7 +5,9 @@ import {
   bodyWeightOn,
   byRecentUse,
   exerciseHistory,
+  exerciseTotals,
   lastPerformed,
+  recordedExerciseIds,
   previousEntry,
   sessionGroups,
   sessionVolume,
@@ -134,4 +136,61 @@ test('sortedSessions: 同じ配列を渡せば同じ結果を返す（使い回�
   assert.deepEqual(a.map((s) => s.date), b.map((s) => s.date));
   // 別の配列（中身は同じ）でも結果は同じ
   assert.deepEqual(sortedSessions([...list]).map((s) => s.date), a.map((s) => s.date));
+});
+
+test('exerciseTotals: やった日数・セット数・合計レップを数える', () => {
+  const list = [session('2026-08-01', [[60, 8], [60, 7]]), session('2026-08-05', [[62.5, 6], [62.5, 6], [60, 9]])];
+  assert.deepEqual(exerciseTotals(exerciseHistory(list, bench.id)), { days: 2, sets: 5, reps: 36 });
+});
+
+test('exerciseTotals: ✓ の付いていないセットは通算に入れない', () => {
+  // 並べただけの行で数が増えると、「やった量」ではなく「開いた回数」になってしまう
+  const half: Session = {
+    date: isoDate('2026-08-01'),
+    entries: [
+      {
+        exerciseId: bench.id,
+        sets: [
+          { weight: 60, reps: 8, done: true, note: '' },
+          { weight: 60, reps: 8, done: false, note: '' },
+        ],
+        note: '',
+      },
+    ],
+    note: '',
+    bodyWeight: 0,
+    finishedAt: 0,
+    updatedAt: 0,
+  };
+  assert.deepEqual(exerciseTotals(exerciseHistory([half], bench.id)), { days: 1, sets: 1, reps: 8 });
+});
+
+test('exerciseTotals: 記録が無ければ全部 0', () => {
+  assert.deepEqual(exerciseTotals(exerciseHistory([], bench.id)), { days: 0, sets: 0, reps: 0 });
+});
+
+test('recordedExerciseIds: ✓ の付いたセットがある種目だけを集める', () => {
+  const list = [session('2026-08-01', [[60, 8]]), session('2026-08-05', [[100, 5]], squat.id)];
+  const ids = recordedExerciseIds(list);
+  assert.equal(ids.has(bench.id), true);
+  assert.equal(ids.has(squat.id), true);
+  assert.equal(ids.size, 2);
+});
+
+test('recordedExerciseIds: 並べただけで ✓ の無い種目は入れない', () => {
+  // 入れてしまうと、「記録あり」で絞ったのに何も減らない
+  const planned: Session = {
+    date: isoDate('2026-08-01'),
+    entries: [
+      { exerciseId: bench.id, sets: [{ weight: 60, reps: 8, done: false, note: '' }], note: '' },
+      { exerciseId: squat.id, sets: [{ weight: 100, reps: 5, done: true, note: '' }], note: '' },
+    ],
+    note: '',
+    bodyWeight: 0,
+    finishedAt: 0,
+    updatedAt: 0,
+  };
+  const ids = recordedExerciseIds([planned]);
+  assert.equal(ids.has(bench.id), false);
+  assert.equal(ids.has(squat.id), true);
 });

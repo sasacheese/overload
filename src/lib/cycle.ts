@@ -113,9 +113,10 @@ export function cycleOf(ex: Exercise, history: ExerciseHistory): Cycle | null {
  * @param viewDate 見ている日。卒業がその日より前なら「前回」を頭に付ける
  */
 export function cycleLine(ex: Exercise, c: Cycle, viewDate: IsoDate = c.latestDate): string {
+  // 回数は「回」で言う（レップという語を画面に出さない。祝福や差分の表記と揃える）
   if (c.graduated) {
     const when = c.latestDate < viewDate ? '前回卒業' : '卒業';
-    const done = `全 ${c.setCount} セットで上限 ${ex.repMax} レップ到達`;
+    const done = `全 ${c.setCount} セットで上限の ${ex.repMax} 回に到達`;
     if (c.next === null) {
       if (ex.loadMode === 'bodyweight') return `${when} — ${done}。加重するか、難度を上げた種目へ`;
       return `${when} — ${done}`;
@@ -123,9 +124,9 @@ export function cycleLine(ex: Exercise, c: Cycle, viewDate: IsoDate = c.latestDa
     if (ex.loadMode === 'assist' && c.next === 0) return `${when} — ${done}。次は補助なしでいける`;
     return `${when} — ${done}。次は ${loadWord(ex, c.next)}`;
   }
-  const head = `${loadWord(ex, c.weight)}で ${c.sessions} 回目`;
+  const head = `${loadWord(ex, c.weight)}で ${c.sessions} セッション目`;
   if (c.reached === 0) return head;
-  const range = `上限 ${ex.repMax} レップ到達 ${c.reached}/${c.targetSets} セット`;
+  const range = `上限の ${ex.repMax} 回に ${c.reached}/${c.targetSets} セット到達`;
   return c.reachedPeak ? `${head} · ${range} — この負荷で最多` : `${head} · ${range}`;
 }
 

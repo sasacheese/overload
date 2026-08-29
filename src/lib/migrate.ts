@@ -44,6 +44,7 @@ export function normalizeEntry(raw: unknown): SessionEntry {
     exerciseId: str(o['exerciseId']) as ExerciseId,
     sets: Array.isArray(o['sets']) ? o['sets'].map(normalizeSet) : [],
     note: str(o['note']),
+    startedAt: num(o['startedAt'], 0),
   };
 }
 
@@ -54,6 +55,7 @@ export function normalizeSession(raw: unknown): Session {
     entries: Array.isArray(o['entries']) ? o['entries'].map(normalizeEntry) : [],
     note: str(o['note']),
     bodyWeight: num(o['bodyWeight'], 0),
+    bodyWeightAt: num(o['bodyWeightAt'], 0),
     finishedAt: num(o['finishedAt'], 0),
     updatedAt: num(o['updatedAt'], 0),
   };

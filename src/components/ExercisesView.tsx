@@ -1,11 +1,28 @@
 /**
- * 種目の管理。刻み・レップ範囲・セット数はサイクル（卒業の判定と次の負荷の提示）に
- * 直接効くので、ここを触ると種目カードの表示が変わることが分かる文言にしてある。
+ * 種目の管理。一覧の各行には到達点の推移を小さな線で添え、開いたシートは
+ * 「設定」（編集できる項目）と「記録」（推移の詳細と履歴）の 2 面に分かれる。
+ * 刻み・回数の目安・セット数はサイクル（卒業の判定と次の負荷の提示）に直接効く。
+ *
+ * ## 絞り込み
+ *
+ * 一覧はプリセットを全部並べるので、**実際に使っている種目より、使っていない
+ * 種目のほうが多い**。「記録あり」で絞れば、自分が回しているものだけの一覧になる。
+ *
+ * 逆の「記録なし」も置いてある。日々使う面ではないが、まだ触っていない種目を
+ * 見渡す用（次に足すものを探す・非表示にするものを選ぶ）には、これしかない。
+ * 3 つとも件数を添えてあるので、押す前にどれだけ減るかが分かる。
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { mergeImpact } from '../lib/merge.ts';
-import { byRecentUse, lastPerformed } from '../lib/query.ts';
+import {
+  bestSeries,
+  byRecentUse,
+  exerciseHistory,
+  exerciseTotals,
+  lastPerformed,
+  recordedExerciseIds,
+} from '../lib/query.ts';
 import {
   LOAD_MODES,
   LOAD_MODE_KEYS,
@@ -18,8 +35,10 @@ import {
 } from '../lib/types.ts';
 import { useStore } from '../store.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
+import { ExerciseRecords } from './ExerciseRecords.tsx';
 import { Icon } from './Icon.tsx';
 import { Overlay } from './Overlay.tsx';
+import { Sparkline } from './Sparkline.tsx';
 
 type Draft = Omit<Exercise, 'id'> & { id: string | null };
 
@@ -40,6 +59,15 @@ function blankDraft(): Draft {
   };
 }
 
+/** 一覧の絞り込み。記録の有無だけで、部位や負荷では絞らない（左の見出しで足りる）。 */
+type Filter = 'all' | 'recorded' | 'untouched';
+
+const FILTERS: readonly { key: Filter; label: string }[] = [
+  { key: 'all', label: 'すべて' },
+  { key: 'recorded', label: '記録あり' },
+  { key: 'untouched', label: '記録なし' },
+];
+
 type Props = {
   startNew: boolean;
   onStartNewHandled: () => void;
@@ -49,6 +77,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
   const { exercises, sessions, upsertExercise, removeExercise, mergeExercise } = useStore();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [filter, setFilter] = useState<Filter>('all');
   const [message, setMessage] = useState<string | null>(null);
   /*
    * まとめ先の種目 id。null は「まとめる操作を開いていない」、'' は「開いたがまだ選んでいない」。
@@ -58,10 +87,22 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
    */
   const [mergeTo, setMergeTo] = useState<string | null>(null);
   const [confirmMerge, setConfirmMerge] = useState(false);
+  /*
+   * シートの面。設定（編集できる項目）と記録（推移と履歴）。
+   *
+   * 開くたびに「設定」へ戻す。記録を見たまま別の種目を開くと、前の種目の
+   * 記録面が一瞬出て、どの種目を開いたのか分からなくなるため。
+   */
+  const [sheetTab, setSheetTab] = useState<'settings' | 'records'>('settings');
+
+  const openDraft = (next: Draft) => {
+    setDraft(next);
+    setSheetTab('settings');
+  };
 
   useEffect(() => {
     if (!startNew) return;
-    setDraft(blankDraft());
+    openDraft(blankDraft());
     onStartNewHandled();
   }, [startNew, onStartNewHandled]);
 
@@ -69,7 +110,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
     if (!draft) return;
     const name = draft.name.trim();
     if (name === '') return setMessage('種目名を入れる');
-    if (draft.repMin > draft.repMax) return setMessage('レップの目安の下限が上限を超えている');
+    if (draft.repMin > draft.repMax) return setMessage('回数の目安の下限が上限を超えている');
     if (draft.increment <= 0) return setMessage('重量の刻みは 0 より大きくする');
     upsertExercise({
       ...draft,
@@ -101,20 +142,104 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
   };
 
   const last = useMemo(() => lastPerformed(sessions), [sessions]);
-  const shown = useMemo(
+  /** ✓ の付いたセットが 1 度でもある種目。絞り込みと件数の両方に使う。 */
+  const recorded = useMemo(() => recordedExerciseIds(sessions), [sessions]);
+
+  /** 非表示の扱いだけを済ませた一覧。絞り込みの件数はここを母数にする。 */
+  const visible = useMemo(
     () => byRecentUse(exercises.filter((e) => showArchived || !e.archived), last),
     [exercises, showArchived, last],
   );
+  const counts = useMemo(
+    () => ({
+      all: visible.length,
+      recorded: visible.filter((e) => recorded.has(e.id)).length,
+      untouched: visible.filter((e) => !recorded.has(e.id)).length,
+    }),
+    [visible, recorded],
+  );
+  const shown = useMemo(
+    () =>
+      filter === 'all'
+        ? visible
+        : visible.filter((e) => (filter === 'recorded' ? recorded.has(e.id) : !recorded.has(e.id))),
+    [visible, filter, recorded],
+  );
+
+  /*
+   * 行の右に添える推移。到達点の並びと、直近が自己ベストかどうか。
+   *
+   * 2 日ぶん無い種目は線にならないので持たない（行には何も出ない）。
+   * exerciseHistory は sortedSessions のメモ化に乗るので、種目の数だけ回しても
+   * 並べ替えは 1 回で済む。
+   */
+  const trends = useMemo(() => {
+    const map = new Map<string, { values: number[]; atBest: boolean }>();
+    for (const e of exercises) {
+      const series = bestSeries(e, exerciseHistory(sessions, e.id));
+      if (series.length < 2) continue;
+      const values = series.map((p) => p.best);
+      map.set(e.id, { values, atBest: values.at(-1)! >= Math.max(...values) });
+    }
+    return map;
+  }, [exercises, sessions]);
+
+  /*
+   * 通算。**これまでその種目をどれだけやったか。**
+   *
+   * 一覧に出しているのがこれまで設定（目安の回数とセット数）だけだったので、
+   * どの種目をどれだけ続けてきたのかが、開くまで分からなかった。通算は伸び悩んでも
+   * 必ず増える数なので、一覧を「やってきたものの棚」として読めるようにする。
+   * 1 度もやっていない種目には出さない（0 を並べても意味を持たない）。
+   */
+  const totals = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof exerciseTotals>>();
+    for (const e of exercises) {
+      const t = exerciseTotals(exerciseHistory(sessions, e.id));
+      if (t.sets > 0) map.set(e.id, t);
+    }
+    return map;
+  }, [exercises, sessions]);
 
   return (
     <>
       <header className="view-head">
         <h1 className="view-title">種目</h1>
-        <button type="button" className="ghost small with-icon" onClick={() => setDraft(blankDraft())}>
+        <button type="button" className="ghost small with-icon" onClick={() => openDraft(blankDraft())}>
           <Icon name="plus" />
           追加
         </button>
       </header>
+
+      {/*
+        絞り込み。件数を添えてあるので、押す前にどれだけ残るかが分かる。
+        1 つも無い選択肢は押せない——押しても何も出ない札を残さない。
+      */}
+      <div className="segmented" role="group" aria-label="一覧の絞り込み">
+        {FILTERS.map((f) => (
+          <button
+            type="button"
+            key={f.key}
+            className={filter === f.key ? 'is-active' : ''}
+            aria-pressed={filter === f.key}
+            disabled={counts[f.key] === 0 && filter !== f.key}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+            <span className="count">{counts[f.key]}</span>
+          </button>
+        ))}
+      </div>
+
+      {shown.length === 0 ? (
+        <p className="empty">
+          {filter === 'recorded'
+            ? 'まだ記録のある種目がない。「今日」から始めると、ここに並ぶ。'
+            : filter === 'untouched'
+              ? '並んでいる種目は全部やったことがある。'
+              : '種目がない。右上の「追加」から作る。'}
+        </p>
+      ) : null}
 
       {MUSCLE_GROUP_KEYS.map((key) => {
         const items = shown.filter((e) => e.group === key);
@@ -124,19 +249,37 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
             {/* 記号は名前が出ない場所（種目カードの見出し）専用。ここは文字があるので置かない */}
             <h2 className="section-title">{MUSCLE_GROUPS[key].label}</h2>
             <ul className="ex-list">
-              {items.map((e) => (
-                <li key={e.id}>
-                  <button type="button" className="ex-item" onClick={() => setDraft({ ...e, id: e.id })}>
-                    <span className="ex-name">
-                      {e.name}
-                      {e.archived ? <span className="chip subtle">非表示</span> : null}
-                    </span>
-                    <span className="muted">
-                      {LOAD_MODES[e.loadMode].label} · {e.repMin}〜{e.repMax}レップ × {e.sets}セット
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {items.map((e) => {
+                const trend = trends.get(e.id);
+                const total = totals.get(e.id);
+                return (
+                  <li key={e.id}>
+                    <button type="button" className="ex-item" onClick={() => openDraft({ ...e, id: e.id })}>
+                      <span className="ex-text">
+                        <span className="ex-name">
+                          {e.name}
+                          {e.archived ? <span className="chip subtle">非表示</span> : null}
+                        </span>
+                        <span className="muted">
+                          {LOAD_MODES[e.loadMode].label} · {e.repMin}〜{e.repMax}回 × {e.sets}セット
+                        </span>
+                        {/*
+                          通算。設定（上の行）と混ぜず、数字だけの行として下に置く。
+                          「目安」と「やった量」は別のものなので、同じ行に並べると読み違える。
+                        */}
+                        {total ? (
+                          <span className="ex-totals">
+                            通算 <strong>{total.days}</strong> 日 · <strong>{total.sets}</strong> セット ·{' '}
+                            <strong>{total.reps.toLocaleString('ja-JP')}</strong> 回
+                          </span>
+                        ) : null}
+                      </span>
+                      {/* 到達点の推移。形だけを見せる（数字は開いた先の記録の面にある） */}
+                      {trend ? <Sparkline values={trend.values} atBest={trend.atBest} /> : null}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         );
@@ -156,6 +299,44 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                   <Icon name="close" />
                 </button>
               </header>
+
+              {/*
+                設定と記録の面。新しい種目にはまだ記録が無いので、面を分けずに設定だけ出す。
+                一覧のスパークラインを押した先がこの「記録」——小さい線で形だけ見せて、
+                数字と予想はここで読む。
+              */}
+              {draft.id !== null ? (
+                <div className="sheet-tabs" role="tablist" aria-label="種目の面">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sheetTab === 'settings'}
+                    className={`sheet-tab ${sheetTab === 'settings' ? 'is-active' : ''}`}
+                    onClick={() => setSheetTab('settings')}
+                  >
+                    設定
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sheetTab === 'records'}
+                    className={`sheet-tab ${sheetTab === 'records' ? 'is-active' : ''}`}
+                    onClick={() => setSheetTab('records')}
+                  >
+                    記録
+                  </button>
+                </div>
+              ) : null}
+
+              {sheetTab === 'records' && draft.id !== null ? (
+                <div className="sheet-body">
+                  {(() => {
+                    /* 記録は保存済みの実体で引く。編集途中の名前や設定は記録に効かない */
+                    const saved = exercises.find((e) => e.id === draft.id);
+                    return saved ? <ExerciseRecords exercise={saved} /> : null;
+                  })()}
+                </div>
+              ) : (
               <div className="sheet-body form">
                 <label>
                   <span>種目名</span>
@@ -205,7 +386,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                 </label>
                 <div className="pair">
                   <label>
-                    <span>レップの目安 下限</span>
+                    <span>回数の目安 下限</span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -214,7 +395,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                     />
                   </label>
                   <label>
-                    <span>レップの目安 上限</span>
+                    <span>回数の目安 上限</span>
                     <input
                       type="number"
                       inputMode="numeric"
@@ -244,18 +425,13 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                     />
                   </label>
                 </div>
-                <p className="hint">
-                  {`初めてこの種目をやる日は ${draft.repMin} レップ × ${draft.sets} セットの空欄が並ぶ。2 回目以降は前回と同じ数字が入るので、この目安は使わない。`}
-                  {draft.loadMode === 'assist' ? ' 補助は下げるほど負荷が上がる。' : ''}
-                  {/*
-                    自重を選んだときだけ、記録の付け方を書く。マシンのレッグレイズや
-                    バックエクステンションのように「重さを設定しない種目」で、
-                    重量の欄に何を入れるのか迷われたため。
-                  */}
-                  {draft.loadMode === 'bodyweight'
-                    ? ' マシンのレッグレイズやバックエクステンションもこれ。重さの欄は空欄のままでよく、ベルトやプレートで加重した日だけ数字を入れる。伸びはレップで測る。'
-                    : ''}
-                  {` レップの目安と刻みはサイクルの表示に使う——上限に全セット届くと種目カードに「卒業」と出て、刻みぶん先の次の負荷を提示する。入力欄には入れない（上げるかどうか、いつ上げるかは自分で決める）。`}
+                {/*
+                  回数の目安と刻みが何に効くのかを 1 行だけ。目安は入力欄には
+                  流し込まない（目標を出さない、の原則）ので、それをここで言っておく。
+                */}
+                <p className="footnote">
+                  回数の目安と刻みは種目カードのサイクル表示に使う——上限に全セット届くと「卒業」と出て、
+                  刻みぶん先の次の負荷を提示する。入力欄には入れない（上げるかどうかは自分で決める）。
                 </p>
                 {/*
                   記録を別の種目にまとめる。
@@ -288,7 +464,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                         </select>
                       </label>
                       <p className="footnote">
-                        この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・レップの目安・
+                        この種目の記録がまとめ先に移り、この種目は非表示になる。設定（名前・回数の目安・
                         コツ）は移らないので、残したいものはまとめ先の側で直す。
                       </p>
                       <div className="btn-row">
@@ -313,6 +489,9 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
 
                 {message ? <p className="gate-error">{message}</p> : null}
               </div>
+              )}
+
+              {sheetTab === 'records' && draft.id !== null ? null : (
               <div className="sheet-actions">
                 {draft.id !== null ? (
                   <button
@@ -331,6 +510,7 @@ export function ExercisesView({ startNew, onStartNewHandled }: Props) {
                   保存
                 </button>
               </div>
+              )}
             </div>
           </div>
         </Overlay>

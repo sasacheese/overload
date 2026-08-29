@@ -111,35 +111,35 @@ test('cycleOf: 上限到達セット数がサイクル最多を更新したら r
 
 test('cycleLine: 目標ではなく現在地。0 到達の日は分数を出さない（未達の表示を作らない）', () => {
   const none = cycleOf(bench, history([[[60, 8], [60, 8], [60, 8]]]))!;
-  assert.equal(cycleLine(bench, none), '60kgで 1 回目');
+  assert.equal(cycleLine(bench, none), '60kgで 1 セッション目');
 
   const some = cycleOf(bench, history([
     [[60, 10], [60, 8], [60, 8]],
     [[60, 8], [60, 8], [60, 8]],
   ]))!;
-  assert.equal(cycleLine(bench, some), '60kgで 2 回目 · 上限 10 レップ到達 1/3 セット — この負荷で最多');
+  assert.equal(cycleLine(bench, some), '60kgで 2 セッション目 · 上限の 10 回に 1/3 セット到達 — この負荷で最多');
 });
 
 test('cycleLine: 卒業は次の負荷まで言う。前の日の卒業は「前回卒業」', () => {
   const c = cycleOf(bench, history([[[60, 10], [60, 10], [60, 10]]]))!;
-  assert.equal(cycleLine(bench, c), '卒業 — 全 3 セットで上限 10 レップ到達。次は 62.5kg');
+  assert.equal(cycleLine(bench, c), '卒業 — 全 3 セットで上限の 10 回に到達。次は 62.5kg');
   assert.equal(
     cycleLine(bench, c, isoDate('2026-08-29')),
-    '前回卒業 — 全 3 セットで上限 10 レップ到達。次は 62.5kg',
+    '前回卒業 — 全 3 セットで上限の 10 回に到達。次は 62.5kg',
   );
 });
 
 test('cycleLine: アシストの卒業。補助 0 は「補助なし」と言う', () => {
   const some = cycleOf(chin, history([[[20, 10], [20, 10], [20, 10]]]))!;
-  assert.equal(cycleLine(chin, some), '卒業 — 全 3 セットで上限 10 レップ到達。次は 補助 17.5kg');
+  assert.equal(cycleLine(chin, some), '卒業 — 全 3 セットで上限の 10 回に到達。次は 補助 17.5kg');
 
   const zero = cycleOf(chin, history([[[2, 10], [2, 10], [2, 10]]]))!;
-  assert.equal(cycleLine(chin, zero), '卒業 — 全 3 セットで上限 10 レップ到達。次は補助なしでいける');
+  assert.equal(cycleLine(chin, zero), '卒業 — 全 3 セットで上限の 10 回に到達。次は補助なしでいける');
 });
 
 test('cycleLine: 自重の卒業は加重か難度を言う', () => {
   const c = cycleOf(dips, history([[[0, 10], [0, 10], [0, 10]]]))!;
-  assert.equal(cycleLine(dips, c), '卒業 — 全 3 セットで上限 10 レップ到達。加重するか、難度を上げた種目へ');
+  assert.equal(cycleLine(dips, c), '卒業 — 全 3 セットで上限の 10 回に到達。加重するか、難度を上げた種目へ');
 });
 
 test('stallOf: 合計レップが伸びない回が続いたら停滞。同じ数字の繰り返しも停滞', () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BodyWeightView } from './components/BodyWeightView.tsx';
+import { TrendsView } from './components/TrendsView.tsx';
 import { CalendarView } from './components/CalendarView.tsx';
 import { ExercisesView } from './components/ExercisesView.tsx';
 import { Gate } from './components/Gate.tsx';
@@ -20,7 +20,7 @@ import { SyncProvider } from './sync.tsx';
 const TABS = [
   { key: 'today', name: '今日', icon: 'barbell' },
   { key: 'calendar', name: '記録', icon: 'calendar' },
-  { key: 'weight', name: '体重', icon: 'trend' },
+  { key: 'trends', name: '推移', icon: 'trend' },
   { key: 'exercises', name: '種目', icon: 'list' },
   { key: 'settings', name: '設定', icon: 'settings' },
 ] as const satisfies readonly { key: string; name: string; icon: IconName }[];
@@ -308,8 +308,8 @@ function Shell({ demo = false, onExitDemo }: { demo?: boolean; onExitDemo?: () =
             }}
           />
         );
-      case 'weight':
-        return <BodyWeightView today={today} />;
+      case 'trends':
+        return <TrendsView today={today} />;
       case 'exercises':
         return <ExercisesView startNew={startNewExercise} onStartNewHandled={() => setStartNewExercise(false)} />;
       case 'settings':

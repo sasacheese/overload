@@ -12,10 +12,15 @@
  * −/+ ボタンは `showSteps` で消せる。重量はマシンごとに刻みがばらばらで、
  * 決まった量ずつ動かすボタンが役に立たないため、重量欄では出していない。
  * レップは必ず 1 ずつなのでボタンが効く。
+ *
+ * `dial` を渡すと左端に小さな速度計が出て、弧をなぞって合わせる入れかた（ArcDial）が
+ * 開く。直打ちの置き換えではなく並走——どちらで入れても同じ値に落ちる。
  */
 
 import { useEffect, useState } from 'react';
 import { format, round } from '../lib/progression.ts';
+import { ArcDial } from './ArcDial.tsx';
+import { Icon } from './Icon.tsx';
 
 /** 値が入っていない欄に出す字。0 という数字を置かないための代役。 */
 const NOTHING = '—';
@@ -31,6 +36,8 @@ type Props = {
   zeroLabel?: string | undefined;
   /** −/+ ボタンを出すか。既定は出す。 */
   showSteps?: boolean | undefined;
+  /** 弧のダイヤル（ArcDial）で合わせる入り口を出すか。既定は出さない。 */
+  dial?: boolean | undefined;
   /**
    * 打ち終えて次へ送るときの行き先。
    *
@@ -51,10 +58,33 @@ export function Stepper({
   label,
   zeroLabel,
   showSteps = true,
+  dial = false,
   onNext,
   onChange,
 }: Props) {
   const [draft, setDraft] = useState<string | null>(null);
+  /**
+   * ダイヤルの弧の右端。null なら閉じている。
+   *
+   * 開く瞬間に決めて、開いているあいだは固定する。値に追随させると、なぞって
+   * 値が動くたびに縮尺が変わり、指の下で目盛りが滑る。
+   */
+  const [dialMax, setDialMax] = useState<number | null>(null);
+
+  /**
+   * 弧に割り当てる範囲。いまの値の 1.5 倍か、20 刻みぶんの広いほう。
+   *
+   * 絶対の上限まで割り当てると 1 目盛りが粗くなりすぎ、狭すぎると
+   * 「今日は上げたい」の行き先が弧の外になる。きりのいい数字（5 か 10 の倍数）へ
+   * 丸め上げ、さらに刻みで割り切れる位置に載せて、右端まで目盛りが吸い付くようにする。
+   */
+  const dialCeiling = (): number => {
+    const grid = step >= 2 ? 10 : 5;
+    const base = Math.max(value * 1.5, min + step * 20, grid);
+    const nice = Math.ceil(base / grid) * grid;
+    const ceiling = round(Math.ceil(nice / step) * step);
+    return max === undefined ? ceiling : Math.min(max, ceiling);
+  };
 
   // 外から値が変わったら（前回の流し込みなど）編集中の下書きを捨てる
   useEffect(() => {
@@ -116,7 +146,17 @@ export function Stepper({
   };
 
   return (
-    <div className={`stepper ${showSteps ? '' : 'is-plain'} ${blank ? 'is-blank' : ''}`}>
+    <div className={`stepper ${showSteps ? '' : 'is-plain'} ${dial ? 'has-dial' : ''} ${blank ? 'is-blank' : ''}`}>
+      {dial ? (
+        <button
+          type="button"
+          className="stepper-dial"
+          aria-label={`${label}をダイヤルで合わせる`}
+          onClick={() => setDialMax(dialCeiling())}
+        >
+          <Icon name="dial" />
+        </button>
+      ) : null}
       {showSteps ? (
         <button
           type="button"
@@ -168,6 +208,20 @@ export function Stepper({
         >
           ＋
         </button>
+      ) : null}
+
+      {dialMax !== null ? (
+        <ArcDial
+          value={value}
+          step={step}
+          min={min}
+          max={dialMax}
+          label={label}
+          suffix={suffix}
+          zeroLabel={zeroLabel}
+          onChange={onChange}
+          onClose={() => setDialMax(null)}
+        />
       ) : null}
     </div>
   );
