@@ -4357,13 +4357,95 @@ button {
   }
 }
 
+/* ── 卒業の祝福 ─────────────────────────────────
+ * 記録更新と同じカードの器（金の格）に、バーベルの線画を足したもの。
+ * 動くのは両端の 1 枚だけ——降りてくれば「増やせる」、浮き上がれば「外せる」。
+ * 何が変わるのかを、文を読む前に絵で言う。 */
+
+.grad-scene {
+  /* span なので明示する。inline のままだと width が効かず、絵が潰れる */
+  display: block;
+  width: 14rem;
+  max-width: 100%;
+  margin: 0.75rem 0 0.375rem;
+  color: var(--gold);
+}
+
+.grad-scene svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* 降ってくるプレートが箱の外から入ってくる */
+  overflow: visible;
+}
+
+/* 増える 1 枚。上から降りてきて据わる（待ちのあいだは backwards で浮いている） */
+.graduation-add .grad-new {
+  animation: grad-drop 620ms var(--spring) 900ms backwards;
+}
+
+@keyframes grad-drop {
+  0% {
+    transform: translateY(-2.25rem);
+    opacity: 0;
+  }
+  55% {
+    opacity: 1;
+  }
+}
+
+/*
+ * 外れる 1 枚（アシスト）。浮き上がって消える。
+ * 素の状態（アニメーションが動かない環境）では最初から無い＝外れたあとの絵になる。
+ */
+.graduation-remove .grad-new {
+  opacity: 0;
+  animation: grad-lift 620ms var(--ease-out) 900ms backwards;
+}
+
+@keyframes grad-lift {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-2.25rem);
+    opacity: 0;
+  }
+}
+
+/* 自重のまま卒業。次の 1 枚は点線の輪郭で置いて、「ここに足せる」ことだけ示す */
+.graduation-suggest .grad-new {
+  stroke-dasharray: 5 5;
+  opacity: 0.7;
+  animation: grad-hint 1600ms ease-in-out 900ms infinite;
+}
+
+@keyframes grad-hint {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* 数字で進めない卒業（自重のまま）に添える 1 行。shift の代わりの場所 */
+.grad-next {
+  font-size: var(--fs-sm);
+  color: var(--fg-dim);
+  margin-top: 0.375rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .celebrate,
   .celebrate-card,
   .celebrate-rays span,
   .celebrate-shine,
   .celebrate-sparkles span,
-  .celebrate-timer {
+  .celebrate-timer,
+  .grad-new {
     animation: none;
   }
   .celebrate-rays,

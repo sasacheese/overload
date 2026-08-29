@@ -23,12 +23,14 @@ import {
   sortedSessions,
 } from '../lib/query.ts';
 
+import { cycleOf, type Cycle } from '../lib/cycle.ts';
 import { recordFeedback } from '../lib/haptics.ts';
 import { findRecords, recordTier, type Achievement, type RecordKind, type RecordTier } from '../lib/records.ts';
 import { startedAt, type Exercise, type IsoDate, type Session, type SessionEntry } from '../lib/types.ts';
 import { canFinish, wrapUp } from '../lib/wrapup.ts';
 import { useSession, useStore } from '../store.tsx';
 import { Celebration } from './Celebration.tsx';
+import { Graduation } from './Graduation.tsx';
 import { Wrapup } from './Wrapup.tsx';
 import { EmptyDay, type LastDay } from './EmptyDay.tsx';
 import { ExerciseCard } from './ExerciseCard.tsx';
@@ -176,6 +178,10 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     initialFolded(date, session.entries, wide),
   );
   const [celebration, setCelebration] = useState<{ achievements: Achievement[]; exerciseName: string } | null>(null);
+  /** 卒業の祝福。記録更新のカードより優先して 1 枚だけ出す。 */
+  const [graduation, setGraduation] = useState<{ exercise: Exercise; cycle: Cycle; records: Achievement[] } | null>(
+    null,
+  );
   /** 締めの画面。fresh は「いま押して締めた」——あとから見直したときは光を出さない。 */
   const [wrap, setWrap] = useState<{ fresh: boolean } | null>(null);
 
@@ -333,6 +339,22 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     const fresh = records.filter((r) => !shown.has(key(r.kind)));
 
     /*
+     * 卒業の判定。この ✓ を含めた履歴でサイクルを見る。
+     *
+     * 記録更新と別に見ているのは、卒業が「過去との比較」ではなく「レップ範囲を
+     * 登り切ったか」だから——2 週目に同じ数字で卒業し直しても記録は 1 つも
+     * 動かないが、卒業は卒業。祝福と同じく 1 日 1 回だけ（✓ を外して入れ直しても
+     * 繰り返さない）。
+     */
+    const cycle = cycleOf(exercise, [
+      { date, entry, bodyWeight },
+      ...exerciseHistory(sessions, exercise.id).filter((h) => h.date < date),
+    ]);
+    const gradKey = `${date}:${exercise.id}:graduation`;
+    const graduated = cycle !== null && cycle.graduated && !shown.has(gradKey);
+    if (graduated) shown.add(gradKey);
+
+    /*
      * 出さなかったぶんも「出した」ことにする。
      *
      * 出さなかったぶん（上限で溢れたもの）も含め、当たった種類を全部覚えておかないと、
@@ -347,6 +369,21 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
       sessionStorage.setItem(SHOWN_KEY, JSON.stringify([...shown]));
     } catch {
       // 覚えられなければ同じ祝福がもう一度出るだけ
+    }
+
+    /*
+     * 卒業と記録更新が同じ ✓ で重なったら、卒業のカード 1 枚にまとめる
+     * （記録更新は卒業のカードの中に小さく添える）。カードを 2 枚続けて出すと、
+     * 後の 1 枚が前の 1 枚を消して、どちらも読めなくなる。
+     * サイクルを登り切った合図なので、✓ の破裂も常に最上位（legend）。
+     */
+    if (graduated && cycle) {
+      clearTimeout(celebrationTimer.current);
+      celebrationTimer.current = window.setTimeout(() => {
+        recordFeedback();
+        setGraduation({ exercise, cycle, records: fresh });
+      }, CELEBRATE_DELAY_MS);
+      return 'legend';
     }
 
     if (fresh.length === 0) return null;
@@ -613,6 +650,15 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
           achievements={celebration.achievements}
           exerciseName={celebration.exerciseName}
           onClose={() => setCelebration(null)}
+        />
+      ) : null}
+
+      {graduation ? (
+        <Graduation
+          exercise={graduation.exercise}
+          cycle={graduation.cycle}
+          records={graduation.records}
+          onClose={() => setGraduation(null)}
         />
       ) : null}
 

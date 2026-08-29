@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { STALL_SESSIONS, cycleLine, cycleOf, stallOf } from './cycle.ts';
+import { STALL_SESSIONS, cycleLine, cycleOf, graduationShift, stallOf } from './cycle.ts';
 import type { ExerciseHistory } from './progression.ts';
 import { exerciseId, isoDate, type Exercise } from './types.ts';
 
@@ -140,6 +140,25 @@ test('cycleLine: アシストの卒業。補助 0 は「補助なし」と言う
 test('cycleLine: 自重の卒業は加重か難度を言う', () => {
   const c = cycleOf(dips, history([[[0, 10], [0, 10], [0, 10]]]))!;
   assert.equal(cycleLine(dips, c), '卒業 — 全 3 セットで上限の 10 回に到達。加重するか、難度を上げた種目へ');
+});
+
+test('graduationShift: どこから → どこへ。記録更新の previous → now と同じ形', () => {
+  const grad = cycleOf(bench, history([[[60, 10], [60, 10], [60, 10]]]))!;
+  assert.deepEqual(graduationShift(bench, grad), { from: '60kg', to: '62.5kg', gain: '+2.5kg' });
+});
+
+test('graduationShift: アシストは減った量を「補助 −」で言い、補助 0 は「補助なし」', () => {
+  const some = cycleOf(chin, history([[[20, 10], [20, 10], [20, 10]]]))!;
+  assert.deepEqual(graduationShift(chin, some), { from: '補助 20kg', to: '補助 17.5kg', gain: '補助 −2.5kg' });
+
+  // 刻みが残りの補助より大きい日。次は 0 で止まるので、減る量も実際の 2kg
+  const zero = cycleOf(chin, history([[[2, 10], [2, 10], [2, 10]]]))!;
+  assert.deepEqual(graduationShift(chin, zero), { from: '補助 2kg', to: '補助なし', gain: '補助 −2kg' });
+});
+
+test('graduationShift: 自重のまま卒業したら to は無い（加重か難度で進む）', () => {
+  const c = cycleOf(dips, history([[[0, 10], [0, 10], [0, 10]]]))!;
+  assert.deepEqual(graduationShift(dips, c), { from: '自重', to: null, gain: null });
 });
 
 test('stallOf: 合計レップが伸びない回が続いたら停滞。同じ数字の繰り返しも停滞', () => {

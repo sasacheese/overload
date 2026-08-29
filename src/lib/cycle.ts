@@ -26,7 +26,7 @@
  * 次の段階として言う。アシストは補助を刻みぶん**減らす**方向に進む。
  */
 
-import { loadRank, loadWord, round, type ExerciseHistory } from './progression.ts';
+import { format, loadRank, loadWord, round, type ExerciseHistory } from './progression.ts';
 import { doneSets, type Exercise, type IsoDate, type SetRecord } from './types.ts';
 
 export type Cycle = {
@@ -128,6 +128,35 @@ export function cycleLine(ex: Exercise, c: Cycle, viewDate: IsoDate = c.latestDa
   if (c.reached === 0) return head;
   const range = `上限の ${ex.repMax} 回に ${c.reached}/${c.targetSets} セット到達`;
   return c.reachedPeak ? `${head} · ${range} — この負荷で最多` : `${head} · ${range}`;
+}
+
+export type GraduationShift = {
+  /** 卒業した負荷。 */
+  from: string;
+  /** 次の負荷。数字で進めない（自重のまま卒業など）ときは null。 */
+  to: string | null;
+  /** 動く量（`+2.5kg` / `補助 −2.5kg`）。to が無ければ null。 */
+  gain: string | null;
+};
+
+/**
+ * 卒業の「どこから → どこへ」。祝福の画面が横に並べて出すための素材。
+ *
+ * 記録更新の祝福（records.ts の previous → now）と同じ形にしてある。
+ * アシストは減った量を「補助 −2.5kg」と言う——+ を付けると増えたように読める。
+ * 補助 0 は「補助なし」。数字の 0kg より、到達した状態の名前のほうが伝わる。
+ */
+export function graduationShift(ex: Exercise, c: Cycle): GraduationShift {
+  const from = loadWord(ex, c.weight);
+  if (c.next === null) return { from, to: null, gain: null };
+  if (ex.loadMode === 'assist') {
+    return {
+      from,
+      to: c.next === 0 ? '補助なし' : loadWord(ex, c.next),
+      gain: `補助 −${format(round(c.weight - c.next))}kg`,
+    };
+  }
+  return { from, to: loadWord(ex, c.next), gain: `+${format(round(c.next - c.weight))}kg` };
 }
 
 /** 停滞と見なすまでの「伸びが無い」連続回数。週 2 回やる種目なら約 2 週間ぶん。 */
