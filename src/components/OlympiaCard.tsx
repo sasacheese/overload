@@ -77,27 +77,36 @@ export function OlympiaCard({ number }: { number: number }) {
         </span>
       </header>
 
-      <div className="olympia-figure">
-        <Pose pose={champion.pose} />
-      </div>
-
-      <strong className="olympia-name">{champion.name}</strong>
-      <span className="olympia-reign">
-        {champion.reign} · {champion.wins} 回
-      </span>
-      <span className="olympia-note">{champion.note}</span>
-
       {/*
-        名言。原語のまま + 日本語訳。本人の言葉でなければ著者名を添える
-        （出典の確かな短い言葉しか載せない。lib/olympia.ts の冒頭に方針）。
+        本文。ヘッダーとフッターに挟まれた領域を 1 つの束として中央に置く。
+        裏面の高さは表（祝福）で決まるので、日によって大きく変わる——余った縦を
+        どこか 1 箇所（以前は絵と名前の間）に集めると間延びして見える。
+        絵はカードの高さに比例して育ち（上限つき）、それでも余ったぶんは
+        束の上下に等分される。
       */}
-      <p className="olympia-quote">
-        <span className="olympia-quote-original">“{champion.flavor.original}”</span>
-        <span className="olympia-quote-ja">
-          {champion.flavor.ja}
-          {champion.flavor.by !== null ? <span className="olympia-quote-by"> — {champion.flavor.by}</span> : null}
+      <div className="olympia-body">
+        <div className="olympia-figure">
+          <Pose pose={champion.pose} />
+        </div>
+
+        <strong className="olympia-name">{champion.name}</strong>
+        <span className="olympia-reign">
+          {champion.reign} · {champion.wins} 回
         </span>
-      </p>
+        <span className="olympia-note">{champion.note}</span>
+
+        {/*
+          名言。原語のまま + 日本語訳。本人の言葉でなければ著者名を添える
+          （出典の確かな短い言葉しか載せない。lib/olympia.ts の冒頭に方針）。
+        */}
+        <p className="olympia-quote">
+          <span className="olympia-quote-original">“{champion.flavor.original}”</span>
+          <span className="olympia-quote-ja">
+            {champion.flavor.ja}
+            {champion.flavor.by !== null ? <span className="olympia-quote-by"> — {champion.flavor.by}</span> : null}
+          </span>
+        </p>
+      </div>
 
       <footer className="olympia-foot">
         <span>
