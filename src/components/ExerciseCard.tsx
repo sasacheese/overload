@@ -18,6 +18,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { relativeLabel } from '../lib/calendar.ts';
+import { cycleLine, cycleOf, stallOf } from '../lib/cycle.ts';
 import { forecast, shortfall, shortfallLabel } from '../lib/forecast.ts';
 import { journeyOf } from '../lib/milestones.ts';
 import { tapFeedback } from '../lib/haptics.ts';
@@ -27,6 +28,7 @@ import {
   format,
   formatEstimate,
   loadOf,
+  loadWord,
   maxGainPerDay,
   metrics,
   sessionsSinceBest,
@@ -216,6 +218,14 @@ export function ExerciseCard({
         .map((h) => ({ ...h, order: orderInDay(sessionOn(sessions, h.date), exercise.id) })),
     [history, date, sessions, exercise.id],
   );
+  /*
+   * サイクルの現在地。見ている日までの記録で出す（今日のセットに ✓ を付けると
+   * その場で進む）。まだ何もやっていない朝は前回までの状態——前回卒業していれば
+   * 「次は 62.5kg」が、重量を上げる日だと分かる形でここに出る。
+   */
+  const upToDate = useMemo(() => history.filter((h) => h.date <= date), [history, date]);
+  const cycle = useMemo(() => cycleOf(exercise, upToDate), [exercise, upToDate]);
+  const stall = useMemo(() => stallOf(exercise, upToDate), [exercise, upToDate]);
   const series = useMemo(() => bestSeries(exercise, history), [exercise, history]);
   /*
    * 初日から直近まで。これから担ぐ直前に「あの日の自分」と並べる。
@@ -420,6 +430,19 @@ export function ExerciseCard({
             <p className="footnote">自重のままなら重さは空欄のまま ✓。ベルトやプレートで加重した日だけ +kg に入れる。</p>
           ) : null}
 
+          {/*
+            サイクルの現在地。目標ではない——「この負荷で n 回目・上限到達 k セット」
+            という事実だけで、今日届くべき数字は出さない。卒業（全セット上限到達）は
+            成功したときにしか出ない判定なので、達成できなかった日には何も出ない。
+            次の負荷は提示するだけで、入力欄には入れない。
+          */}
+          {cycle ? (
+            <p className={`cycle-line with-icon ${cycle.graduated ? 'is-grad' : ''}`}>
+              <Icon name={cycle.graduated ? 'flag' : 'cycle'} />
+              {cycleLine(exercise, cycle, date)}
+            </p>
+          ) : null}
+
           <ol className="sets">
             {entry.sets.map((set, i) => {
               const delta = set.done ? compareToPrev(exercise, set, prevSets[i]) : null;
@@ -445,8 +468,6 @@ export function ExerciseCard({
                       */
                       suffix={exercise.loadMode === 'bodyweight' ? '+kg' : 'kg'}
                       zeroLabel={exercise.loadMode === 'bodyweight' ? '自重' : undefined}
-                      /* マシンごとに刻みが違うので、決まった量ずつ動かすボタンは役に立たない */
-                      showSteps={false}
                       dial
                       onNext={focusNextField}
                       onChange={(weight) => patchSet(i, { weight })}
@@ -525,8 +546,20 @@ export function ExerciseCard({
             ) : null}
           </div>
 
-          {/* 停滞は開かなくても見えるところに出す。開くまで気づけないと意味がない */}
-          {stale >= 3 ? (
+          {/*
+            停滞は開かなくても見えるところに出す。開くまで気づけないと意味がない。
+
+            サイクル基準の停滞（同じ負荷で合計レップが伸びない）が出ているときは
+            そちらを優先する——「何を変えるか」の候補まで言えるため。出ていなければ
+            従来の自己ベスト基準（e1rm が動かない）に落ちる。
+          */}
+          {stall ? (
+            <p className="hint">
+              {loadWord(exercise, stall.weight)}のまま {stall.sessions} セッション、直近 {stall.since} 回は
+              合計の回数が伸びていない。回数の目安（いまは {exercise.repMin}〜{exercise.repMax}）か
+              セット数を変えるか、似た種目に替える——変えるのは 1 つだけにすると、何が効いたか分かる。
+            </p>
+          ) : stale >= 3 ? (
             <p className="hint">
               自己ベストから {stale} セッション。負荷を 10% ほど落として組み直すか、いつもと違う角度・
               グリップに変えると動き出すことがある。

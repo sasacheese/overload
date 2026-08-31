@@ -196,6 +196,26 @@ test('wrapUp: 更新も伸びも無い日は、続いていることを言う（
   assert.equal(w.praise, '今週 2 回目。');
 });
 
+test('wrapUp: 空いた週から戻った最初の日は、記録更新より復帰を言う', () => {
+  // 8/3 週にやって、8/10 週が丸ごと空き、8/17 週に戻った。しかも重量を上げていて
+  // 記録更新もある——それでも、その日に言うのは戻ったこと
+  const before = session('2026-08-04', [{ id: bench.id, sets: [[60, 8]] }]);
+  const back = session('2026-08-18', [{ id: bench.id, sets: [[62.5, 8]] }]);
+  const w = wrapUp(back, exercises, [before, back]);
+  assert.equal(w.comeback, true);
+  assert.equal(w.praise, '空いた週から、戻ってきた。');
+
+  // 同じ週の 2 回目からは通常どおり（毎回言うと安売りになる）
+  const second = session('2026-08-20', [{ id: bench.id, sets: [[62.5, 8]] }]);
+  const w2 = wrapUp(second, exercises, [before, back, second]);
+  assert.equal(w2.comeback, false);
+
+  // 先週もやっていれば復帰ではない
+  const usual = session('2026-08-11', [{ id: bench.id, sets: [[60, 8]] }]);
+  const w3 = wrapUp(back, exercises, [before, usual, back]);
+  assert.equal(w3.comeback, false);
+});
+
 test('wrapUp: 同じ週の回数を数える（月曜起点）', () => {
   // 2026-08-17 は月曜。その週に 3 日
   const a = session('2026-08-17', [{ id: bench.id, sets: [[60, 8]] }]);

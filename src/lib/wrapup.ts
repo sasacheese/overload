@@ -25,7 +25,7 @@
  * 出てきたものを並べるだけにしてある。
  */
 
-import { weekStart, weekStreak } from './calendar.ts';
+import { isComebackWeek, weekStart, weekStreak } from './calendar.ts';
 import { bodyWeightOn, countedSets, exerciseHistory, sessionGroups, sessionVolume, sortedSessions } from './query.ts';
 import { metrics, setLine } from './progression.ts';
 import { findRecords, sessionVolumeRecord, type Achievement } from './records.ts';
@@ -89,6 +89,14 @@ export type WrapUp = {
   weekCount: number;
   /** 週単位の連続記録。日単位にしないのは、休養日で切れて休むことが罰になるため。 */
   weekStreak: number;
+  /**
+   * 空いた週から戻ってきた最初の日か。
+   *
+   * 定着は「途切れないこと」ではなく「途切れても戻れること」なので、
+   * 連続が切れたあとの最初の 1 回を、切れなかった週と同じかそれ以上に扱う。
+   * その週の 2 回目からは通常どおり（毎回言うと安売りになる）。
+   */
+  comeback: boolean;
   /** 通算のトレーニング日数。 */
   totalDays: number;
   /**
@@ -147,8 +155,11 @@ function entriesOfDay(session: Session, exercises: readonly Exercise[], sessions
   return out;
 }
 
-/** セッション全体の総量の更新。種目に属さないので 1 回だけ見る。 */
-function wholeDayRecord(
+/**
+ * セッション全体の総量の更新。種目に属さないので 1 回だけ見る。
+ * 締め（この下）と、その日のカードの棚（lib/cards.ts）の両方が使う。
+ */
+export function wholeDayRecord(
   session: Session,
   exercises: readonly Exercise[],
   sessions: readonly Session[],
@@ -175,6 +186,9 @@ function wholeDayRecord(
  * ここが空になる経路を作らないため。
  */
 function praiseFor(w: Omit<WrapUp, 'praise'>): string {
+  // 復帰は記録更新より先に言う。空いたあとに戻ってくることが、このアプリの
+  // 定義する定着そのものなので、その日は数字より戻ったことが主役になる
+  if (w.comeback) return '空いた週から、戻ってきた。';
   if (w.progressed >= 2) return `${w.progressed}種目の記録を更新しました`;
   /*
    * 1 種目でも「更新した」と言う。
@@ -244,6 +258,7 @@ export function wrapUp(session: Session, exercises: readonly Exercise[], session
     progressed: entries.filter((e) => e.records.length > 0).length + (whole ? 1 : 0),
     weekCount,
     weekStreak: weekStreak(withToday, session.date),
+    comeback: weekCount === 1 && isComebackWeek(withToday, session.date),
     totalDays: new Set(withToday).size,
     volumeRatio,
   };

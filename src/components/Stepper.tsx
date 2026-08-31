@@ -9,9 +9,9 @@
  * 実際に「毎回 0 を消してから打っている」という使われ方になっていた。いまは 0 の欄は
  * 触る前から `—` で、触れば完全に空になる。打たずに離れれば 0 のまま戻る。
  *
- * −/+ ボタンは `showSteps` で消せる。重量はマシンごとに刻みがばらばらで、
- * 決まった量ずつ動かすボタンが役に立たないため、重量欄では出していない。
- * レップは必ず 1 ずつなのでボタンが効く。
+ * −/+ ボタンは持たない。以前は出していたが使われず、狭い画面では数字の幅を
+ * 食い潰して「15」が「1」に見切れる——読み違いの実害の方が大きかった。
+ * 入れかたは直打ちとダイヤルの 2 本立てで足りている。
  *
  * `dial` を渡すと左端に小さな速度計が出て、弧をなぞって合わせる入れかた（ArcDial）が
  * 開く。直打ちの置き換えではなく並走——どちらで入れても同じ値に落ちる。
@@ -34,8 +34,6 @@ type Props = {
   label: string;
   /** 0 のときに出す字。省くと `—`。自重種目の重量欄などで差し替える。 */
   zeroLabel?: string | undefined;
-  /** −/+ ボタンを出すか。既定は出す。 */
-  showSteps?: boolean | undefined;
   /** 弧のダイヤル（ArcDial）で合わせる入り口を出すか。既定は出さない。 */
   dial?: boolean | undefined;
   /**
@@ -57,7 +55,6 @@ export function Stepper({
   suffix,
   label,
   zeroLabel,
-  showSteps = true,
   dial = false,
   onNext,
   onChange,
@@ -110,26 +107,6 @@ export function Stepper({
   const resting = blank ? (zeroLabel ?? NOTHING) : '';
 
   /**
-   * いま画面に出ている値。打ちかけの文字があればそれを読む。
-   *
-   * −/+ が `value` を直接使うと、打った数字を確定せずにボタンを押したときに
-   * 打つ前の値から動いてしまう（12 と打って ＋ を押すと 13 ではなく 7 になっていた）。
-   * 画面に見えている数字から動くのが期待どおりの挙動。
-   */
-  const current = (): number => {
-    if (draft === null) return value;
-    if (draft.trim() === '') return value;
-    const parsed = Number(draft.replace(/[^\d.]/g, ''));
-    return Number.isFinite(parsed) ? clamp(parsed) : value;
-  };
-
-  /** −/+ を押したときの動き。打ちかけは確定させて捨てる。 */
-  const bump = (delta: number) => {
-    setDraft(null);
-    onChange(clamp(current() + delta));
-  };
-
-  /**
    * 離れたときに確定する。
    *
    * **空のまま離れたら元の値に戻す。** 焦点を当てた時点で空にしているので、
@@ -146,7 +123,7 @@ export function Stepper({
   };
 
   return (
-    <div className={`stepper ${showSteps ? '' : 'is-plain'} ${dial ? 'has-dial' : ''} ${blank ? 'is-blank' : ''}`}>
+    <div className={`stepper ${dial ? 'has-dial' : ''} ${blank ? 'is-blank' : ''}`}>
       {dial ? (
         <button
           type="button"
@@ -155,16 +132,6 @@ export function Stepper({
           onClick={() => setDialMax(dialCeiling())}
         >
           <Icon name="dial" />
-        </button>
-      ) : null}
-      {showSteps ? (
-        <button
-          type="button"
-          className="stepper-btn"
-          aria-label={`${label}を減らす`}
-          onClick={() => bump(-step)}
-        >
-          −
         </button>
       ) : null}
       <label className="stepper-field">
@@ -199,16 +166,6 @@ export function Stepper({
         />
         {suffix ? <span className="stepper-suffix">{suffix}</span> : null}
       </label>
-      {showSteps ? (
-        <button
-          type="button"
-          className="stepper-btn"
-          aria-label={`${label}を増やす`}
-          onClick={() => bump(step)}
-        >
-          ＋
-        </button>
-      ) : null}
 
       {dialMax !== null ? (
         <ArcDial
