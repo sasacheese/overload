@@ -27,6 +27,7 @@ import { cardKey, cardNumber, dayCards, graduationKey, recordKey, type DayCard }
 import { cycleOf, type Cycle } from '../lib/cycle.ts';
 import { recordFeedback } from '../lib/haptics.ts';
 import { findRecords, recordTier, type Achievement, type RecordKind, type RecordTier } from '../lib/records.ts';
+import { suggestToday } from '../lib/suggest.ts';
 import { startedAt, type Exercise, type IsoDate, type Session, type SessionEntry } from '../lib/types.ts';
 import { canFinish, wrapUp } from '../lib/wrapup.ts';
 import { useSession, useStore } from '../store.tsx';
@@ -282,6 +283,18 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
     const found = sortedSessions(sessions).find((s) => s.date < date && countedSets(s) > 0);
     return found ? { date: found.date, groups: sessionGroups(found, exercises) } : null;
   }, [sessions, exercises, date, session.entries.length]);
+
+  /**
+   * 今日のおすすめ。1 種目も並んでいない**今日**にだけ出す。
+   *
+   * 過ぎた日・先の日には出さない。過去の日を開くのは記録を直すためで、そこに
+   * 今日の献立を出しても押す先が違うし、先の日に出すとその日までの記録次第で
+   * 変わる話を先に決めてしまう。
+   */
+  const suggestions = useMemo(
+    () => (date === today && session.entries.length === 0 ? suggestToday(sessions, exercises, today) : []),
+    [sessions, exercises, date, today, session.entries.length],
+  );
 
   const volume = sessionVolume(session, exercises, bodyWeight);
   const sets = countedSets(session);
@@ -618,7 +631,9 @@ export function SessionView({ date, today, onDateChange, onCreateExercise }: Pro
         );
       })}
 
-      {session.entries.length === 0 ? <EmptyDay date={date} today={today} last={previousDay} /> : null}
+      {session.entries.length === 0 ? (
+        <EmptyDay date={date} today={today} last={previousDay} suggestions={suggestions} onPick={addExercise} />
+      ) : null}
 
       {/* その日の達成。1 枚も無い日は棚ごと出ない（0 枚を見せない） */}
       <DayCards cards={cards} onOpen={openCard} />
