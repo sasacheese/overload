@@ -20,10 +20,16 @@
  *
  * 2 段目に置いているのは事実だけで、「今日も頑張ろう」のような、何日開いても同じ文に
  * なる呼びかけは置かない（締めの一言と同じ理由。README 1.4）。
+ *
+ * その下に**今日のおすすめ**（`Suggest`）。空いている部位が無ければ段ごと出ないので、
+ * 何も無い日の見え方は元のまま。ここも呼びかけではなく、空いた日数という事実と、
+ * 押せばそのまま並ぶ種目だけを置く。
  */
 
 import { relativeLabel } from '../lib/calendar.ts';
-import { MUSCLE_GROUPS, type IsoDate, type MuscleGroup } from '../lib/types.ts';
+import type { Suggestion } from '../lib/suggest.ts';
+import { MUSCLE_GROUPS, type Exercise, type IsoDate, type MuscleGroup } from '../lib/types.ts';
+import { Icon } from './Icon.tsx';
 
 /** その日より前で、実際に ✓ が付いた直近の日。 */
 export type LastDay = { date: IsoDate; groups: readonly MuscleGroup[] };
@@ -33,9 +39,13 @@ type Props = {
   date: IsoDate;
   today: IsoDate;
   last: LastDay | null;
+  /** 今日のおすすめ。空なら段ごと出ない（勧めることが無い日がある）。 */
+  suggestions: readonly Suggestion[];
+  /** 勧めた種目を押したとき。今日にその種目を足す。 */
+  onPick: (exercise: Exercise) => void;
 };
 
-export function EmptyDay({ date, today, last }: Props) {
+export function EmptyDay({ date, today, last, suggestions, onPick }: Props) {
   return (
     <div className="empty-day">
       {/*
@@ -51,6 +61,7 @@ export function EmptyDay({ date, today, last }: Props) {
           {last.groups.length > 0 ? `（${last.groups.map((g) => MUSCLE_GROUPS[g].label).join('・')}）` : ''}
         </p>
       ) : null}
+      <Suggest suggestions={suggestions} onPick={onPick} />
       <p className="empty">
         種目を追加すると、前回と同じ数字が入った状態で並ぶ。あとは実際にやった数に直して、✓ を長押しで溜め切る。
       </p>
@@ -103,5 +114,53 @@ function BareBar() {
       {/* カラー。スリーブとシャフトの境。線 1 本のままだとバーに見えない */}
       <path d="M44 48v16M164 48v16" strokeWidth="2.2" />
     </svg>
+  );
+}
+
+/*
+ * 今日のおすすめ。**いちばん長く置いている部位**と、そこで前にやった種目。
+ *
+ * 出すのは事実（何日空いているか）と、押せば今日に並ぶ種目だけ。「やろう」とは
+ * 言わない——休むのも正しい選択で、勧めた側が急かす文を持つと、開くたびに
+ * 未達を言われる画面になる（README 1 章の、目標を入力欄に流し込まない話と同じ）。
+ *
+ * 色は無彩色のまま。赤は「前進した」の合図なので、まだ何もしていない面には渡さない。
+ * 部位の札だけ地を 1 段上げて、日数と種目はその下に平らに並べる。
+ *
+ * 種目はボタンにしてある。読んだあとに「種目を追加」を押して同じ名前をもう一度
+ * 探すのは、勧めた意味が無い。押した種目は前回の数字が入った状態で今日に並ぶ。
+ */
+function Suggest({ suggestions, onPick }: { suggestions: readonly Suggestion[]; onPick: (e: Exercise) => void }) {
+  if (suggestions.length === 0) return null;
+  return (
+    <section className="suggest">
+      <h2 className="suggest-head">今日のおすすめ</h2>
+      <ul className="suggest-list">
+        {suggestions.map((s) => (
+          <li key={s.group} className="suggest-row">
+            <p className="suggest-part">
+              <span className="suggest-group">{MUSCLE_GROUPS[s.group].label}</span>
+              <span className="suggest-gap">{s.days}日空いている</span>
+            </p>
+            {s.exercises.length > 0 ? (
+              <div className="suggest-items">
+                {s.exercises.map((e) => (
+                  <button
+                    type="button"
+                    key={e.id}
+                    className="suggest-item"
+                    aria-label={`${e.name}を追加`}
+                    onClick={() => onPick(e)}
+                  >
+                    <Icon name="plus" />
+                    {e.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
